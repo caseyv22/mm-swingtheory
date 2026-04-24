@@ -1,0 +1,15 @@
+name = "mm-api"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mm-db"
+database_id = "78b84a46-b53d-497e-abbd-1bfcdb2131ed"
+
+[triggers]
+crons = [
+  "0 15 * * 0",
+  "0 15 * * *"
+]
