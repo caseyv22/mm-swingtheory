@@ -29,7 +29,7 @@ export default function App() {
                   alt="Swing Theory"
                   width={72}
                   height={40}
-                  className="brightness-0 invert"
+                  className="brightness-0 invert mx-auto"
                 />
                 <div className="text-center">
                   <p className="font-display text-4xl text-white tracking-widest">MINI MULLIGANS</p>
