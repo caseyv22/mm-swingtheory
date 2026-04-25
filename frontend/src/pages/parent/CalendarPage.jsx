@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '@clerk/clerk-react'
-import { UserButton } from '@clerk/clerk-react'
+import { useAuth, UserButton } from '@clerk/clerk-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api.js'
+import Logo from '../../components/Logo.jsx'
 
 function formatDate(dateStr) {
   const date = new Date(dateStr + 'T00:00:00')
@@ -20,48 +20,50 @@ function SessionCard({ session, onBook, onCancel, cancellationHours }) {
   let statusLabel = ''
   let statusColor = ''
 
-  if (session.is_cancelled) { statusLabel = 'Cancelled'; statusColor = 'bg-red-100 text-red-600' }
-  else if (isPast) { statusLabel = 'Past'; statusColor = 'bg-gray-100 text-gray-400' }
+  if (session.is_cancelled) { statusLabel = 'Cancelled'; statusColor = 'bg-red-50 text-red-500' }
+  else if (isPast) { statusLabel = 'Past'; statusColor = 'bg-st-cloud text-st-graphite' }
   else if (session.is_booked_by_me) { statusLabel = 'Booked ✓'; statusColor = 'bg-st-light text-st-green' }
-  else if (isFull) { statusLabel = 'Full'; statusColor = 'bg-orange-100 text-orange-600' }
-  else { statusLabel = 'Available'; statusColor = 'bg-st-light text-st-accent' }
+  else if (isFull) { statusLabel = 'Full'; statusColor = 'bg-orange-50 text-orange-500' }
+  else { statusLabel = 'Available'; statusColor = 'bg-st-light text-st-green' }
 
   const isBookable = !session.is_cancelled && !isPast && !session.is_booked_by_me && !isFull
 
   return (
-    <div className={`bg-white rounded-2xl p-5 shadow-sm border border-gray-100 ${(isPast || session.is_cancelled) ? 'opacity-50' : ''}`}>
-      <div className="flex items-start justify-between">
+    <div className={`bg-white rounded-2xl p-5 shadow-sm border border-st-cloud transition-opacity ${(isPast || session.is_cancelled) ? 'opacity-40' : ''}`}>
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-display text-2xl text-st-green tracking-wider">{formatDate(session.date)}</p>
-          <p className="font-body text-sm text-gray-500 mt-0.5">4:00 – 5:00 PM · Swing Theory Pasadena</p>
+          <p className="font-bold text-lg text-st-phantom leading-tight">{formatDate(session.date)}</p>
+          <p className="text-sm text-st-graphite mt-0.5 font-medium">4:00 – 5:00 PM · Swing Theory Pasadena</p>
         </div>
-        <span className={`font-body text-xs font-semibold px-3 py-1 rounded-full ${statusColor}`}>{statusLabel}</span>
+        <span className={`text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap ${statusColor}`}>{statusLabel}</span>
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <p className="font-body text-sm text-gray-400">
-          {session.is_cancelled ? session.cancel_reason || 'Cancelled' : `${session.spots_remaining} of ${session.capacity} spots open`}
+        <p className="text-sm text-st-graphite font-medium">
+          {session.is_cancelled
+            ? session.cancel_reason || 'Session cancelled'
+            : `${session.spots_remaining} of ${session.capacity} spots open`}
         </p>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           {isBookable && (
             <button
               onClick={() => onBook(session)}
-              className="bg-st-green text-white font-display tracking-widest text-sm px-5 py-2.5 rounded-xl hover:bg-st-accent transition-colors min-h-[44px]"
+              className="bg-st-green text-white font-bold text-sm px-5 py-2.5 rounded-xl hover:opacity-90 transition-opacity min-h-[44px]"
             >
-              BOOK
+              Book
             </button>
           )}
           {session.is_booked_by_me && !isPast && (
             canCancel ? (
               <button
                 onClick={() => onCancel(session)}
-                className="border border-gray-200 text-gray-500 font-body text-sm px-4 py-2.5 rounded-xl hover:border-red-300 hover:text-red-500 transition-colors min-h-[44px]"
+                className="border border-st-smoke text-st-graphite font-medium text-sm px-4 py-2.5 rounded-xl hover:border-red-300 hover:text-red-500 transition-colors min-h-[44px]"
               >
                 Cancel
               </button>
             ) : (
-              <p className="font-body text-xs text-gray-400 self-center max-w-[120px] text-right">
+              <p className="text-xs text-st-graphite text-right max-w-[120px] font-medium">
                 Cancellation window closed
               </p>
             )
@@ -72,29 +74,52 @@ function SessionCard({ session, onBook, onCancel, cancellationHours }) {
   )
 }
 
-function ConfirmModal({ session, onConfirm, onClose, loading, memberName }) {
+function ConfirmModal({ session, onConfirm, onClose, loading, kidName }) {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
-        <h2 className="font-display text-3xl text-st-green tracking-widest">CONFIRM BOOKING</h2>
-        <div className="mt-4 space-y-2 font-body text-sm text-gray-600">
-          <p><span className="font-semibold">Session:</span> {formatDate(session.date)}</p>
-          <p><span className="font-semibold">Time:</span> 4:00 – 5:00 PM</p>
-          <p><span className="font-semibold">Location:</span> 50 S De Lacey Ave, Pasadena</p>
-          {memberName && <p><span className="font-semibold">Golfer:</span> {memberName}</p>}
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+        <h2 className="font-extrabold text-2xl text-st-green">Confirm Booking</h2>
+        <div className="mt-4 space-y-2 text-sm text-st-arsenic font-medium">
+          <div className="flex justify-between py-2 border-b border-st-cloud">
+            <span className="text-st-graphite">Session</span>
+            <span>{formatDate(session.date)}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-st-cloud">
+            <span className="text-st-graphite">Time</span>
+            <span>4:00 – 5:00 PM</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-st-cloud">
+            <span className="text-st-graphite">Location</span>
+            <span className="text-right">50 S De Lacey Ave<br/>Pasadena, CA</span>
+          </div>
+          {kidName && (
+            <div className="flex justify-between py-2">
+              <span className="text-st-graphite">Golfer</span>
+              <span>{kidName}</span>
+            </div>
+          )}
         </div>
         <div className="mt-6 flex gap-3">
-          <button onClick={onClose} className="flex-1 border border-gray-200 text-gray-500 font-body py-3 rounded-xl hover:bg-gray-50 min-h-[44px]">
+          <button
+            onClick={onClose}
+            className="flex-1 border border-st-smoke text-st-graphite font-semibold py-3 rounded-xl hover:bg-st-cloud transition-colors min-h-[44px]"
+          >
             Go Back
           </button>
-          <button onClick={onConfirm} disabled={loading} className="flex-1 bg-st-green text-white font-display tracking-widest py-3 rounded-xl hover:bg-st-accent transition-colors disabled:opacity-50 min-h-[44px]">
-            {loading ? 'BOOKING...' : 'CONFIRM'}
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 bg-st-green text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 min-h-[44px]"
+          >
+            {loading ? 'Booking...' : 'Confirm'}
           </button>
         </div>
       </div>
     </div>
   )
 }
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.workers.dev'
 
 export default function CalendarPage() {
   const { getToken } = useAuth()
@@ -109,9 +134,7 @@ export default function CalendarPage() {
   const [member, setMember] = useState(null)
   const [cancellationHours, setCancellationHours] = useState(24)
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   async function loadData() {
     try {
@@ -137,10 +160,6 @@ export default function CalendarPage() {
     }
   }
 
-  async function handleBook(session) {
-    setSelectedSession(session)
-  }
-
   async function handleConfirmBook() {
     setBookingLoading(true)
     try {
@@ -162,16 +181,13 @@ export default function CalendarPage() {
     if (!confirm(`Cancel your booking for ${formatDate(session.date)}?`)) return
     try {
       const token = await getToken()
-      const booking = await token
-      // Find booking id - reload data after
-      const myBookingRes = await fetch(
-        `${import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.workers.dev'}/my-bookings`,
-        { headers: { Authorization: `Bearer ${await getToken()}` } }
-      )
-      const myBookingData = await myBookingRes.json()
-      const booking2 = myBookingData.bookings?.find(b => b.session_id === session.id)
-      if (booking2) {
-        await api.cancelBooking(await getToken(), booking2.id)
+      const res = await fetch(`${API_URL}/my-bookings`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const data = await res.json()
+      const booking = data.bookings?.find(b => b.session_id === session.id && b.status === 'confirmed')
+      if (booking) {
+        await api.cancelBooking(await getToken(), booking.id)
         setSuccessMessage('Booking cancelled.')
         setTimeout(() => setSuccessMessage(null), 3000)
         await loadData()
@@ -182,60 +198,66 @@ export default function CalendarPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-st-light flex items-center justify-center">
-      <div className="text-st-green font-display text-2xl tracking-widest">LOADING...</div>
+    <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
+      <div className="text-st-green font-bold text-lg">Loading...</div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-st-light">
+    <div className="min-h-screen bg-st-offwhite">
       {/* Header */}
       <div className="bg-st-green px-4 pt-10 pb-6">
-        <div className="max-w-lg mx-auto flex items-start justify-between">
-          <div>
-            <h1 className="font-display text-4xl text-white tracking-widest">MINI MULLIGANS</h1>
-            <p className="font-body text-st-light/70 text-sm mt-1">
-              {member ? `Welcome, ${member.parent_name.split(' ')[0]}` : 'Junior Golf'}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 mt-1">
-            <button onClick={() => navigate('/my-bookings')} className="font-body text-st-light/80 text-sm hover:text-white transition-colors">
+        <div className="max-w-lg mx-auto flex items-center justify-between">
+          <Logo size="md" dark={true} />
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/my-bookings')}
+              className="text-white/70 hover:text-white text-sm font-semibold transition-colors"
+            >
               My Bookings
             </button>
             <UserButton afterSignOutUrl="/login" />
           </div>
         </div>
+        {member && (
+          <div className="max-w-lg mx-auto mt-4">
+            <p className="text-white/60 text-sm font-medium">
+              Booking for <span className="text-white font-bold">{member.kid_name}</span>
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Content */}
+      {/* Sessions */}
       <div className="max-w-lg mx-auto px-4 py-6 space-y-3">
         {successMessage && (
-          <div className="bg-st-green text-white font-body text-sm px-4 py-3 rounded-xl">
+          <div className="bg-st-green text-white text-sm font-semibold px-4 py-3 rounded-xl">
             {successMessage}
           </div>
         )}
         {error && (
-          <div className="bg-red-50 text-red-600 font-body text-sm px-4 py-3 rounded-xl">
-            {error} <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+          <div className="bg-red-50 text-red-500 text-sm font-semibold px-4 py-3 rounded-xl flex justify-between">
+            {error}
+            <button onClick={() => setError(null)} className="underline ml-2">Dismiss</button>
           </div>
         )}
 
         {paused ? (
-          <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-            <p className="font-display text-2xl text-st-green tracking-wider">BOOKING PAUSED</p>
-            <p className="font-body text-gray-500 text-sm mt-2">Booking is currently paused — check back soon.</p>
+          <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-st-cloud">
+            <p className="font-extrabold text-xl text-st-green">Booking Paused</p>
+            <p className="text-st-graphite text-sm mt-2 font-medium">Check back soon for upcoming sessions.</p>
           </div>
         ) : sessions.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-            <p className="font-display text-2xl text-st-green tracking-wider">NO SESSIONS</p>
-            <p className="font-body text-gray-500 text-sm mt-2">No upcoming sessions available right now.</p>
+          <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-st-cloud">
+            <p className="font-extrabold text-xl text-st-green">No Upcoming Sessions</p>
+            <p className="text-st-graphite text-sm mt-2 font-medium">Check back soon.</p>
           </div>
         ) : (
           sessions.map(session => (
             <SessionCard
               key={session.id}
               session={session}
-              onBook={handleBook}
+              onBook={setSelectedSession}
               onCancel={handleCancel}
               cancellationHours={cancellationHours}
             />
@@ -249,7 +271,7 @@ export default function CalendarPage() {
           onConfirm={handleConfirmBook}
           onClose={() => setSelectedSession(null)}
           loading={bookingLoading}
-          memberName={member?.kid_name}
+          kidName={member?.kid_name}
         />
       )}
     </div>
