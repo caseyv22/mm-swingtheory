@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth, SignIn } from '@clerk/clerk-react'
-import Logo from './components/Logo.jsx'
 import CalendarPage from './pages/parent/CalendarPage.jsx'
 import MyBookingsPage from './pages/parent/MyBookingsPage.jsx'
 import SignUpPage from './pages/parent/SignUpPage.jsx'
@@ -24,8 +23,18 @@ export default function App() {
         <Route path="/login" element={
           <div className="min-h-screen bg-st-green flex items-center justify-center p-4">
             <div className="w-full max-w-md">
-              <div className="flex justify-center mb-8">
-                <Logo size="lg" dark={true} centered={true} />
+              <div className="flex flex-col items-center gap-3 mb-8">
+                <img
+                  src="/STEmblem.svg"
+                  alt="Swing Theory"
+                  width={72}
+                  height={40}
+                  className="brightness-0 invert"
+                />
+                <div className="text-center">
+                  <p className="font-display text-4xl text-white tracking-widest">MINI MULLIGANS</p>
+                  <p className="font-body text-white/60 text-xs font-semibold tracking-widest uppercase mt-1">by Swing Theory</p>
+                </div>
               </div>
               <SignIn
                 routing="path"
