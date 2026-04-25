@@ -4,10 +4,7 @@
 
 @layer base {
   body {
-    @apply font-body bg-white text-gray-900 antialiased;
-  }
-
-  h1, h2, h3 {
-    @apply font-display tracking-wide;
+    @apply bg-st-offwhite text-st-phantom antialiased;
+    font-family: 'Manrope', sans-serif;
   }
 }
