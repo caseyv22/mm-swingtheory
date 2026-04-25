@@ -18,7 +18,7 @@ export default {
         'st-phantom': '#1E1E24',
       },
       fontFamily: {
-        display: ['"Manrope"', 'sans-serif'],
+        display: ['"Bebas Neue"', 'sans-serif'],
         body: ['"Manrope"', 'sans-serif'],
       },
     },
