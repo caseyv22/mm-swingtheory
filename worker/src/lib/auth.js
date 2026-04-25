@@ -14,9 +14,12 @@ export async function verifyAuth(request, env) {
 
   try {
     const clerk = getClerkClient(env);
-    const payload = await clerk.verifyToken(token);
+    const payload = await clerk.verifyToken(token, {
+      secretKey: env.CLERK_SECRET_KEY,
+    });
     return payload;
   } catch (e) {
+    console.error('Auth error:', e.message);
     return null;
   }
 }
@@ -24,10 +27,12 @@ export async function verifyAuth(request, env) {
 export async function requireAuth(request, env) {
   const payload = await verifyAuth(request, env);
   if (!payload) {
-    return { error: new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    })};
+    return {
+      error: new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    };
   }
   return { user: payload };
 }
@@ -41,10 +46,12 @@ export async function requireAdmin(request, env) {
   const role = clerkUser.publicMetadata?.role;
 
   if (role !== 'admin') {
-    return { error: new Response(JSON.stringify({ error: 'Forbidden' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' }
-    })};
+    return {
+      error: new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    };
   }
 
   return { user: { ...user, role: 'admin', clerkUser } };
