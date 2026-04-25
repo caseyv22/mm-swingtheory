@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@clerk/clerk-react'
 import { api } from '../../lib/api.js'
+import Logo from '../../components/Logo.jsx'
 
 export default function OnboardingPage() {
   const { getToken } = useAuth()
@@ -29,70 +30,50 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-st-light flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+    <div className="min-h-screen bg-st-offwhite flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
         <div className="mb-8">
-          <h1 className="font-display text-4xl text-st-green tracking-widest">WELCOME</h1>
-          <p className="font-body text-gray-500 text-sm mt-1">Tell us about your junior golfer to get started.</p>
+          <Logo size="md" dark={false} />
+          <h1 className="font-extrabold text-3xl text-st-phantom mt-6">Welcome.</h1>
+          <p className="text-st-graphite text-sm mt-1 font-medium">Tell us about your junior golfer to get started.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="font-body text-xs font-semibold text-gray-500 uppercase tracking-wider">Your Full Name</label>
-            <input
-              type="text"
-              required
-              value={form.parent_name}
-              onChange={e => setForm(f => ({ ...f, parent_name: e.target.value }))}
-              className="mt-1 w-full border border-gray-200 rounded-xl px-4 py-3 font-body text-sm focus:outline-none focus:ring-2 focus:ring-st-accent"
-              placeholder="Jane Smith"
-            />
-          </div>
+          {[
+            { label: 'Your Full Name', key: 'parent_name', type: 'text', placeholder: 'Jane Smith', required: true },
+            { label: 'Phone Number', key: 'phone', type: 'tel', placeholder: '(626) 555-0100', required: false },
+            { label: "Child's First Name", key: 'kid_name', type: 'text', placeholder: 'Jamie', required: true },
+            { label: "Child's Age", key: 'kid_age', type: 'number', placeholder: '8', required: false },
+          ].map(field => (
+            <div key={field.key}>
+              <label className="text-xs font-bold text-st-graphite uppercase tracking-wider">
+                {field.label}
+              </label>
+              <input
+                type={field.type}
+                required={field.required}
+                min={field.key === 'kid_age' ? 3 : undefined}
+                max={field.key === 'kid_age' ? 17 : undefined}
+                value={form[field.key]}
+                onChange={e => setForm(f => ({ ...f, [field.key]: e.target.value }))}
+                className="mt-1.5 w-full border border-st-smoke bg-white rounded-xl px-4 py-3 text-sm font-medium text-st-phantom focus:outline-none focus:ring-2 focus:ring-st-green focus:border-transparent transition-all"
+                placeholder={field.placeholder}
+              />
+            </div>
+          ))}
 
-          <div>
-            <label className="font-body text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone Number</label>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-              className="mt-1 w-full border border-gray-200 rounded-xl px-4 py-3 font-body text-sm focus:outline-none focus:ring-2 focus:ring-st-accent"
-              placeholder="(626) 555-0100"
-            />
-          </div>
-
-          <div>
-            <label className="font-body text-xs font-semibold text-gray-500 uppercase tracking-wider">Child's First Name</label>
-            <input
-              type="text"
-              required
-              value={form.kid_name}
-              onChange={e => setForm(f => ({ ...f, kid_name: e.target.value }))}
-              className="mt-1 w-full border border-gray-200 rounded-xl px-4 py-3 font-body text-sm focus:outline-none focus:ring-2 focus:ring-st-accent"
-              placeholder="Jamie"
-            />
-          </div>
-
-          <div>
-            <label className="font-body text-xs font-semibold text-gray-500 uppercase tracking-wider">Child's Age</label>
-            <input
-              type="number"
-              min="3"
-              max="17"
-              value={form.kid_age}
-              onChange={e => setForm(f => ({ ...f, kid_age: e.target.value }))}
-              className="mt-1 w-full border border-gray-200 rounded-xl px-4 py-3 font-body text-sm focus:outline-none focus:ring-2 focus:ring-st-accent"
-              placeholder="8"
-            />
-          </div>
-
-          {error && <p className="text-red-500 font-body text-sm">{error}</p>}
+          {error && (
+            <div className="bg-red-50 text-red-500 text-sm font-semibold px-4 py-3 rounded-xl">
+              {error}
+            </div>
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-st-green text-white font-display text-xl tracking-widest py-4 rounded-xl hover:bg-st-accent transition-colors disabled:opacity-50 mt-2"
+            className="w-full bg-st-green text-white font-bold text-base py-4 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 mt-2 min-h-[44px]"
           >
-            {loading ? 'SAVING...' : 'LET\'S PLAY'}
+            {loading ? 'Saving...' : "Let's Play →"}
           </button>
         </form>
       </div>
