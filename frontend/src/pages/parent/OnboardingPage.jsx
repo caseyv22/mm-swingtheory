@@ -42,7 +42,7 @@ export default function OnboardingPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-8">
-          <img src="/STEmblem.svg" alt="Swing Theory" width={36} height={20} />
+          <img src="/STEmblemGreen.svg" alt="Swing Theory" width={36} height={20} />
           <div>
             <p className="font-display text-xl text-st-green tracking-widest">SWING THEORY</p>
             <p className="font-body text-st-graphite text-xs font-semibold tracking-widest uppercase">Pasadena</p>
