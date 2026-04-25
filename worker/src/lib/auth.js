@@ -32,7 +32,6 @@ async function verifyJWT(token) {
   const header = JSON.parse(atob(headerB64.replace(/-/g, '+').replace(/_/g, '/')));
   const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')));
 
-  // Check expiry
   if (payload.exp && Date.now() / 1000 > payload.exp) {
     throw new Error('Token expired');
   }
@@ -42,7 +41,6 @@ async function verifyJWT(token) {
   if (!jwk) throw new Error('No matching key found');
 
   const publicKey = await importPublicKey(jwk);
-
   const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
   const signature = base64UrlDecode(signatureB64);
 
@@ -54,7 +52,6 @@ async function verifyJWT(token) {
   );
 
   if (!valid) throw new Error('Invalid signature');
-
   return payload;
 }
 
@@ -65,9 +62,7 @@ export function getClerkClient(env) {
 
 export async function verifyAuth(request, env) {
   const authHeader = request.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null;
-  }
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
 
   const token = authHeader.replace('Bearer ', '');
 
@@ -111,10 +106,38 @@ export async function requireAdmin(request, env) {
         }),
       };
     }
-
     return { user: { ...user, role: 'admin', clerkUser } };
   } catch (e) {
     console.error('Admin check error:', e.message);
+    return {
+      error: new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    };
+  }
+}
+
+export async function requireInstructor(request, env) {
+  const { user, error } = await requireAuth(request, env);
+  if (error) return { error };
+
+  try {
+    const { createClerkClient } = await import('@clerk/backend');
+    const clerk = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
+    const clerkUser = await clerk.users.getUser(user.sub);
+    const role = clerkUser.publicMetadata?.role;
+
+    if (role !== 'admin' && role !== 'instructor') {
+      return {
+        error: new Response(JSON.stringify({ error: 'Forbidden' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      };
+    }
+    return { user: { ...user, role, clerkUser } };
+  } catch (e) {
     return {
       error: new Response(JSON.stringify({ error: 'Forbidden' }), {
         status: 403,
