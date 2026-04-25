@@ -7,17 +7,14 @@ import { getConfig, generateId, getMemberByClerkId, getSession, getBookingCount,
 
 const app = new Hono();
 
-// CORS — allow requests from the frontend
 app.use('/*', cors({
-  origin: ['https://mm.swingtheory.golf', 'http://localhost:5173'],
+  origin: ['https://mm.swingtheory.golf', 'https://mm-1a4.pages.dev', 'http://localhost:5173'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// ─── Health check ────────────────────────────────────────────
 app.get('/health', (c) => c.json({ ok: true, service: 'mm-api' }));
 
-// ─── Sessions ────────────────────────────────────────────────
 app.get('/sessions', async (c) => {
   const { user, error } = await requireAuth(c.req.raw, c.env);
   if (error) return error;
@@ -43,7 +40,6 @@ app.get('/sessions', async (c) => {
     ORDER BY s.date ASC
   `).bind(today, endDateStr).all();
 
-  // Check which sessions the current user has booked
   const member = await getMemberByClerkId(c.env.DB, user.sub);
 
   let myBookings = new Set();
@@ -64,7 +60,6 @@ app.get('/sessions', async (c) => {
   return c.json({ paused: false, sessions: enriched });
 });
 
-// ─── Bookings ─────────────────────────────────────────────────
 app.post('/bookings', async (c) => {
   const { user, error } = await requireAuth(c.req.raw, c.env);
   if (error) return error;
@@ -83,11 +78,9 @@ app.post('/bookings', async (c) => {
   const today = new Date().toISOString().split('T')[0];
   if (session.date < today) return c.json({ error: 'Session is in the past' }, 400);
 
-  // Check capacity
   const bookedCount = await getBookingCount(c.env.DB, session_id);
   if (bookedCount >= session.capacity) return c.json({ error: 'Session is full' }, 400);
 
-  // Check weekly limit
   const config = await getConfig(c.env.DB);
   const weekCount = await getWeekBookingCount(c.env.DB, member.id, session.date);
   if (weekCount >= config.max_bookings_per_week) {
@@ -120,7 +113,6 @@ app.delete('/bookings/:id', async (c) => {
   if (!booking) return c.json({ error: 'Booking not found' }, 404);
   if (booking.status === 'cancelled') return c.json({ error: 'Already cancelled' }, 400);
 
-  // Check cancellation window
   const config = await getConfig(c.env.DB);
   const sessionStart = new Date(`${booking.date}T${booking.start_time}:00-07:00`);
   const hoursUntil = (sessionStart - new Date()) / (1000 * 60 * 60);
@@ -137,7 +129,6 @@ app.delete('/bookings/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-// ─── Members ──────────────────────────────────────────────────
 app.post('/members', async (c) => {
   const { user, error } = await requireAuth(c.req.raw, c.env);
   if (error) return error;
@@ -148,7 +139,6 @@ app.post('/members', async (c) => {
     return c.json({ error: 'parent_name and kid_name are required' }, 400);
   }
 
-  // Get email from Clerk user
   const { getClerkClient } = await import('./lib/auth.js');
   const clerk = getClerkClient(c.env);
   const clerkUser = await clerk.users.getUser(user.sub);
@@ -156,7 +146,6 @@ app.post('/members', async (c) => {
 
   if (!email) return c.json({ error: 'No email found on Clerk account' }, 400);
 
-  // Check if member already exists
   const existing = await c.env.DB.prepare('SELECT id FROM members WHERE clerk_id = ?').bind(user.sub).first();
   if (existing) return c.json({ error: 'Member already exists' }, 409);
 
@@ -178,19 +167,35 @@ app.get('/members/me', async (c) => {
   return c.json({ member });
 });
 
-// ─── Admin routes ─────────────────────────────────────────────
+app.get('/my-bookings', async (c) => {
+  const { user, error } = await requireAuth(c.req.raw, c.env);
+  if (error) return error;
+
+  const member = await getMemberByClerkId(c.env.DB, user.sub);
+  if (!member) return c.json({ bookings: [] });
+
+  const bookings = await c.env.DB.prepare(`
+    SELECT b.*, s.date, s.start_time, s.end_time, s.is_cancelled
+    FROM bookings b
+    JOIN sessions s ON b.session_id = s.id
+    WHERE b.member_id = ?
+    ORDER BY s.date DESC
+  `).bind(member.id).all();
+
+  return c.json({ bookings: bookings.results });
+});
+
 app.get('/admin/members', async (c) => {
   const { error } = await requireAdmin(c.req.raw, c.env);
   if (error) return error;
 
   const status = c.req.query('status');
-  let query = 'SELECT * FROM members ORDER BY created_at DESC';
   let result;
 
   if (status) {
     result = await c.env.DB.prepare('SELECT * FROM members WHERE status = ? ORDER BY created_at DESC').bind(status).all();
   } else {
-    result = await c.env.DB.prepare(query).all();
+    result = await c.env.DB.prepare('SELECT * FROM members ORDER BY created_at DESC').all();
   }
 
   return c.json({ members: result.results });
@@ -263,8 +268,6 @@ app.post('/admin/sessions/:id/cancel', async (c) => {
     UPDATE sessions SET is_cancelled = 1, cancel_reason = ? WHERE id = ?
   `).bind(reason || null, c.req.param('id')).run();
 
-  // Phase 5: trigger cancellation emails to all booked parents
-
   return c.json({ ok: true });
 });
 
@@ -294,7 +297,6 @@ app.post('/admin/bookings', async (c) => {
   const { member_id, session_id } = await c.req.json();
   if (!member_id || !session_id) return c.json({ error: 'member_id and session_id required' }, 400);
 
-  // Admin bypasses capacity and weekly limits
   const id = generateId();
   await c.env.DB.prepare(`
     INSERT INTO bookings (id, member_id, session_id, status)
@@ -304,16 +306,15 @@ app.post('/admin/bookings', async (c) => {
   return c.json({ ok: true, booking_id: id }, 201);
 });
 
-// ─── Cron dispatcher ──────────────────────────────────────────
 export default {
   fetch: app.fetch,
 
   async scheduled(event, env, ctx) {
     switch (event.cron) {
-      case '0 15 * * 0': // Sunday 8AM Pacific — generate sessions
+      case '0 15 * * 0':
         ctx.waitUntil(generateSessions(env.DB));
         break;
-      case '0 15 * * *': // Daily 8AM Pacific — send reminders
+      case '0 15 * * *':
         ctx.waitUntil(sendReminders(env.DB, env.RESEND_API_KEY));
         break;
     }
