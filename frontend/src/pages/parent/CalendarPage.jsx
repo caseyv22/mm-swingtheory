@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useAuth, UserButton } from '@clerk/clerk-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api.js'
-import Logo from '../../components/Logo.jsx'
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.workers.dev'
 
 function formatDate(dateStr) {
   const date = new Date(dateStr + 'T00:00:00')
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
-function SessionCard({ session, onBook, onCancel, cancellationHours }) {
+function SessionCard({ session, onBook, onCancel, cancellationHours, showInstructor }) {
   const today = new Date()
-  const sessionStart = new Date(`${session.date}T${session.start_time || '16:00'}:00`)
+  const sessionStart = new Date(`${session.date}T${session.start_time}:00`)
   const isPast = sessionStart < today
   const isFull = session.spots_remaining <= 0
   const hoursUntil = (sessionStart - today) / (1000 * 60 * 60)
@@ -33,9 +34,18 @@ function SessionCard({ session, onBook, onCancel, cancellationHours }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-bold text-lg text-st-phantom leading-tight">{formatDate(session.date)}</p>
-          <p className="text-sm text-st-graphite mt-0.5 font-medium">4:00 – 5:00 PM · Swing Theory Pasadena</p>
+          <p className="text-sm text-st-graphite mt-0.5 font-medium">
+            {session.start_time} – {session.end_time} · Swing Theory Pasadena
+          </p>
+          {showInstructor && session.instructor_name && (
+            <p className="text-sm text-st-accent font-semibold mt-0.5">
+              with {session.instructor_name}
+            </p>
+          )}
         </div>
-        <span className={`text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap ${statusColor}`}>{statusLabel}</span>
+        <span className={`text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap ${statusColor}`}>
+          {statusLabel}
+        </span>
       </div>
 
       <div className="mt-4 flex items-center justify-between">
@@ -44,7 +54,6 @@ function SessionCard({ session, onBook, onCancel, cancellationHours }) {
             ? session.cancel_reason || 'Session cancelled'
             : `${session.spots_remaining} of ${session.capacity} spots open`}
         </p>
-
         <div className="flex gap-2 items-center">
           {isBookable && (
             <button
@@ -74,28 +83,38 @@ function SessionCard({ session, onBook, onCancel, cancellationHours }) {
   )
 }
 
-function ConfirmModal({ session, onConfirm, onClose, loading, kidName }) {
+function ConfirmModal({ session, program, onConfirm, onClose, loading, user, child }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
         <h2 className="font-extrabold text-2xl text-st-green">Confirm Booking</h2>
-        <div className="mt-4 space-y-2 text-sm text-st-arsenic font-medium">
-          <div className="flex justify-between py-2 border-b border-st-cloud">
-            <span className="text-st-graphite">Session</span>
+        <div className="mt-4 space-y-0 text-sm text-st-arsenic font-medium">
+          <div className="flex justify-between py-2.5 border-b border-st-cloud">
+            <span className="text-st-graphite">Program</span>
+            <span>{program?.name}</span>
+          </div>
+          <div className="flex justify-between py-2.5 border-b border-st-cloud">
+            <span className="text-st-graphite">Date</span>
             <span>{formatDate(session.date)}</span>
           </div>
-          <div className="flex justify-between py-2 border-b border-st-cloud">
+          <div className="flex justify-between py-2.5 border-b border-st-cloud">
             <span className="text-st-graphite">Time</span>
-            <span>4:00 – 5:00 PM</span>
+            <span>{session.start_time} – {session.end_time}</span>
           </div>
-          <div className="flex justify-between py-2 border-b border-st-cloud">
+          <div className="flex justify-between py-2.5 border-b border-st-cloud">
             <span className="text-st-graphite">Location</span>
-            <span className="text-right">50 S De Lacey Ave<br/>Pasadena, CA</span>
+            <span className="text-right">50 S De Lacey Ave<br />Pasadena, CA</span>
           </div>
-          {kidName && (
-            <div className="flex justify-between py-2">
+          {child && (
+            <div className="flex justify-between py-2.5">
               <span className="text-st-graphite">Golfer</span>
-              <span>{kidName}</span>
+              <span>{child.first_name}</span>
+            </div>
+          )}
+          {!child && user && (
+            <div className="flex justify-between py-2.5">
+              <span className="text-st-graphite">Student</span>
+              <span>{user.full_name}</span>
             </div>
           )}
         </div>
@@ -119,37 +138,42 @@ function ConfirmModal({ session, onConfirm, onClose, loading, kidName }) {
   )
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.workers.dev'
-
 export default function CalendarPage() {
+  const { slug } = useParams()
   const { getToken } = useAuth()
   const navigate = useNavigate()
   const [sessions, setSessions] = useState([])
+  const [program, setProgram] = useState(null)
   const [paused, setPaused] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedSession, setSelectedSession] = useState(null)
   const [bookingLoading, setBookingLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState(null)
-  const [member, setMember] = useState(null)
-  const [cancellationHours, setCancellationHours] = useState(24)
+  const [user, setUser] = useState(null)
+  const [child, setChild] = useState(null)
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [slug])
 
   async function loadData() {
+    setLoading(true)
     try {
       const token = await getToken()
       const [sessionsData, meData] = await Promise.all([
-        api.getSessions(token),
+        api.getSessions(token, slug),
         api.getMe(token),
       ])
+
       if (sessionsData.paused) {
         setPaused(true)
       } else {
         setSessions(sessionsData.sessions || [])
+        setProgram(sessionsData.program || null)
       }
-      if (meData.member) {
-        setMember(meData.member)
+
+      if (meData.user) {
+        setUser(meData.user)
+        setChild(meData.child || null)
       } else {
         navigate('/onboarding')
       }
@@ -199,7 +223,7 @@ export default function CalendarPage() {
 
   if (loading) return (
     <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
-      <div className="text-st-green font-bold text-lg">Loading...</div>
+      <p className="text-st-green font-bold text-lg">Loading...</p>
     </div>
   )
 
@@ -208,7 +232,15 @@ export default function CalendarPage() {
       {/* Header */}
       <div className="bg-st-green px-4 pt-10 pb-6">
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <Logo size="md" dark={true} />
+          <button
+            onClick={() => navigate('/programs')}
+            className="flex items-center gap-2.5"
+          >
+            <img src="/STEmblem.svg" alt="ST" width={28} height={16} className="brightness-0 invert" />
+            <span className="text-white/70 text-sm font-semibold hover:text-white transition-colors">
+              ← All Programs
+            </span>
+          </button>
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/my-bookings')}
@@ -219,13 +251,16 @@ export default function CalendarPage() {
             <UserButton afterSignOutUrl="/login" />
           </div>
         </div>
-        {member && (
-          <div className="max-w-lg mx-auto mt-4">
-            <p className="text-white/60 text-sm font-medium">
-              Booking for <span className="text-white font-bold">{member.kid_name}</span>
+        <div className="max-w-lg mx-auto mt-4">
+          <h1 className="font-display text-4xl text-white tracking-widest">
+            {program?.name?.toUpperCase() || 'SESSIONS'}
+          </h1>
+          {user && (
+            <p className="text-white/60 text-sm font-medium mt-1">
+              {child ? `Booking for ${child.first_name}` : `Booking for ${user.full_name.split(' ')[0]}`}
             </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Sessions */}
@@ -245,7 +280,7 @@ export default function CalendarPage() {
         {paused ? (
           <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-st-cloud">
             <p className="font-extrabold text-xl text-st-green">Booking Paused</p>
-            <p className="text-st-graphite text-sm mt-2 font-medium">Check back soon for upcoming sessions.</p>
+            <p className="text-st-graphite text-sm mt-2 font-medium">Check back soon.</p>
           </div>
         ) : sessions.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-st-cloud">
@@ -259,7 +294,8 @@ export default function CalendarPage() {
               session={session}
               onBook={setSelectedSession}
               onCancel={handleCancel}
-              cancellationHours={cancellationHours}
+              cancellationHours={program?.cancellation_hours}
+              showInstructor={program?.show_instructor}
             />
           ))
         )}
@@ -268,10 +304,12 @@ export default function CalendarPage() {
       {selectedSession && (
         <ConfirmModal
           session={selectedSession}
+          program={program}
           onConfirm={handleConfirmBook}
           onClose={() => setSelectedSession(null)}
           loading={bookingLoading}
-          kidName={member?.kid_name}
+          user={user}
+          child={child}
         />
       )}
     </div>
