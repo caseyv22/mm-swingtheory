@@ -6,15 +6,17 @@ export default function SignUpPage() {
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center gap-3 mb-8">
           <img
-  src="/STEmblem.svg"
-  alt="Swing Theory"
-  width={72}
-  height={40}
-  className="brightness-0 invert mx-auto"
-/>
+            src="/STEmblem.svg"
+            alt="Swing Theory"
+            width={72}
+            height={40}
+            className="brightness-0 invert"
+          />
           <div className="text-center">
-            <p className="font-display text-4xl text-white tracking-widest">MINI MULLIGANS</p>
-            <p className="font-body text-white/60 text-xs font-semibold tracking-widest uppercase mt-1">by Swing Theory</p>
+            <p className="font-display text-4xl text-white tracking-widest">SWING THEORY</p>
+            <p className="font-body text-white/60 text-xs font-semibold tracking-widest uppercase mt-1">
+              Pasadena
+            </p>
           </div>
         </div>
         <SignUp
