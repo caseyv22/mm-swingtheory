@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth, UserButton } from '@clerk/clerk-react'
 import { useNavigate } from 'react-router-dom'
+import Logo from '../../components/Logo.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.workers.dev'
 
@@ -15,9 +16,7 @@ export default function MyBookingsPage() {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadBookings()
-  }, [])
+  useEffect(() => { loadBookings() }, [])
 
   async function loadBookings() {
     try {
@@ -39,58 +38,66 @@ export default function MyBookingsPage() {
   const past = bookings.filter(b => b.date < today || b.status === 'cancelled')
 
   return (
-    <div className="min-h-screen bg-st-light">
+    <div className="min-h-screen bg-st-offwhite">
       <div className="bg-st-green px-4 pt-10 pb-6">
-        <div className="max-w-lg mx-auto flex items-start justify-between">
-          <div>
-            <h1 className="font-display text-4xl text-white tracking-widest">MY BOOKINGS</h1>
-            <p className="font-body text-st-light/70 text-sm mt-1">Your Mini Mulligans sessions</p>
-          </div>
-          <div className="flex items-center gap-3 mt-1">
-            <button onClick={() => navigate('/calendar')} className="font-body text-st-light/80 text-sm hover:text-white transition-colors">
+        <div className="max-w-lg mx-auto flex items-center justify-between">
+          <Logo size="md" dark={true} />
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/calendar')}
+              className="text-white/70 hover:text-white text-sm font-semibold transition-colors"
+            >
               Calendar
             </button>
             <UserButton afterSignOutUrl="/login" />
           </div>
         </div>
+        <div className="max-w-lg mx-auto mt-4">
+          <h1 className="text-white font-extrabold text-2xl">My Bookings</h1>
+        </div>
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
         {loading ? (
-          <div className="text-center text-st-green font-display text-xl tracking-widest">LOADING...</div>
+          <div className="text-center text-st-green font-bold text-lg">Loading...</div>
         ) : (
           <>
             <div>
-              <h2 className="font-display text-xl text-st-green tracking-widest mb-3">UPCOMING</h2>
+              <h2 className="font-bold text-sm text-st-graphite uppercase tracking-wider mb-3">Upcoming</h2>
               {upcoming.length === 0 ? (
-                <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
-                  <p className="font-body text-gray-400 text-sm">No upcoming bookings.</p>
-                  <button onClick={() => navigate('/calendar')} className="mt-3 bg-st-green text-white font-display tracking-widest text-sm px-6 py-2.5 rounded-xl hover:bg-st-accent transition-colors">
-                    BOOK A SESSION
+                <div className="bg-white rounded-2xl p-6 text-center shadow-sm border border-st-cloud">
+                  <p className="text-st-graphite text-sm font-medium">No upcoming bookings.</p>
+                  <button
+                    onClick={() => navigate('/calendar')}
+                    className="mt-3 bg-st-green text-white font-bold text-sm px-6 py-2.5 rounded-xl hover:opacity-90 transition-opacity"
+                  >
+                    Book a Session
                   </button>
                 </div>
               ) : upcoming.map(b => (
-                <div key={b.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-3">
-                  <p className="font-display text-2xl text-st-green tracking-wider">{formatDate(b.date)}</p>
-                  <p className="font-body text-sm text-gray-500 mt-0.5">4:00 – 5:00 PM</p>
-                  <span className="inline-block mt-2 bg-st-light text-st-green font-body text-xs font-semibold px-3 py-1 rounded-full">Confirmed ✓</span>
+                <div key={b.id} className="bg-white rounded-2xl p-5 shadow-sm border border-st-cloud mb-3">
+                  <p className="font-bold text-lg text-st-phantom">{formatDate(b.date)}</p>
+                  <p className="text-sm text-st-graphite mt-0.5 font-medium">4:00 – 5:00 PM</p>
+                  <span className="inline-block mt-3 bg-st-light text-st-green text-xs font-bold px-3 py-1.5 rounded-full">
+                    Confirmed ✓
+                  </span>
                 </div>
               ))}
             </div>
 
             {past.length > 0 && (
               <div>
-                <h2 className="font-display text-xl text-gray-400 tracking-widest mb-3">PAST</h2>
+                <h2 className="font-bold text-sm text-st-graphite uppercase tracking-wider mb-3">Past</h2>
                 {past.map(b => (
-                  <div key={b.id} className="bg-white/60 rounded-2xl p-5 shadow-sm border border-gray-100 mb-3 opacity-60">
-                    <p className="font-display text-2xl text-gray-400 tracking-wider">{formatDate(b.date)}</p>
-                    <p className="font-body text-sm text-gray-400 mt-0.5">4:00 – 5:00 PM</p>
-                    <div className="flex gap-2 mt-2">
+                  <div key={b.id} className="bg-white/60 rounded-2xl p-5 shadow-sm border border-st-cloud mb-3 opacity-60">
+                    <p className="font-bold text-lg text-st-arsenic">{formatDate(b.date)}</p>
+                    <p className="text-sm text-st-graphite mt-0.5 font-medium">4:00 – 5:00 PM</p>
+                    <div className="flex gap-2 mt-3">
                       {b.status === 'cancelled' && (
-                        <span className="bg-gray-100 text-gray-400 font-body text-xs font-semibold px-3 py-1 rounded-full">Cancelled</span>
+                        <span className="bg-st-cloud text-st-graphite text-xs font-bold px-3 py-1.5 rounded-full">Cancelled</span>
                       )}
                       {b.checked_in === 1 && (
-                        <span className="bg-st-light text-st-green font-body text-xs font-semibold px-3 py-1 rounded-full">Attended ✓</span>
+                        <span className="bg-st-light text-st-green text-xs font-bold px-3 py-1.5 rounded-full">Attended ✓</span>
                       )}
                     </div>
                   </div>
