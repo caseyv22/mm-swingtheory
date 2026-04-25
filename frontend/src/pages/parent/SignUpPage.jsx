@@ -8,7 +8,12 @@ export default function SignUpPage() {
           <h1 className="text-white font-display text-5xl tracking-widest">MINI MULLIGANS</h1>
           <p className="text-st-light/80 font-body text-sm mt-2">Junior Golf · Swing Theory Pasadena</p>
         </div>
-        <SignUp routing="path" path="/signup" signInUrl="/login" afterSignUpUrl="/onboarding" />
+        <SignUp
+          routing="path"
+          path="/signup"
+          signInUrl="/login"
+          forceRedirectUrl="/onboarding"
+        />
       </div>
     </div>
   )
