@@ -216,7 +216,7 @@ function MemberDetail({ memberId, onClose, onStatusChange }) {
 function AddMemberModal({ onClose, onAdded }) {
   const { getToken } = useAuth()
   const [form, setForm] = useState({
-    full_name: '', email: '', phone: '', kid_first_name: '', kid_age: ''
+    full_name: '', email: '', phone: '', role: 'parent', kid_first_name: '', kid_age: ''
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -226,8 +226,8 @@ function AddMemberModal({ onClose, onAdded }) {
   }
 
   async function handleSubmit() {
-    if (!form.full_name || !form.email) {
-      setError('Full name and email are required.')
+    if (!form.full_name || !form.email || !form.role) {
+      setError('Full name, email, and role are required.')
       return
     }
     setSaving(true)
@@ -241,8 +241,9 @@ function AddMemberModal({ onClose, onAdded }) {
           full_name: form.full_name,
           email: form.email,
           phone: form.phone || null,
-          kid_first_name: form.kid_first_name || null,
-          kid_age: form.kid_age ? parseInt(form.kid_age) : null,
+          role: form.role,
+          kid_first_name: form.role === 'parent' ? (form.kid_first_name || null) : null,
+          kid_age: form.role === 'parent' && form.kid_age ? parseInt(form.kid_age) : null,
         })
       })
       const data = await res.json()
@@ -256,37 +257,104 @@ function AddMemberModal({ onClose, onAdded }) {
     }
   }
 
-  const fields = [
-    { label: 'Full Name *', key: 'full_name', placeholder: 'Parent full name', type: 'text' },
-    { label: 'Email *', key: 'email', placeholder: 'parent@email.com', type: 'email' },
-    { label: 'Phone', key: 'phone', placeholder: '(818) 555-0000', type: 'tel' },
-    { label: "Child's First Name", key: 'kid_first_name', placeholder: 'First name', type: 'text' },
-    { label: "Child's Age", key: 'kid_age', placeholder: 'Age', type: 'number' },
-  ]
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
         <h2 className="font-display text-2xl text-st-green tracking-widest mb-1">ADD MEMBER</h2>
-        <p className="text-st-graphite text-sm font-medium mb-6">Create a new member account manually.</p>
+        <p className="text-st-graphite text-sm font-medium mb-6">
+          An invitation email will be sent so the user can set their password.
+        </p>
 
         {error && (
           <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-lg mb-4">{error}</div>
         )}
 
         <div className="space-y-4">
-          {fields.map(f => (
-            <div key={f.key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">{f.label}</label>
-              <input
-                type={f.type}
-                value={form[f.key]}
-                onChange={e => set(f.key, e.target.value)}
-                placeholder={f.placeholder}
-                className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
-              />
+          {/* Role selector */}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Role *</label>
+            <div className="grid grid-cols-3 gap-2">
+              {['parent', 'student', 'instructor'].map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => set('role', r)}
+                  className={`py-2.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-colors capitalize
+                    ${form.role === r
+                      ? 'bg-st-green text-white border-st-green'
+                      : 'border-st-cloud text-st-graphite hover:border-st-green hover:text-st-green'
+                    }`}
+                >
+                  {r}
+                </button>
+              ))}
             </div>
-          ))}
+          </div>
+
+          {/* Full name */}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Full Name *</label>
+            <input
+              type="text"
+              value={form.full_name}
+              onChange={e => set('full_name', e.target.value)}
+              placeholder="Full name"
+              className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Email *</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={e => set('email', e.target.value)}
+              placeholder="email@example.com"
+              className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
+            />
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Phone</label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={e => set('phone', e.target.value)}
+              placeholder="(818) 555-0000"
+              className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
+            />
+          </div>
+
+          {/* Child fields — only for parent role */}
+          {form.role === 'parent' && (
+            <div className="pt-2 border-t border-st-cloud space-y-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-st-accent">Child Information</p>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Child's First Name</label>
+                <input
+                  type="text"
+                  value={form.kid_first_name}
+                  onChange={e => set('kid_first_name', e.target.value)}
+                  placeholder="First name"
+                  className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Child's Age</label>
+                <input
+                  type="number"
+                  value={form.kid_age}
+                  onChange={e => set('kid_age', e.target.value)}
+                  placeholder="Age"
+                  min="1"
+                  max="18"
+                  className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex gap-3">
@@ -294,7 +362,7 @@ function AddMemberModal({ onClose, onAdded }) {
             Cancel
           </button>
           <button onClick={handleSubmit} disabled={saving} className="flex-1 bg-st-green text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">
-            {saving ? 'Adding...' : 'Add Member'}
+            {saving ? 'Sending Invite...' : 'Send Invitation'}
           </button>
         </div>
       </div>
