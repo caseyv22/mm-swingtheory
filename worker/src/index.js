@@ -17,15 +17,16 @@ const app = new Hono();
 
 app.use('/*', cors({
   origin: (origin) => {
-    if (!origin) return true;
-    if (origin === 'http://localhost:5173') return true;
-    if (origin.endsWith('.pages.dev')) return true;
-    if (origin === 'https://mm.swingtheory.golf') return true;
-    if (origin === 'https://lessons.swingtheory.golf') return true;
-    return false;
+    if (!origin) return '*';
+    if (origin === 'http://localhost:5173') return origin;
+    if (origin.endsWith('.pages.dev')) return origin;
+    if (origin === 'https://mm.swingtheory.golf') return origin;
+    if (origin === 'https://lessons.swingtheory.golf') return origin;
+    return null;
   },
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'x-subdomain'],
+  credentials: true,
 }));
 
 // ─── Health ───────────────────────────────────────────────────────────────────
