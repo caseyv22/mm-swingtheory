@@ -151,7 +151,7 @@ function SessionRow({ session, onBook, onCancel, cancellationHours, showInstruct
         <div className="flex-1">
           <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusStyle}`}>{statusLabel}</span>
           <p className="font-bold text-st-phantom text-base mt-2">{formatTime(session.start_time)} – {formatTime(session.end_time)}</p>
-          {showInstructor && session.instructor_name && (
+          {!!showInstructor && session.instructor_name && (
             <p className="text-sm text-st-accent font-semibold mt-0.5">with {session.instructor_name}</p>
           )}
           <p className="text-sm text-st-graphite font-medium mt-1">
