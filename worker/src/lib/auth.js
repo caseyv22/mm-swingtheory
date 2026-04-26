@@ -55,11 +55,6 @@ async function verifyJWT(token) {
   return payload;
 }
 
-export function getClerkClient(env) {
-  const { createClerkClient } = require('@clerk/backend');
-  return createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
-}
-
 export async function verifyAuth(request, env) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
