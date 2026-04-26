@@ -10,6 +10,6 @@ database_id = "78b84a46-b53d-497e-abbd-1bfcdb2131ed"
 
 [triggers]
 crons = [
-  "0 15 * * 0",
+  "0 15 * * SUN",
   "0 15 * * *"
 ]
