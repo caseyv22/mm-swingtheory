@@ -29,14 +29,25 @@ app.get('/health', (c) => c.json({ ok: true, service: 'st-platform-api' }));
 
 // ─── Programs ─────────────────────────────────────────────────
 app.get('/programs', async (c) => {
-  const { error } = await requireAuth(c.req.raw, c.env);
+  const { user, error } = await requireAuth(c.req.raw, c.env);
   if (error) return error;
+
+  const subdomain = c.req.header('x-subdomain') || 'mm';
 
   const programs = await c.env.DB.prepare(
     'SELECT * FROM programs WHERE is_active = 1 ORDER BY created_at ASC'
   ).all();
 
-  return c.json({ programs: programs.results });
+  const dbUser = await getUserByClerkId(c.env.DB, user.sub);
+
+  const filtered = programs.results.filter(p => {
+    if (subdomain === 'lessons') {
+      return p.slug === 'theory-ai';
+    }
+    return p.slug !== 'theory-ai';
+  });
+
+  return c.json({ programs: filtered, user: dbUser });
 });
 
 app.get('/programs/:slug', async (c) => {
@@ -68,7 +79,6 @@ app.get('/programs/:slug/sessions', async (c) => {
 
   const sessions = await c.env.DB.prepare(`
     SELECT s.*,
-      i.id as instructor_id,
       u.full_name as instructor_name,
       COUNT(CASE WHEN b.status = 'confirmed' THEN 1 END) as booked_count
     FROM sessions s
@@ -128,10 +138,9 @@ app.post('/bookings', async (c) => {
   const program = await getProgram(c.env.DB, session.program_id);
   const weekCount = await getWeekBookingCount(c.env.DB, dbUser.id, program.id, session.date);
   if (weekCount >= program.max_bookings_per_week) {
-    return c.json({ error: `Maximum ${program.max_bookings_per_week} booking(s) per week allowed for this program` }, 400);
+    return c.json({ error: `Maximum ${program.max_bookings_per_week} booking(s) per week allowed` }, 400);
   }
 
-  // For parent bookings, get the child
   let childId = null;
   if (program.booker_type === 'parent') {
     const child = await getChildByParentId(c.env.DB, dbUser.id);
@@ -208,64 +217,103 @@ app.get('/my-bookings', async (c) => {
 });
 
 // ─── Users ────────────────────────────────────────────────────
-app.post('/users', async (c) => {
-  const { user, error } = await requireAuth(c.req.raw, c.env);
-  if (error) return error;
-
-  const { full_name, phone, role, child_first_name, child_age } = await c.req.json();
-
-  if (!full_name || !role) {
-    return c.json({ error: 'full_name and role are required' }, 400);
-  }
-
-  if (!['parent', 'student'].includes(role)) {
-    return c.json({ error: 'Invalid role' }, 400);
-  }
-
-  const { createClerkClient } = await import('@clerk/backend');
-  const clerk = createClerkClient({ secretKey: c.env.CLERK_SECRET_KEY });
-  const clerkUser = await clerk.users.getUser(user.sub);
-  const email = clerkUser.emailAddresses?.[0]?.emailAddress;
-
-  if (!email) return c.json({ error: 'No email on Clerk account' }, 400);
-
-  const existing = await c.env.DB.prepare(
-    'SELECT id FROM users WHERE clerk_id = ?'
-  ).bind(user.sub).first();
-  if (existing) return c.json({ error: 'User already exists' }, 409);
-
-  const userId = generateId();
-  await c.env.DB.prepare(`
-    INSERT INTO users (id, clerk_id, email, full_name, phone, role, status)
-    VALUES (?, ?, ?, ?, ?, ?, 'active')
-  `).bind(userId, user.sub, email, full_name, phone || null, role).run();
-
-  // If parent, create child record
-  if (role === 'parent' && child_first_name) {
-    const childId = generateId();
-    await c.env.DB.prepare(`
-      INSERT INTO children (id, parent_id, first_name, age)
-      VALUES (?, ?, ?, ?)
-    `).bind(childId, userId, child_first_name, child_age || null).run();
-  }
-
-  return c.json({ ok: true, user_id: userId }, 201);
-});
-
 app.get('/users/me', async (c) => {
   const { user, error } = await requireAuth(c.req.raw, c.env);
   if (error) return error;
 
   const dbUser = await getUserByClerkId(c.env.DB, user.sub);
-  if (!dbUser) return c.json({ user: null });
 
-  // If parent, include child
+  if (!dbUser) {
+    return c.json({ user: null, first_login: true, role: null });
+  }
+
   let child = null;
   if (dbUser.role === 'parent') {
     child = await getChildByParentId(c.env.DB, dbUser.id);
   }
 
-  return c.json({ user: dbUser, child });
+  const first_login = dbUser.role === 'parent' && !child;
+
+  return c.json({
+    user: dbUser,
+    child,
+    first_login,
+    role: dbUser.role,
+  });
+});
+
+app.post('/users/child', async (c) => {
+  const { user, error } = await requireAuth(c.req.raw, c.env);
+  if (error) return error;
+
+  const { first_name, age } = await c.req.json();
+  if (!first_name) return c.json({ error: 'first_name required' }, 400);
+
+  const dbUser = await getUserByClerkId(c.env.DB, user.sub);
+  if (!dbUser) return c.json({ error: 'User not found' }, 404);
+  if (dbUser.role !== 'parent') return c.json({ error: 'Only parents can add children' }, 403);
+
+  const existing = await getChildByParentId(c.env.DB, dbUser.id);
+  if (existing) return c.json({ error: 'Child already exists' }, 409);
+
+  const id = generateId();
+  await c.env.DB.prepare(`
+    INSERT INTO children (id, parent_id, first_name, age)
+    VALUES (?, ?, ?, ?)
+  `).bind(id, dbUser.id, first_name, age || null).run();
+
+  return c.json({ ok: true, child_id: id }, 201);
+});
+
+// ─── Admin — Invite ───────────────────────────────────────────
+app.post('/admin/invite', async (c) => {
+  const { error } = await requireAdmin(c.req.raw, c.env);
+  if (error) return error;
+
+  const { first_name, last_name, email, phone, role } = await c.req.json();
+
+  if (!first_name || !last_name || !email || !role) {
+    return c.json({ error: 'first_name, last_name, email, and role are required' }, 400);
+  }
+
+  if (!['parent', 'student', 'instructor', 'admin'].includes(role)) {
+    return c.json({ error: 'Invalid role' }, 400);
+  }
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM users WHERE email = ?'
+  ).bind(email).first();
+  if (existing) return c.json({ error: 'A user with this email already exists' }, 409);
+
+  try {
+    const { createClerkClient } = await import('@clerk/backend');
+    const clerk = createClerkClient({ secretKey: c.env.CLERK_SECRET_KEY });
+
+    const invitation = await clerk.invitations.createInvitation({
+      emailAddress: email,
+      redirectUrl: c.env.INVITE_REDIRECT_URL,
+      publicMetadata: { role },
+    });
+
+    const userId = generateId();
+    await c.env.DB.prepare(`
+      INSERT INTO users (id, clerk_id, email, full_name, phone, role, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'active')
+    `).bind(
+      userId,
+      invitation.id,
+      email,
+      `${first_name} ${last_name}`,
+      phone || null,
+      role
+    ).run();
+
+    return c.json({ ok: true, user_id: userId, invitation_id: invitation.id }, 201);
+
+  } catch (e) {
+    console.error('Invite error:', e.message);
+    return c.json({ error: 'Failed to send invitation: ' + e.message }, 500);
+  }
 });
 
 // ─── Admin — Users ────────────────────────────────────────────
@@ -285,6 +333,33 @@ app.get('/admin/users', async (c) => {
 
   const result = await c.env.DB.prepare(query).bind(...bindings).all();
   return c.json({ users: result.results });
+});
+
+app.get('/admin/users/:id', async (c) => {
+  const { error } = await requireAdmin(c.req.raw, c.env);
+  if (error) return error;
+
+  const user = await c.env.DB.prepare(
+    'SELECT * FROM users WHERE id = ?'
+  ).bind(c.req.param('id')).first();
+
+  if (!user) return c.json({ error: 'User not found' }, 404);
+
+  let child = null;
+  if (user.role === 'parent') {
+    child = await getChildByParentId(c.env.DB, user.id);
+  }
+
+  const bookings = await c.env.DB.prepare(`
+    SELECT b.*, s.date, s.start_time, s.end_time, p.name as program_name
+    FROM bookings b
+    JOIN sessions s ON b.session_id = s.id
+    JOIN programs p ON s.program_id = p.id
+    WHERE b.user_id = ?
+    ORDER BY s.date DESC
+  `).bind(user.id).all();
+
+  return c.json({ user, child, bookings: bookings.results });
 });
 
 app.put('/admin/users/:id/status', async (c) => {
@@ -346,6 +421,7 @@ app.get('/admin/sessions', async (c) => {
 
   const date = c.req.query('date');
   const programId = c.req.query('program_id');
+  const weekStart = c.req.query('week_start');
 
   let query = `
     SELECT s.*, p.name as program_name,
@@ -362,6 +438,14 @@ app.get('/admin/sessions', async (c) => {
 
   if (date) { query += ' AND s.date = ?'; bindings.push(date); }
   if (programId) { query += ' AND s.program_id = ?'; bindings.push(programId); }
+  if (weekStart) {
+    const start = new Date(weekStart + 'T00:00:00Z');
+    const end = new Date(start);
+    end.setUTCDate(start.getUTCDate() + 6);
+    query += ' AND s.date >= ? AND s.date <= ?';
+    bindings.push(weekStart, end.toISOString().split('T')[0]);
+  }
+
   query += ' GROUP BY s.id ORDER BY s.date ASC, s.start_time ASC';
 
   const sessions = await c.env.DB.prepare(query).bind(...bindings).all();
