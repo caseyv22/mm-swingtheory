@@ -3,16 +3,22 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth, UserButton } from '@clerk/clerk-react'
 import { api } from '../lib/api.js'
 
-const PROGRAM_ICONS = {
-  'mini-mulligans': '⛳',
-  'summer-program': '☀️',
-  'theory-ai': '🏌️',
+const PROGRAM_DESCRIPTIONS = {
+  'mini-mulligans': 'Junior golf sessions for kids ages 5–12. Small groups, instructor-led, Tuesday and Thursday afternoons.',
+  'summer-program': 'Intensive multi-day summer sessions. Tuesday, Wednesday & Friday, 10 AM–12 PM.',
+  'theory-ai': 'One-on-one private coaching with a Swing Theory instructor, powered by AI swing analysis.',
 }
 
-const PROGRAM_DESCRIPTIONS = {
-  'mini-mulligans': 'Junior golf sessions for kids. Tue & Thu, 4–5 PM.',
-  'summer-program': 'Intensive summer sessions. Tue, Wed & Fri, 10 AM–12 PM.',
-  'theory-ai': 'One-on-one coaching with a Swing Theory instructor.',
+const PROGRAM_SCHEDULE = {
+  'mini-mulligans': 'Tue & Thu · 4:00 – 5:00 PM',
+  'summer-program': 'Tue, Wed & Fri · 10:00 AM – 12:00 PM',
+  'theory-ai': 'By appointment',
+}
+
+const PROGRAM_TAG = {
+  'mini-mulligans': 'Junior Program',
+  'summer-program': 'Summer Intensive',
+  'theory-ai': 'Private Coaching',
 }
 
 export default function ProgramSelector() {
@@ -22,9 +28,7 @@ export default function ProgramSelector() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   async function loadData() {
     try {
@@ -46,39 +50,33 @@ export default function ProgramSelector() {
     }
   }
 
-  // Filter programs by role
   const visiblePrograms = programs.filter(p => {
     if (!user) return false
     if (user.role === 'parent') return p.booker_type === 'parent' || p.booker_type === 'student'
     if (user.role === 'student') return p.booker_type === 'student'
-    return true // admin sees all
+    return true
   })
 
   if (loading) return (
     <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
-      <p className="text-st-green font-bold text-lg">Loading...</p>
+      <p className="text-st-green font-bold text-lg tracking-wide">Loading...</p>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-st-offwhite">
-      {/* Header */}
-      <div className="bg-st-green px-4 pt-10 pb-6">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img
-              src="/STEmblem.svg"
-              alt="Swing Theory"
-              width={36}
-              height={20}
-              className="brightness-0 invert"
-            />
-            <div>
-              <p className="font-display text-xl text-white tracking-widest">SWING THEORY</p>
-              <p className="font-body text-white/60 text-xs font-semibold tracking-widest uppercase">Pasadena</p>
+    <div className="min-h-screen bg-st-offwhite flex flex-col">
+
+      {/* Top Nav */}
+      <header className="bg-st-green border-b border-white/10 shrink-0">
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/STEmblem.svg" alt="Swing Theory" width={32} height={18} className="brightness-0 invert" />
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-lg text-white tracking-widest">SWING THEORY</span>
+              <span className="text-white/40 text-xs font-semibold tracking-widest uppercase hidden sm:inline">Pasadena</span>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             <button
               onClick={() => navigate('/my-bookings')}
               className="text-white/70 hover:text-white text-sm font-semibold transition-colors"
@@ -88,55 +86,81 @@ export default function ProgramSelector() {
             <UserButton afterSignOutUrl="/login" />
           </div>
         </div>
-        {user && (
-          <div className="max-w-lg mx-auto mt-4">
-            <p className="text-white font-extrabold text-2xl">
-              Hey, {user.full_name.split(' ')[0]} 👋
-            </p>
-            <p className="text-white/60 text-sm font-medium mt-0.5">
-              What would you like to book today?
-            </p>
-          </div>
-        )}
+      </header>
+
+      {/* Page hero */}
+      <div className="bg-st-green px-6 lg:px-10 pb-12 pt-10 shrink-0">
+        <div className="max-w-7xl mx-auto">
+          {user && (
+            <>
+              <p className="text-white/40 text-xs font-bold uppercase tracking-widest mb-2">Welcome back</p>
+              <h1 className="font-display text-5xl lg:text-6xl text-white tracking-widest">
+                {user.full_name.split(' ')[0].toUpperCase()}
+              </h1>
+              <p className="text-white/50 text-sm font-medium mt-2">
+                Select a program to view and book upcoming sessions.
+              </p>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Program Cards */}
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
+      {/* Programs */}
+      <main className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-10 py-10">
         {visiblePrograms.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-st-cloud">
-            <p className="font-bold text-st-green text-lg">No programs available</p>
-            <p className="text-st-graphite text-sm mt-1">Check back soon.</p>
+          <div className="bg-white rounded-2xl p-12 text-center border border-st-cloud">
+            <p className="font-display text-2xl text-st-green tracking-widest">NO PROGRAMS AVAILABLE</p>
+            <p className="text-st-graphite text-sm mt-2">Check back soon.</p>
           </div>
         ) : (
-          visiblePrograms.map(program => (
-            <button
-              key={program.id}
-              onClick={() => navigate(`/book/${program.slug}`)}
-              className="w-full bg-white rounded-2xl p-6 shadow-sm border border-st-cloud hover:border-st-accent hover:shadow-md transition-all text-left group"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <span className="text-3xl">{PROGRAM_ICONS[program.slug] || '📅'}</span>
-                  <div>
-                    <p className="font-extrabold text-lg text-st-phantom group-hover:text-st-green transition-colors">
-                      {program.name}
-                    </p>
-                    <p className="text-st-graphite text-sm font-medium mt-0.5">
-                      {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {visiblePrograms.map(program => (
+              <button
+                key={program.id}
+                onClick={() => navigate(`/book/${program.slug}`)}
+                className="group bg-white rounded-2xl border border-st-cloud hover:border-st-green hover:shadow-lg transition-all duration-200 text-left overflow-hidden"
+              >
+                {/* Animated top bar */}
+                <div className="h-0.5 bg-st-green scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
+
+                <div className="p-7">
+                  {/* Tag + arrow */}
+                  <div className="flex items-center justify-between mb-5">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-st-accent bg-st-light px-3 py-1 rounded-full">
+                      {PROGRAM_TAG[program.slug] || 'Program'}
+                    </span>
+                    <span className="text-st-cloud group-hover:text-st-green transition-colors text-xl font-light leading-none">
+                      →
+                    </span>
+                  </div>
+
+                  {/* Name */}
+                  <h2 className="font-display text-3xl text-st-phantom group-hover:text-st-green transition-colors tracking-widest leading-none mb-3">
+                    {program.name.toUpperCase()}
+                  </h2>
+
+                  {/* Description */}
+                  <p className="text-st-graphite text-sm font-medium leading-relaxed mb-6">
+                    {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
+                  </p>
+
+                  {/* Footer */}
+                  <div className="pt-5 border-t border-st-cloud flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-bold text-st-graphite uppercase tracking-widest">
+                      {PROGRAM_SCHEDULE[program.slug] || ''}
                     </p>
                     {program.price_display && (
-                      <span className="inline-block mt-2 bg-st-light text-st-green text-xs font-bold px-3 py-1 rounded-full">
+                      <span className="text-sm font-bold text-st-green shrink-0">
                         {program.price_display}
                       </span>
                     )}
                   </div>
                 </div>
-                <span className="text-st-graphite group-hover:text-st-green transition-colors mt-1">→</span>
-              </div>
-            </button>
-          ))
+              </button>
+            ))}
+          </div>
         )}
-      </div>
+      </main>
     </div>
   )
 }
