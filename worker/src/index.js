@@ -17,16 +17,15 @@ const app = new Hono();
 
 app.use('/*', cors({
   origin: (origin) => {
-    if (!origin) return '*';
-    if (origin === 'http://localhost:5173') return origin;
-    if (origin.endsWith('.pages.dev')) return origin;
-    if (origin === 'https://mm.swingtheory.golf') return origin;
-    if (origin === 'https://lessons.swingtheory.golf') return origin;
-    return null;
+    if (!origin) return true;
+    if (origin === 'http://localhost:5173') return true;
+    if (origin.endsWith('.pages.dev')) return true;
+    if (origin === 'https://mm.swingtheory.golf') return true;
+    if (origin === 'https://lessons.swingtheory.golf') return true;
+    return false;
   },
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'x-subdomain'],
-  credentials: true,
 }));
 
 // ─── Health ───────────────────────────────────────────────────────────────────
@@ -173,18 +172,11 @@ app.get('/programs/:slug/sessions', async (c) => {
   }
 
   const enriched = sessions.results.map(s => ({
-  ...s,
-  spots_remaining: s.capacity - s.booked_count,
-  is_booked_by_me: myBookings.has(s.id),
-  is_cancelled: s.is_cancelled === 1,
-  instructor_name: program.show_instructor ? s.instructor_name : null,
-  booked_count: undefined,
-  notes: undefined,
-  program_id: undefined,
-  instructor_id: undefined,
-  day_of_week: undefined,
-  created_at: undefined,
-}))
+    ...s,
+    spots_remaining: s.capacity - s.booked_count,
+    is_booked_by_me: myBookings.has(s.id),
+    instructor_name: program.show_instructor ? s.instructor_name : null,
+  }));
 
   return c.json({ paused: false, program, sessions: enriched });
 });
@@ -710,26 +702,57 @@ app.post('/admin/members', async (c) => {
   if (error) return error;
 
   const body = await c.req.json();
-  const { full_name, email, phone, kid_first_name, kid_age } = body;
+  const { full_name, email, phone, role, kid_first_name, kid_age } = body;
 
-  if (!full_name || !email) return c.json({ error: 'full_name and email required' }, 400);
+  if (!full_name || !email || !role) {
+    return c.json({ error: 'full_name, email, and role are required' }, 400);
+  }
+
+  const validRoles = ['student', 'parent', 'instructor', 'admin'];
+  if (!validRoles.includes(role)) {
+    return c.json({ error: 'Invalid role' }, 400);
+  }
 
   const existing = await c.env.DB.prepare(
     'SELECT id FROM users WHERE email = ?'
   ).bind(email).first();
   if (existing) return c.json({ error: 'A user with this email already exists' }, 409);
 
+  // Send Clerk invitation
+  let clerkId = `invited_${generateId()}`;
+  try {
+    const { createClerkClient } = await import('@clerk/backend');
+    const clerk = createClerkClient({ secretKey: c.env.CLERK_SECRET_KEY });
+    const invitation = await clerk.invitations.createInvitation({
+      emailAddress: email,
+      redirectUrl: 'https://mm-1a4.pages.dev/home',
+      publicMetadata: { role },
+      ignoreExisting: false,
+    });
+    clerkId = `invited_${invitation.id}`;
+  } catch (clerkErr) {
+    console.error('Clerk invitation error:', clerkErr.message);
+    // Non-fatal — still create the DB record
+  }
+
   const userId = generateId();
   await c.env.DB.prepare(
     `INSERT INTO users (id, clerk_id, email, full_name, phone, role, status)
-     VALUES (?, ?, ?, ?, ?, 'student', 'active')`
-  ).bind(userId, `manual_${userId}`, email, full_name, phone || null).run();
+     VALUES (?, ?, ?, ?, ?, ?, 'active')`
+  ).bind(userId, clerkId, email, full_name, phone || null, role).run();
 
-  if (kid_first_name) {
+  if (role === 'parent' && kid_first_name) {
     const childId = generateId();
     await c.env.DB.prepare(
       'INSERT INTO children (id, parent_id, first_name, age) VALUES (?, ?, ?, ?)'
     ).bind(childId, userId, kid_first_name, kid_age || null).run();
+  }
+
+  if (role === 'instructor') {
+    const instructorId = generateId();
+    await c.env.DB.prepare(
+      'INSERT INTO instructors (id, user_id) VALUES (?, ?)'
+    ).bind(instructorId, userId).run();
   }
 
   return c.json({ ok: true, user_id: userId }, 201);
