@@ -103,8 +103,7 @@ export default function App() {
                 </div>
               </div>
               <SignIn
-                routing="path"
-                path="/login"
+                routing="hash"
                 fallbackRedirectUrl="/home"
               />
             </div>
