@@ -103,11 +103,10 @@ export default function App() {
                 </div>
               </div>
               <SignIn
-  routing="path"
-  path="/login/*"
-  fallbackRedirectUrl="/home"
-  signUpUrl={undefined}
-/>
+                routing="path"
+                path="/login"
+                fallbackRedirectUrl="/home"
+              />
             </div>
           </div>
         } />
@@ -140,7 +139,7 @@ export default function App() {
           </ProtectedRoute>
         } />
 
-        <Route path="/admin" element={
+        <Route path="/admin/*" element={
           <ProtectedRoute>
             <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
               <p className="text-st-green font-bold text-lg">Admin panel coming soon</p>
