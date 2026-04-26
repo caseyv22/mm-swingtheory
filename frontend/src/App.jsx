@@ -103,10 +103,11 @@ export default function App() {
                 </div>
               </div>
               <SignIn
-                routing="path"
-                path="/login"
-                fallbackRedirectUrl="/home"
-              />
+  routing="path"
+  path="/login/*"
+  fallbackRedirectUrl="/home"
+  signUpUrl={undefined}
+/>
             </div>
           </div>
         } />
