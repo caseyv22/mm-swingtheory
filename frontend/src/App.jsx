@@ -86,7 +86,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={
+        <Route path="/login/*" element={
           <div className="min-h-screen bg-st-green flex items-center justify-center p-4">
             <div className="w-full max-w-md">
               <div className="flex items-center gap-3 mb-8">
