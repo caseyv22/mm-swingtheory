@@ -8,6 +8,7 @@ import MyBookingsPage from './pages/parent/MyBookingsPage.jsx'
 import ChildInfoPage from './pages/parent/ChildInfoPage.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminRoster from './pages/admin/AdminRoster.jsx'
+import AdminMembers from './pages/admin/AdminMembers.jsx'
 
 function RoleRouter() {
   const { getToken, isLoaded } = useAuth()
@@ -142,6 +143,8 @@ export default function App() {
 
         <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/roster" element={<ProtectedRoute><AdminRoster /></ProtectedRoute>} />
+        <Route path="/admin/members" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
+        <Route path="/admin/members/:id" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
