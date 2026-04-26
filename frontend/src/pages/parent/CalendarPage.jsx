@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useAuth, UserButton } from '@clerk/clerk-react'
+import { useAuth } from '@clerk/clerk-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api.js'
+import NavBar from '../../components/NavBar.jsx'
 
 function formatDate(dateStr) {
   const date = new Date(dateStr + 'T00:00:00')
@@ -17,14 +18,13 @@ function formatTime(timeStr) {
   return `${hour12}:${minute} ${ampm}`
 }
 
-// ─── Month Calendar Grid ──────────────────────────────────────────────────────
+// ─── Month Calendar ───────────────────────────────────────────────────────────
 
 function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
 
-  // Map session dates to status
   const sessionMap = {}
   sessions.forEach(s => {
     if (!sessionMap[s.date]) sessionMap[s.date] = { booked: false, available: false, cancelled: false, full: false }
@@ -53,31 +53,21 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
 
   return (
     <div className="bg-white rounded-2xl border border-st-cloud p-6 select-none">
-      {/* Month nav */}
       <div className="flex items-center justify-between mb-5">
-        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-st-offwhite transition-colors text-st-graphite text-xl leading-none">
-          ‹
-        </button>
-        <p className="font-display text-xl tracking-widest text-st-phantom">
-          {monthName.toUpperCase()} {viewYear}
-        </p>
-        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-st-offwhite transition-colors text-st-graphite text-xl leading-none">
-          ›
-        </button>
+        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-st-offwhite transition-colors text-st-graphite text-xl">‹</button>
+        <p className="font-display text-xl tracking-widest text-st-phantom">{monthName.toUpperCase()} {viewYear}</p>
+        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-st-offwhite transition-colors text-st-graphite text-xl">›</button>
       </div>
 
-      {/* Day headers */}
       <div className="grid grid-cols-7 mb-1">
         {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
           <div key={d} className="text-center text-[10px] font-bold uppercase tracking-widest text-st-graphite py-1">{d}</div>
         ))}
       </div>
 
-      {/* Day cells */}
       <div className="grid grid-cols-7 gap-y-1">
         {cells.map((day, i) => {
           if (!day) return <div key={`e${i}`} />
-
           const mm = String(viewMonth + 1).padStart(2, '0')
           const dd = String(day).padStart(2, '0')
           const dateStr = `${viewYear}-${mm}-${dd}`
@@ -109,23 +99,14 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
             >
               <span className={`text-sm font-semibold leading-none
                 ${isSelected ? 'text-white' : isToday ? 'text-st-green font-bold' : 'text-st-phantom'}
-              `}>
-                {day}
-              </span>
-              {/* Today indicator dot */}
-              {isToday && !isSelected && !hasSession && (
-                <span className="w-1 h-1 rounded-full bg-st-green mt-0.5" />
-              )}
-              {/* Session dot */}
-              {hasSession && (
-                <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-white/70' : dotColor}`} />
-              )}
+              `}>{day}</span>
+              {isToday && !isSelected && !hasSession && <span className="w-1 h-1 rounded-full bg-st-green mt-0.5" />}
+              {hasSession && <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-white/70' : dotColor}`} />}
             </button>
           )
         })}
       </div>
 
-      {/* Legend */}
       <div className="flex items-center gap-4 mt-5 pt-4 border-t border-st-cloud flex-wrap">
         {[
           { color: 'bg-st-accent', label: 'Available' },
@@ -168,35 +149,23 @@ function SessionRow({ session, onBook, onCancel, cancellationHours, showInstruct
     `}>
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1">
-          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusStyle}`}>
-            {statusLabel}
-          </span>
-          <p className="font-bold text-st-phantom text-base mt-2">
-            {formatTime(session.start_time)} – {formatTime(session.end_time)}
-          </p>
+          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusStyle}`}>{statusLabel}</span>
+          <p className="font-bold text-st-phantom text-base mt-2">{formatTime(session.start_time)} – {formatTime(session.end_time)}</p>
           {showInstructor && session.instructor_name && (
             <p className="text-sm text-st-accent font-semibold mt-0.5">with {session.instructor_name}</p>
           )}
           <p className="text-sm text-st-graphite font-medium mt-1">
-            {session.is_cancelled
-              ? session.cancel_reason || 'Session cancelled'
-              : `${session.spots_remaining} of ${session.capacity} spots open`}
+            {session.is_cancelled ? session.cancel_reason || 'Session cancelled' : `${session.spots_remaining} of ${session.capacity} spots open`}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isBookable && (
-            <button onClick={() => onBook(session)} className="bg-st-green text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity">
-              Book
-            </button>
+            <button onClick={() => onBook(session)} className="bg-st-green text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity">Book</button>
           )}
           {session.is_booked_by_me && !isPast && (
-            canCancel ? (
-              <button onClick={() => onCancel(session)} className="border border-st-smoke text-st-graphite font-medium text-sm px-4 py-2.5 rounded-lg hover:border-red-300 hover:text-red-500 transition-colors">
-                Cancel
-              </button>
-            ) : (
-              <p className="text-xs text-st-graphite text-right max-w-[110px] font-medium leading-tight">Cancellation window closed</p>
-            )
+            canCancel
+              ? <button onClick={() => onCancel(session)} className="border border-st-smoke text-st-graphite font-medium text-sm px-4 py-2.5 rounded-lg hover:border-red-300 hover:text-red-500 transition-colors">Cancel</button>
+              : <p className="text-xs text-st-graphite text-right max-w-[110px] font-medium leading-tight">Cancellation window closed</p>
           )}
         </div>
       </div>
@@ -273,7 +242,6 @@ export default function CalendarPage() {
         const sessionList = sessionsData.sessions || []
         setSessions(sessionList)
         setProgram(sessionsData.program || null)
-        // Auto-select the next available session date
         const nextAvail = sessionList.find(s => !s.is_cancelled && s.spots_remaining > 0)
         if (nextAvail && !selectedDate) setSelectedDate(nextAvail.date)
       }
@@ -335,44 +303,22 @@ export default function CalendarPage() {
 
   return (
     <div className="min-h-screen bg-st-offwhite flex flex-col">
+      <NavBar role={user?.role} />
 
-      {/* Nav */}
-      <header className="bg-st-green border-b border-white/10 shrink-0">
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
-          <button onClick={() => navigate('/programs')} className="flex items-center gap-3">
-            <img src="/STEmblem.svg" alt="ST" width={28} height={16} className="brightness-0 invert" />
-            <span className="text-white/60 hover:text-white text-sm font-semibold transition-colors">← All Programs</span>
-          </button>
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate('/my-bookings')} className="text-white/70 hover:text-white text-sm font-semibold transition-colors">
-              My Bookings
-            </button>
-            <UserButton afterSignOutUrl="/login" />
-          </div>
-        </div>
-      </header>
+      <main className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-10 py-8">
 
-      {/* Sub-header */}
-      <div className="bg-st-green px-6 lg:px-10 pb-6 pt-3 shrink-0">
-        <div className="max-w-7xl mx-auto flex items-end justify-between">
-          <div>
-            <h1 className="font-display text-4xl lg:text-5xl text-white tracking-widest leading-none">
-              {program?.name?.toUpperCase() || slug?.toUpperCase()}
-            </h1>
-            {user && (
-              <p className="text-white/50 text-sm font-medium mt-1.5">
-                {child ? `Booking for ${child.first_name}` : `Booking for ${user.full_name.split(' ')[0]}`}
-              </p>
-            )}
-          </div>
+        {/* Page title — in body */}
+        <div className="mb-8">
+          <p className="text-xs font-bold uppercase tracking-widest text-st-accent mb-1">
+            {user && (child ? `Booking for ${child.first_name}` : `Booking for ${user.full_name?.split(' ')[0]}`)}
+          </p>
+          <h1 className="font-display text-4xl lg:text-5xl text-st-phantom tracking-widest leading-none">
+            {program?.name?.toUpperCase() || slug?.toUpperCase()}
+          </h1>
           {program?.price_display && (
-            <span className="text-white/50 text-sm font-semibold hidden sm:block pb-1">{program.price_display}</span>
+            <p className="text-st-graphite text-sm font-medium mt-1.5">{program.price_display} · 50 S De Lacey Ave, Pasadena</p>
           )}
         </div>
-      </div>
-
-      {/* Main content */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-10 py-8">
 
         {/* Alerts */}
         {successMessage && (
@@ -398,13 +344,11 @@ export default function CalendarPage() {
         ) : (
           <div className="flex flex-col lg:flex-row gap-8">
 
-            {/* Left: Sessions */}
+            {/* Left: Sessions panel */}
             <div className="flex-1 min-w-0">
               {selectedDate ? (
                 <>
-                  <p className="text-xs font-bold uppercase tracking-widest text-st-graphite mb-4">
-                    {formatDate(selectedDate)}
-                  </p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-st-graphite mb-4">{formatDate(selectedDate)}</p>
                   <div className="space-y-3">
                     {selectedDateSessions.map(session => (
                       <SessionRow
@@ -419,9 +363,9 @@ export default function CalendarPage() {
                   </div>
                 </>
               ) : (
-                <div className="bg-white rounded-2xl border border-st-cloud p-10 text-center h-full flex flex-col items-center justify-center">
+                <div className="bg-white rounded-2xl border border-st-cloud p-10 text-center">
                   <p className="font-display text-xl text-st-phantom tracking-widest">SELECT A DATE</p>
-                  <p className="text-st-graphite text-sm font-medium mt-2 max-w-xs">
+                  <p className="text-st-graphite text-sm font-medium mt-2 max-w-xs mx-auto">
                     Tap a highlighted date on the calendar to view available sessions.
                   </p>
                   {nextAvailable && (
@@ -438,12 +382,7 @@ export default function CalendarPage() {
 
             {/* Right: Calendar + info */}
             <div className="lg:w-80 xl:w-96 shrink-0">
-              <MonthCalendar
-                sessions={sessions}
-                selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
-              />
-              {/* Info card */}
+              <MonthCalendar sessions={sessions} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
               <div className="mt-4 bg-white rounded-xl border border-st-cloud p-5 text-sm space-y-3 hidden lg:block">
                 {program?.session_days && (
                   <div>
