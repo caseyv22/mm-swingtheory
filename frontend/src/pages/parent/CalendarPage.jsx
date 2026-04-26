@@ -10,6 +10,15 @@ function formatDate(dateStr) {
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
+function formatTime(timeStr) {
+  if (!timeStr) return ''
+  const [hourStr, minute] = timeStr.split(':')
+  const hour = parseInt(hourStr, 10)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const hour12 = hour % 12 || 12
+  return `${hour12}:${minute} ${ampm}`
+}
+
 function SessionCard({ session, onBook, onCancel, cancellationHours, showInstructor }) {
   const today = new Date()
   const sessionStart = new Date(`${session.date}T${session.start_time}:00`)
@@ -21,11 +30,11 @@ function SessionCard({ session, onBook, onCancel, cancellationHours, showInstruc
   let statusLabel = ''
   let statusColor = ''
 
-  if (session.is_cancelled) { statusLabel = 'Cancelled'; statusColor = 'bg-red-50 text-red-500' }
-  else if (isPast) { statusLabel = 'Past'; statusColor = 'bg-st-cloud text-st-graphite' }
-  else if (session.is_booked_by_me) { statusLabel = 'Booked ✓'; statusColor = 'bg-st-light text-st-green' }
-  else if (isFull) { statusLabel = 'Full'; statusColor = 'bg-orange-50 text-orange-500' }
-  else { statusLabel = 'Available'; statusColor = 'bg-st-light text-st-green' }
+  if (session.is_cancelled)        { statusLabel = 'Cancelled'; statusColor = 'bg-red-50 text-red-500' }
+  else if (isPast)                 { statusLabel = 'Past';      statusColor = 'bg-st-cloud text-st-graphite' }
+  else if (session.is_booked_by_me){ statusLabel = 'Booked ✓'; statusColor = 'bg-st-light text-st-green' }
+  else if (isFull)                 { statusLabel = 'Full';      statusColor = 'bg-orange-50 text-orange-500' }
+  else                             { statusLabel = 'Available'; statusColor = 'bg-st-light text-st-green' }
 
   const isBookable = !session.is_cancelled && !isPast && !session.is_booked_by_me && !isFull
 
@@ -35,7 +44,7 @@ function SessionCard({ session, onBook, onCancel, cancellationHours, showInstruc
         <div>
           <p className="font-bold text-lg text-st-phantom leading-tight">{formatDate(session.date)}</p>
           <p className="text-sm text-st-graphite mt-0.5 font-medium">
-            {session.start_time} – {session.end_time} · Swing Theory Pasadena
+            {formatTime(session.start_time)} – {formatTime(session.end_time)} · Swing Theory Pasadena
           </p>
           {showInstructor && session.instructor_name && (
             <p className="text-sm text-st-accent font-semibold mt-0.5">
@@ -99,7 +108,7 @@ function ConfirmModal({ session, program, onConfirm, onClose, loading, user, chi
           </div>
           <div className="flex justify-between py-2.5 border-b border-st-cloud">
             <span className="text-st-graphite">Time</span>
-            <span>{session.start_time} – {session.end_time}</span>
+            <span>{formatTime(session.start_time)} – {formatTime(session.end_time)}</span>
           </div>
           <div className="flex justify-between py-2.5 border-b border-st-cloud">
             <span className="text-st-graphite">Location</span>
@@ -173,7 +182,8 @@ export default function CalendarPage() {
 
       if (meData.user) {
         setUser(meData.user)
-        setChild(meData.child || null)
+        const children = meData.children || []
+        setChild(children[0] || null)
       } else {
         navigate('/onboarding')
       }
@@ -205,11 +215,8 @@ export default function CalendarPage() {
     if (!confirm(`Cancel your booking for ${formatDate(session.date)}?`)) return
     try {
       const token = await getToken()
-      const res = await fetch(`${API_URL}/my-bookings`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      const booking = data.bookings?.find(b => b.session_id === session.id && b.status === 'confirmed')
+      const data = await api.getMyBookings(token)
+      const booking = data.upcoming?.find(b => b.session_id === session.id && b.status === 'confirmed')
       if (booking) {
         await api.cancelBooking(await getToken(), booking.id)
         setSuccessMessage('Booking cancelled.')
@@ -231,7 +238,7 @@ export default function CalendarPage() {
     <div className="min-h-screen bg-st-offwhite">
       {/* Header */}
       <div className="bg-st-green px-4 pt-10 pb-6">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
           <button
             onClick={() => navigate('/programs')}
             className="flex items-center gap-2.5"
@@ -251,7 +258,7 @@ export default function CalendarPage() {
             <UserButton afterSignOutUrl="/login" />
           </div>
         </div>
-        <div className="max-w-lg mx-auto mt-4">
+        <div className="max-w-5xl mx-auto mt-4">
           <h1 className="font-display text-4xl text-white tracking-widest">
             {program?.name?.toUpperCase() || 'SESSIONS'}
           </h1>
@@ -264,14 +271,14 @@ export default function CalendarPage() {
       </div>
 
       {/* Sessions */}
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-3">
+      <div className="max-w-5xl mx-auto px-4 py-6">
         {successMessage && (
-          <div className="bg-st-green text-white text-sm font-semibold px-4 py-3 rounded-xl">
+          <div className="bg-st-green text-white text-sm font-semibold px-4 py-3 rounded-xl mb-4">
             {successMessage}
           </div>
         )}
         {error && (
-          <div className="bg-red-50 text-red-500 text-sm font-semibold px-4 py-3 rounded-xl flex justify-between">
+          <div className="bg-red-50 text-red-500 text-sm font-semibold px-4 py-3 rounded-xl flex justify-between mb-4">
             {error}
             <button onClick={() => setError(null)} className="underline ml-2">Dismiss</button>
           </div>
@@ -288,16 +295,18 @@ export default function CalendarPage() {
             <p className="text-st-graphite text-sm mt-2 font-medium">Check back soon.</p>
           </div>
         ) : (
-          sessions.map(session => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              onBook={setSelectedSession}
-              onCancel={handleCancel}
-              cancellationHours={program?.cancellation_hours}
-              showInstructor={program?.show_instructor}
-            />
-          ))
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {sessions.map(session => (
+              <SessionCard
+                key={session.id}
+                session={session}
+                onBook={setSelectedSession}
+                onCancel={handleCancel}
+                cancellationHours={program?.cancellation_hours}
+                showInstructor={program?.show_instructor}
+              />
+            ))}
+          </div>
         )}
       </div>
 
