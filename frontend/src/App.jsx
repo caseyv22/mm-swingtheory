@@ -9,6 +9,9 @@ import ChildInfoPage from './pages/parent/ChildInfoPage.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminRoster from './pages/admin/AdminRoster.jsx'
 import AdminMembers from './pages/admin/AdminMembers.jsx'
+import AdminSessions from './pages/admin/AdminSessions.jsx'
+import AdminPrograms from './pages/admin/AdminPrograms.jsx'
+import AdminSettings from './pages/admin/AdminSettings.jsx'
 
 function RoleRouter() {
   const { getToken, isLoaded } = useAuth()
@@ -145,6 +148,9 @@ export default function App() {
         <Route path="/admin/roster" element={<ProtectedRoute><AdminRoster /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
         <Route path="/admin/members/:id" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
+        <Route path="/admin/sessions" element={<ProtectedRoute><AdminSessions /></ProtectedRoute>} />
+        <Route path="/admin/programs" element={<ProtectedRoute><AdminPrograms /></ProtectedRoute>} />
+        <Route path="/admin/settings" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
