@@ -3,12 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/admin', icon: '▪' },
-  { label: 'Roster', href: '/admin/roster', icon: '▪' },
-  { label: 'Members', href: '/admin/members', icon: '▪' },
-  { label: 'Sessions', href: '/admin/sessions', icon: '▪' },
-  { label: 'Programs', href: '/admin/programs', icon: '▪' },
-  { label: 'Settings', href: '/admin/settings', icon: '▪' },
+  { label: 'Dashboard', href: '/admin' },
+  { label: 'Sessions', href: '/admin/sessions' },
+  { label: 'Members', href: '/admin/members' },
+  { label: 'Programs', href: '/admin/programs' },
+  { label: 'Settings', href: '/admin/settings' },
 ]
 
 export default function AdminLayout({ children }) {
@@ -26,7 +25,6 @@ export default function AdminLayout({ children }) {
 
       {/* Sidebar — desktop */}
       <aside className="hidden lg:flex flex-col w-56 bg-st-green shrink-0 fixed top-0 left-0 h-full z-40">
-        {/* Logo */}
         <div className="px-6 py-6 border-b border-white/10">
           <button onClick={() => navigate('/admin')} className="flex items-center gap-3">
             <img src="/STEmblem.svg" alt="ST" width={28} height={16} className="brightness-0 invert" />
@@ -37,7 +35,6 @@ export default function AdminLayout({ children }) {
           </button>
         </div>
 
-        {/* Nav links */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {NAV_ITEMS.map(item => (
             <button
@@ -54,25 +51,20 @@ export default function AdminLayout({ children }) {
           ))}
         </nav>
 
-        {/* User */}
         <div className="px-5 py-5 border-t border-white/10 flex items-center gap-3">
           <UserButton afterSignOutUrl="/login" />
           <span className="text-white/50 text-xs font-semibold">Admin</span>
         </div>
       </aside>
 
-      {/* Mobile sidebar overlay */}
+      {/* Mobile overlay */}
       {sidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="lg:hidden fixed inset-0 bg-black/50 z-40" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Mobile sidebar drawer */}
+      {/* Mobile drawer */}
       <aside className={`lg:hidden fixed top-0 left-0 h-full w-56 bg-st-green z-50 flex flex-col transition-transform duration-200
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="px-6 py-6 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/STEmblem.svg" alt="ST" width={28} height={16} className="brightness-0 invert" />
@@ -104,15 +96,10 @@ export default function AdminLayout({ children }) {
         </div>
       </aside>
 
-      {/* Main content area */}
+      {/* Main */}
       <div className="flex-1 lg:ml-56 flex flex-col min-h-screen">
-
-        {/* Mobile top bar */}
         <header className="lg:hidden bg-st-green h-14 flex items-center justify-between px-4 shrink-0">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="flex flex-col gap-1.5 w-8 h-8 items-center justify-center"
-          >
+          <button onClick={() => setSidebarOpen(true)} className="flex flex-col gap-1.5 w-8 h-8 items-center justify-center">
             <span className="w-5 h-0.5 bg-white" />
             <span className="w-5 h-0.5 bg-white" />
             <span className="w-5 h-0.5 bg-white" />
@@ -124,7 +111,6 @@ export default function AdminLayout({ children }) {
           <UserButton afterSignOutUrl="/login" />
         </header>
 
-        {/* Page content */}
         <main className="flex-1 p-6 lg:p-10">
           {children}
         </main>
