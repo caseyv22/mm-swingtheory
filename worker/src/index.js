@@ -173,11 +173,18 @@ app.get('/programs/:slug/sessions', async (c) => {
   }
 
   const enriched = sessions.results.map(s => ({
-    ...s,
-    spots_remaining: s.capacity - s.booked_count,
-    is_booked_by_me: myBookings.has(s.id),
-    instructor_name: program.show_instructor ? s.instructor_name : null,
-  }));
+  ...s,
+  spots_remaining: s.capacity - s.booked_count,
+  is_booked_by_me: myBookings.has(s.id),
+  is_cancelled: s.is_cancelled === 1,
+  instructor_name: program.show_instructor ? s.instructor_name : null,
+  booked_count: undefined,
+  notes: undefined,
+  program_id: undefined,
+  instructor_id: undefined,
+  day_of_week: undefined,
+  created_at: undefined,
+}))
 
   return c.json({ paused: false, program, sessions: enriched });
 });
