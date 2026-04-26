@@ -22,12 +22,7 @@ function RoleRouter() {
     try {
       const token = await getToken()
       const data = await api.getMe(token)
-
-      if (!data.user) {
-        setStatus('no-user')
-        return
-      }
-
+      if (!data.user) { setStatus('no-user'); return }
       setRole(data.user.role)
       setFirstLogin(data.first_login)
       setStatus('ready')
@@ -67,7 +62,6 @@ function RoleRouter() {
   if (role === 'student') return <Navigate to="/programs" replace />
   if (role === 'instructor') return <Navigate to="/instructor" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
-
   return <Navigate to="/programs" replace />
 }
 
@@ -82,33 +76,39 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+function LoginPage() {
+  return (
+    <div className="min-h-screen bg-st-green flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="flex items-center gap-3 mb-8">
+          <img
+            src="/STEmblem.svg"
+            alt="Swing Theory"
+            width={48}
+            height={28}
+            className="brightness-0 invert"
+          />
+          <div>
+            <p className="font-display text-3xl text-white tracking-widest">SWING THEORY</p>
+            <p className="font-body text-white/60 text-xs font-semibold tracking-widest uppercase">Pasadena</p>
+          </div>
+        </div>
+        <SignIn
+          routing="path"
+          path="/login"
+          fallbackRedirectUrl="/home"
+        />
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login/*" element={
-          <div className="min-h-screen bg-st-green flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-              <div className="flex items-center gap-3 mb-8">
-                <img
-                  src="/STEmblem.svg"
-                  alt="Swing Theory"
-                  width={48}
-                  height={28}
-                  className="brightness-0 invert"
-                />
-                <div>
-                  <p className="font-display text-3xl text-white tracking-widest">SWING THEORY</p>
-                  <p className="font-body text-white/60 text-xs font-semibold tracking-widest uppercase">Pasadena</p>
-                </div>
-              </div>
-              <SignIn
-                routing="hash"
-                fallbackRedirectUrl="/home"
-              />
-            </div>
-          </div>
-        } />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login/*" element={<LoginPage />} />
 
         <Route path="/home" element={
           <ProtectedRoute><RoleRouter /></ProtectedRoute>
