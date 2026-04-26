@@ -155,7 +155,9 @@ function SessionRow({ session, onBook, onCancel, cancellationHours, showInstruct
             <p className="text-sm text-st-accent font-semibold mt-0.5">with {session.instructor_name}</p>
           )}
           <p className="text-sm text-st-graphite font-medium mt-1">
-            {session.is_cancelled ? session.cancel_reason || 'Session cancelled' : `${session.spots_remaining} of ${session.capacity} spots open`}
+            {session.is_cancelled
+              ? (session.cancel_reason || 'Session cancelled')
+              : `${session.spots_remaining ?? session.capacity} of ${session.capacity} spots open`}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -342,7 +344,7 @@ export default function CalendarPage() {
             <p className="text-st-graphite text-sm mt-2">Check back soon.</p>
           </div>
         ) : (
-          <div className="flex flex-col lg:flex-row gap-8">
+          <div className="flex flex-col-reverse lg:flex-row gap-8">
 
             {/* Left: Sessions panel */}
             <div className="flex-1 min-w-0">
