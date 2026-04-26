@@ -398,36 +398,7 @@ export default function CalendarPage() {
         ) : (
           <div className="flex flex-col lg:flex-row gap-8">
 
-            {/* Left: Calendar + info */}
-            <div className="lg:w-80 xl:w-96 shrink-0">
-              <MonthCalendar
-                sessions={sessions}
-                selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
-              />
-              {/* Info card */}
-              <div className="mt-4 bg-white rounded-xl border border-st-cloud p-5 text-sm space-y-3 hidden lg:block">
-                {program?.session_days && (
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-0.5">Schedule</p>
-                    <p className="font-semibold text-st-phantom capitalize">{program.session_days.replace(/,/g, ' & ')}</p>
-                  </div>
-                )}
-                {program?.start_time && (
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-0.5">Time</p>
-                    <p className="font-semibold text-st-phantom">{formatTime(program.start_time)} – {formatTime(program.end_time)}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-0.5">Location</p>
-                  <p className="font-semibold text-st-phantom">50 S De Lacey Ave</p>
-                  <p className="text-st-graphite text-xs mt-0.5">Pasadena, CA 91105</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Sessions */}
+            {/* Left: Sessions */}
             <div className="flex-1 min-w-0">
               {selectedDate ? (
                 <>
@@ -463,6 +434,35 @@ export default function CalendarPage() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Right: Calendar + info */}
+            <div className="lg:w-80 xl:w-96 shrink-0">
+              <MonthCalendar
+                sessions={sessions}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+              />
+              {/* Info card */}
+              <div className="mt-4 bg-white rounded-xl border border-st-cloud p-5 text-sm space-y-3 hidden lg:block">
+                {program?.session_days && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-0.5">Schedule</p>
+                    <p className="font-semibold text-st-phantom capitalize">{program.session_days.replace(/,/g, ' & ')}</p>
+                  </div>
+                )}
+                {program?.start_time && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-0.5">Time</p>
+                    <p className="font-semibold text-st-phantom">{formatTime(program.start_time)} – {formatTime(program.end_time)}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-0.5">Location</p>
+                  <p className="font-semibold text-st-phantom">50 S De Lacey Ave</p>
+                  <p className="text-st-graphite text-xs mt-0.5">Pasadena, CA 91105</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
