@@ -6,6 +6,7 @@ async function authFetch(url, token, options = {}) {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
+      'x-subdomain': window.location.hostname.startsWith('lessons') ? 'lessons' : 'mm',
       ...options.headers,
     },
   })
@@ -15,19 +16,12 @@ async function authFetch(url, token, options = {}) {
 }
 
 export const api = {
-  // User
   getMe: (token) => authFetch('/users/me', token),
-  createUser: (token, data) =>
-    authFetch('/users', token, { method: 'POST', body: JSON.stringify(data) }),
-
-  // Programs
+  createChild: (token, data) =>
+    authFetch('/users/child', token, { method: 'POST', body: JSON.stringify(data) }),
   getPrograms: (token) => authFetch('/programs', token),
   getProgram: (token, slug) => authFetch(`/programs/${slug}`, token),
-
-  // Sessions
   getSessions: (token, slug) => authFetch(`/programs/${slug}/sessions`, token),
-
-  // Bookings
   getMyBookings: (token) => authFetch('/my-bookings', token),
   createBooking: (token, sessionId) =>
     authFetch('/bookings', token, { method: 'POST', body: JSON.stringify({ session_id: sessionId }) }),
