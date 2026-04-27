@@ -832,6 +832,93 @@ app.get('/instructor/students', requireInstructor, async (c) => {
   return c.json({ students: students.results })
 })
 
+
+// GET /instructor/sessions/:id/roster
+app.get('/instructor/sessions/:id/roster', requireInstructor, async (c) => {
+  const { id } = c.req.param()
+  const user = c.get('user')
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+  const session = await c.env.DB.prepare(`
+    SELECT s.*, p.name as program_name FROM sessions s
+    JOIN programs p ON s.program_id = p.id
+    WHERE s.id = ? AND s.instructor_id = ?
+  `).bind(id, instr.id).first()
+  if (!session) return c.json({ error: 'Session not found or not assigned to you' }, 404)
+  const bookings = await c.env.DB.prepare(`
+    SELECT b.*, u.full_name, u.email, u.phone, ch.first_name as child_name
+    FROM bookings b
+    JOIN users u ON b.user_id = u.id
+    LEFT JOIN children ch ON b.child_id = ch.id
+    WHERE b.session_id = ? AND b.status = 'confirmed'
+    ORDER BY u.full_name ASC
+  `).bind(id).all()
+  return c.json({ session, bookings: bookings.results })
+})
+
+// GET /instructor/students/:id/sessions
+app.get('/instructor/students/:id/sessions', requireInstructor, async (c) => {
+  const { id } = c.req.param()
+  const user = c.get('user')
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+  const assigned = await c.env.DB.prepare(
+    'SELECT id FROM student_instructors WHERE student_id = ? AND instructor_id = ?'
+  ).bind(id, instr.id).first()
+  if (!assigned) return c.json({ error: 'Student not assigned to you' }, 403)
+  const sessions = await c.env.DB.prepare(`
+    SELECT s.*, p.name as program_name
+    FROM sessions s
+    JOIN programs p ON s.program_id = p.id
+    JOIN bookings b ON b.session_id = s.id
+    WHERE s.instructor_id = ? AND b.user_id = ? AND b.status = 'confirmed'
+    ORDER BY s.date DESC
+  `).bind(instr.id, id).all()
+  return c.json({ sessions: sessions.results })
+})
+
+// GET /instructor/students/:id/notes
+app.get('/instructor/students/:id/notes', requireInstructor, async (c) => {
+  const { id } = c.req.param()
+  const user = c.get('user')
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+  const notes = await c.env.DB.prepare(`
+    SELECT * FROM lesson_notes
+    WHERE instructor_id = ? AND student_id = ?
+    ORDER BY created_at DESC
+  `).bind(instr.id, id).all()
+  return c.json({ notes: notes.results })
+})
+
+// POST /instructor/students/:id/notes
+app.post('/instructor/students/:id/notes', requireInstructor, async (c) => {
+  const { id } = c.req.param()
+  const user = c.get('user')
+  const { session_id, note } = await c.req.json()
+  if (!note?.trim()) return c.json({ error: 'Note cannot be empty' }, 400)
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+  const assigned = await c.env.DB.prepare(
+    'SELECT id FROM student_instructors WHERE student_id = ? AND instructor_id = ?'
+  ).bind(id, instr.id).first()
+  if (!assigned) return c.json({ error: 'Student not assigned to you' }, 403)
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM lesson_notes WHERE instructor_id = ? AND student_id = ? AND session_id = ?'
+  ).bind(instr.id, id, session_id || null).first()
+  if (existing) {
+    await c.env.DB.prepare(
+      "UPDATE lesson_notes SET note = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(note.trim(), existing.id).run()
+    return c.json({ ok: true, updated: true })
+  }
+  const noteId = 'note_' + uid()
+  await c.env.DB.prepare(
+    'INSERT INTO lesson_notes (id, instructor_id, student_id, session_id, note) VALUES (?, ?, ?, ?, ?)'
+  ).bind(noteId, instr.id, id, session_id || null, note.trim()).run()
+  return c.json({ ok: true, note_id: noteId })
+})
+
 // ─── CRON HANDLERS ────────────────────────────────────────────────────────────
 export default {
   fetch: app.fetch,
