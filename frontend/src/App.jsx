@@ -6,7 +6,7 @@ import ProgramSelector from './pages/ProgramSelector.jsx'
 import ParentHome from './pages/parent/ParentHome.jsx'
 import CalendarPage from './pages/parent/CalendarPage.jsx'
 import MyBookingsPage from './pages/parent/MyBookingsPage.jsx'
-import ChildInfoPage from './pages/parent/ChildInfoPage.jsx'
+import AccountPage from './pages/parent/AccountPage.jsx'
 import AdminSessions from './pages/admin/AdminSessions.jsx'
 import AdminMembers from './pages/admin/AdminMembers.jsx'
 import AdminPrograms from './pages/admin/AdminPrograms.jsx'
@@ -62,8 +62,8 @@ function RoleRouter() {
     </div>
   )
 
-  if (role === 'parent' && firstLogin) return <Navigate to="/child-info" replace />
-  if (role === 'parent') return <ParentHome />
+  if (role === 'parent' && firstLogin) return <Navigate to="/account?onboarding=true" replace />
+  if (role === 'parent') return <Navigate to="/home" replace />
   if (role === 'student') return <Navigate to="/programs" replace />
   if (role === 'instructor') return <Navigate to="/instructor" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
@@ -116,11 +116,19 @@ export default function App() {
         <Route path="/login/*" element={<LoginPage />} />
 
         <Route path="/home" element={
+          <ProtectedRoute><ParentHome /></ProtectedRoute>
+        } />
+
+        <Route path="/" element={
           <ProtectedRoute><RoleRouter /></ProtectedRoute>
         } />
 
+        <Route path="/account" element={
+          <ProtectedRoute><AccountPage /></ProtectedRoute>
+        } />
+
         <Route path="/child-info" element={
-          <ProtectedRoute><ChildInfoPage /></ProtectedRoute>
+          <Navigate to="/account?onboarding=true" replace />
         } />
 
         <Route path="/programs" element={
