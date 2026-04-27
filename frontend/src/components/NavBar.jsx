@@ -3,8 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
 
 const NAV_LINKS = [
-  { label: 'Programs', href: '/programs' },
+  { label: 'Home', href: '/home' },
   { label: 'My Bookings', href: '/my-bookings' },
+  { label: 'Child Info', href: '/child-info' },
 ]
 
 export default function NavBar({ role = 'student' }) {
