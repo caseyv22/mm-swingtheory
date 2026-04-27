@@ -20,6 +20,8 @@ function RoleRouter() {
 
   useEffect(() => {
     if (!isLoaded) return
+    // Register the token getter with api so admin pages can call api.get/post/put/delete
+    api.init(getToken)
     loadMe()
   }, [isLoaded])
 
@@ -71,7 +73,15 @@ function RoleRouter() {
 }
 
 function ProtectedRoute({ children }) {
-  const { isLoaded, isSignedIn } = useAuth()
+  const { getToken, isLoaded, isSignedIn } = useAuth()
+
+  useEffect(() => {
+    // Ensure api is always initialized for protected routes (e.g. admin navigating directly)
+    if (isLoaded && isSignedIn) {
+      api.init(getToken)
+    }
+  }, [isLoaded, isSignedIn])
+
   if (!isLoaded) return (
     <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
       <p className="text-st-green font-bold text-lg">Loading...</p>
