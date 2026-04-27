@@ -3,8 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/admin' },
-  { label: 'Sessions', href: '/admin/sessions' },
+  { label: 'Sessions', href: '/admin' },
   { label: 'Members', href: '/admin/members' },
   { label: 'Programs', href: '/admin/programs' },
   { label: 'Settings', href: '/admin/settings' },
