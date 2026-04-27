@@ -1,746 +1,630 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '@clerk/clerk-react'
-import { useNavigate } from 'react-router-dom'
-import AdminLayout from '../../components/AdminLayout.jsx'
+import { useState, useEffect, useCallback } from 'react'
+import AdminLayout from '../../components/AdminLayout'
+import { api } from '../../lib/api'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.workers.dev'
-
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(dateStr) {
-  const date = new Date(dateStr + 'T00:00:00')
-  return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric'
+  })
 }
 
 function formatDateShort(dateStr) {
-  const date = new Date(dateStr + 'T00:00:00')
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric'
+  })
 }
 
-function formatTime(timeStr) {
-  if (!timeStr) return ''
-  const [hourStr, minute] = timeStr.split(':')
-  const hour = parseInt(hourStr, 10)
+function formatTime(t) {
+  if (!t) return ''
+  const [h, m] = t.split(':')
+  const hour = parseInt(h)
   const ampm = hour >= 12 ? 'PM' : 'AM'
-  const hour12 = hour % 12 || 12
-  return `${hour12}:${minute} ${ampm}`
+  return `${hour % 12 || 12}:${m} ${ampm}`
 }
 
-function getWeekMonday(date = new Date()) {
+function getWeekStart(date) {
   const d = new Date(date)
   const day = d.getDay()
   d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
-  d.setHours(0, 0, 0, 0)
   return d
 }
 
-function formatWeekLabel(monday) {
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-  const opts = { month: 'short', day: 'numeric' }
-  return `${monday.toLocaleDateString('en-US', opts)} – ${sunday.toLocaleDateString('en-US', opts)}`
+function addDays(date, n) {
+  const d = new Date(date)
+  d.setDate(d.getDate() + n)
+  return d
 }
 
-// ─── Month Calendar (same as before, keeping it compact) ──────────────────────
+function isoDate(d) {
+  return d.toISOString().split('T')[0]
+}
 
-function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
-  const today = new Date()
-  const [viewYear, setViewYear] = useState(today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(today.getMonth())
-
-  const sessionMap = {}
-  sessions.forEach(s => {
-    if (!sessionMap[s.date]) sessionMap[s.date] = { hasSession: false, cancelled: false, booked: 0, capacity: 0 }
-    sessionMap[s.date].hasSession = true
-    if (s.is_cancelled === 1) sessionMap[s.date].cancelled = true
-    sessionMap[s.date].booked += s.booked_count || 0
-    sessionMap[s.date].capacity += s.capacity || 0
-  })
-
-  const monthName = new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US', { month: 'long' })
-  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay()
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
-
-  const cells = []
-  for (let i = 0; i < firstDayOfWeek; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-
-  function prevMonth() {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
-    else setViewMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
-    else setViewMonth(m => m + 1)
-  }
-
+// ─── Metric Card ──────────────────────────────────────────────────────────────
+function MetricCard({ label, value, sub }) {
   return (
-    <div className="bg-white rounded-2xl border border-st-cloud p-6 select-none h-full flex flex-col">
-      <div className="flex items-center justify-between mb-5">
-        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-st-offwhite transition-colors text-st-graphite text-xl">‹</button>
-        <p className="font-display text-xl tracking-widest text-st-phantom">{monthName.toUpperCase()} {viewYear}</p>
-        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-st-offwhite transition-colors text-st-graphite text-xl">›</button>
-      </div>
-
-      <div className="grid grid-cols-7 mb-1">
-        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-          <div key={d} className="text-center text-[10px] font-bold uppercase tracking-widest text-st-graphite py-1">{d}</div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-y-1 flex-1">
-        {cells.map((day, i) => {
-          if (!day) return <div key={`e${i}`} />
-          const mm = String(viewMonth + 1).padStart(2, '0')
-          const dd = String(day).padStart(2, '0')
-          const dateStr = `${viewYear}-${mm}-${dd}`
-          const cellDate = new Date(viewYear, viewMonth, day)
-          const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-          const isToday = cellDate.getTime() === todayDate.getTime()
-          const isPast = cellDate < todayDate
-          const info = sessionMap[dateStr]
-          const hasSession = !!info?.hasSession
-          const isSelected = selectedDate === dateStr
-          const isFull = info && info.booked >= info.capacity
-          const isCancelled = info?.cancelled
-
-          let dotColor = 'bg-st-accent'
-          if (isCancelled) dotColor = 'bg-red-400'
-          else if (isFull) dotColor = 'bg-orange-400'
-
-          return (
-            <button
-              key={dateStr}
-              onClick={() => hasSession && onSelectDate(isSelected ? null : dateStr)}
-              disabled={!hasSession}
-              className={`
-                relative flex flex-col items-center justify-center rounded-xl py-2 transition-all duration-100
-                ${hasSession && !isSelected ? 'cursor-pointer hover:bg-st-light' : ''}
-                ${!hasSession ? 'cursor-default' : ''}
-                ${isSelected ? 'bg-st-green' : ''}
-                ${isPast && !isSelected ? 'opacity-40' : ''}
-              `}
-            >
-              <span className={`text-sm font-semibold leading-none
-                ${isSelected ? 'text-white' : isToday ? 'text-st-green font-bold' : 'text-st-phantom'}
-              `}>{day}</span>
-              {isToday && !isSelected && !hasSession && <span className="w-1 h-1 rounded-full bg-st-green mt-0.5" />}
-              {hasSession && <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-white/70' : dotColor}`} />}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="flex items-center gap-4 mt-5 pt-4 border-t border-st-cloud flex-wrap">
-        {[
-          { color: 'bg-st-accent', label: 'Available' },
-          { color: 'bg-orange-400', label: 'Full' },
-          { color: 'bg-red-400', label: 'Cancelled' },
-        ].map(({ color, label }) => (
-          <div key={label} className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${color}`} />
-            <span className="text-[10px] font-semibold text-st-graphite uppercase tracking-widest">{label}</span>
-          </div>
-        ))}
-      </div>
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+      <p className="font-display text-3xl text-[#064029] tracking-wide leading-none">{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
   )
 }
 
-// ─── Add Member Modal (keeping compact) ───────────────────────────────────────
-
-function AddMemberModal({ session, onClose, onBooked }) {
-  const { getToken } = useAuth()
-  const [search, setSearch] = useState('')
-  const [results, setResults] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [searching, setSearching] = useState(false)
-  const [booking, setBooking] = useState(false)
-  const [error, setError] = useState(null)
-
-  async function searchMembers(q) {
-    if (!q || q.length < 2) { setResults([]); return }
-    setSearching(true)
-    try {
-      const token = await getToken()
-      const res = await fetch(`${API_URL}/admin/members?q=${encodeURIComponent(q)}&status=active`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      setResults(data.members || [])
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setSearching(false)
-    }
-  }
-
-  async function handleBook() {
-    if (!selected) return
-    setBooking(true)
-    setError(null)
-    try {
-      const token = await getToken()
-      const res = await fetch(`${API_URL}/admin/bookings`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: selected.id, session_id: session.id })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Booking failed')
-      onBooked(selected.full_name)
-      onClose()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBooking(false)
-    }
-  }
+// ─── Session Card (week view) ─────────────────────────────────────────────────
+function SessionCard({ session, isSelected, onClick }) {
+  const pct = session.capacity > 0 ? Math.round((session.booked_count / session.capacity) * 100) : 0
+  const isFull = session.booked_count >= session.capacity
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
-        <h2 className="font-display text-2xl text-st-green tracking-widest">ADD TO SESSION</h2>
-        <p className="text-st-graphite text-sm font-medium mt-1 mb-5">
-          {formatDate(session.date)} · {formatTime(session.start_time)} – {formatTime(session.end_time)}
-        </p>
-
-        {error && (
-          <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-lg mb-4">{error}</div>
-        )}
-
-        <div className="mb-4">
-          <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Search Member</label>
-          <input
-            type="text"
-            value={selected ? selected.full_name : search}
-            onChange={e => {
-              if (selected) setSelected(null)
-              setSearch(e.target.value)
-              searchMembers(e.target.value)
-            }}
-            placeholder="Name or email..."
-            className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
-            autoFocus
-          />
-          {results.length > 0 && !selected && (
-            <div className="mt-1 border border-st-cloud rounded-lg overflow-hidden shadow-sm max-h-48 overflow-y-auto">
-              {results.map((m, i) => (
-                <button
-                  key={m.id}
-                  onClick={() => { setSelected(m); setResults([]) }}
-                  className={`w-full text-left px-4 py-3 text-sm hover:bg-st-offwhite transition-colors ${i < results.length - 1 ? 'border-b border-st-cloud' : ''}`}
-                >
-                  <span className="font-semibold text-st-phantom">{m.full_name}</span>
-                  <span className="text-st-graphite ml-2 text-xs">{m.email}</span>
-                  {m.child_first_name && (
-                    <span className="text-st-accent ml-2 text-xs font-semibold">· {m.child_first_name}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-          {searching && <p className="text-xs text-st-graphite mt-1">Searching...</p>}
+    <button
+      onClick={onClick}
+      className={`w-full text-left rounded-xl border px-4 py-3.5 transition-all hover:shadow-md ${
+        isSelected
+          ? 'border-[#1D9E75] bg-[#E1F5EE] shadow-md'
+          : session.is_cancelled
+          ? 'border-red-100 bg-red-50 opacity-70'
+          : 'border-gray-100 bg-white hover:border-gray-200'
+      }`}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <p className="text-xs font-semibold text-[#1D9E75] uppercase tracking-wider">{session.program_name}</p>
+          <p className="text-sm font-semibold text-gray-900 mt-0.5">{formatDateShort(session.date)}</p>
+          <p className="text-xs text-gray-400">{formatTime(session.start_time)} – {formatTime(session.end_time)}</p>
         </div>
-
-        {selected && (
-          <div className="bg-st-light rounded-xl px-4 py-3 mb-4">
-            <p className="font-semibold text-st-green text-sm">{selected.full_name}</p>
-            <p className="text-st-graphite text-xs mt-0.5">{selected.email}</p>
-            {selected.child_first_name && (
-              <p className="text-st-accent text-xs font-semibold mt-0.5">Child: {selected.child_first_name}</p>
-            )}
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 border border-st-smoke text-st-graphite font-semibold py-3 rounded-xl hover:bg-st-offwhite transition-colors">
-            Cancel
-          </button>
-          <button
-            onClick={handleBook}
-            disabled={booking || !selected}
-            className="flex-1 bg-st-green text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-40"
-          >
-            {booking ? 'Booking...' : 'Book Session'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Session Roster Panel (keeping compact) ────────────────────────────────────
-
-function SessionRosterPanel({ session, onCheckinChange, onCancelSession }) {
-  const { getToken } = useAuth()
-  const [roster, setRoster] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [checkingIn, setCheckingIn] = useState({})
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [showCancelModal, setShowCancelModal] = useState(false)
-  const [cancelReason, setCancelReason] = useState('')
-  const [cancelling, setCancelling] = useState(false)
-  const [successMsg, setSuccessMsg] = useState(null)
-  const [error, setError] = useState(null)
-
-  useEffect(() => { loadRoster() }, [session.id])
-
-  async function loadRoster() {
-    setLoading(true)
-    try {
-      const token = await getToken()
-      const res = await fetch(`${API_URL}/admin/sessions/${session.id}/roster`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      setRoster(data.roster || [])
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleCheckin(bookingId, current) {
-    setCheckingIn(prev => ({ ...prev, [bookingId]: true }))
-    try {
-      const token = await getToken()
-      await fetch(`${API_URL}/admin/bookings/${bookingId}/checkin`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ checked_in: current ? 0 : 1 })
-      })
-      await loadRoster()
-      onCheckinChange?.()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setCheckingIn(prev => ({ ...prev, [bookingId]: false }))
-    }
-  }
-
-  async function handleCancelSession() {
-    setCancelling(true)
-    try {
-      const token = await getToken()
-      await fetch(`${API_URL}/admin/sessions/${session.id}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_cancelled: 1, cancel_reason: cancelReason || null })
-      })
-      setShowCancelModal(false)
-      onCancelSession?.()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setCancelling(false)
-    }
-  }
-
-  const checkedInCount = roster.filter(r => r.checked_in).length
-
-  return (
-    <div className="space-y-4 h-full flex flex-col">
-      {/* Session header */}
-      <div className="bg-white rounded-2xl border border-st-cloud p-5">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-st-accent mb-1">{session.program_name}</p>
-            <h3 className="font-display text-2xl text-st-phantom tracking-widest">{formatDate(session.date).toUpperCase()}</h3>
-            <p className="text-st-graphite text-sm font-medium mt-1">
-              {formatTime(session.start_time)} – {formatTime(session.end_time)}
-            </p>
-          </div>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="text-center">
-              <p className="font-display text-3xl text-st-phantom tracking-widest">
-                {session.booked_count || 0}<span className="text-st-graphite text-xl">/{session.capacity}</span>
-              </p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite">Booked</p>
-            </div>
-            {roster.length > 0 && (
-              <div className="text-center">
-                <p className="font-display text-3xl text-st-green tracking-widest">{checkedInCount}</p>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite">Checked In</p>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="flex gap-2 mt-4">
-          {session.is_cancelled !== 1 && (
-            <>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="bg-st-green text-white font-bold text-sm px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
-              >
-                + Add Member
-              </button>
-              <button
-                onClick={() => setShowCancelModal(true)}
-                className="border border-red-200 text-red-500 font-semibold text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors"
-              >
-                Cancel Session
-              </button>
-            </>
-          )}
-          {session.is_cancelled === 1 && (
-            <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 px-3 py-1.5 rounded-full border border-red-100">
-              Cancelled
+        <div className="text-right">
+          {session.is_cancelled ? (
+            <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>
+          ) : (
+            <span className={`text-xs font-semibold ${isFull ? 'text-red-500' : 'text-gray-600'}`}>
+              {session.booked_count}/{session.capacity}
             </span>
           )}
         </div>
       </div>
 
-      {successMsg && (
-        <div className="bg-st-green text-white text-sm font-semibold px-5 py-3 rounded-xl">{successMsg}</div>
-      )}
-      {error && (
-        <div className="bg-red-50 text-red-600 text-sm font-semibold px-5 py-3 rounded-xl flex justify-between">
-          {error}
-          <button onClick={() => setError(null)} className="underline ml-4">Dismiss</button>
+      {/* Capacity bar */}
+      {!session.is_cancelled && (
+        <div className="w-full bg-gray-100 rounded-full h-1.5">
+          <div
+            className={`h-1.5 rounded-full transition-all ${isFull ? 'bg-red-400' : 'bg-[#1D9E75]'}`}
+            style={{ width: `${Math.min(pct, 100)}%` }}
+          />
         </div>
       )}
 
-      {/* Roster table */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        {loading ? (
-          <div className="bg-white rounded-2xl border border-st-cloud p-8 text-center">
-            <p className="text-st-green font-bold tracking-wide">Loading roster...</p>
+      {session.instructor_name && (
+        <p className="text-xs text-gray-400 mt-2">👤 {session.instructor_name}</p>
+      )}
+      {session.bay && (
+        <p className="text-xs text-gray-400">📍 {session.bay}</p>
+      )}
+    </button>
+  )
+}
+
+// ─── Roster Panel ─────────────────────────────────────────────────────────────
+function RosterPanel({ session, onClose, onUpdate }) {
+  const [roster, setRoster] = useState(null)
+  const [instructors, setInstructors] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState('')
+
+  // Session edit state
+  const [capacity, setCapacity] = useState(session.capacity)
+  const [bay, setBay] = useState(session.bay || '')
+  const [selectedInstructorId, setSelectedInstructorId] = useState(session.instructor_id || '')
+  const [cancelReason, setCancelReason] = useState(session.cancel_reason || '')
+  const [showCancelForm, setShowCancelForm] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    api.get(`/admin/sessions/${session.id}/roster`).then(data => {
+      setRoster(data)
+      setInstructors(data.instructors || [])
+      setLoading(false)
+    })
+  }, [session.id])
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 2500)
+  }
+
+  async function handleUpdateSession() {
+    setSaving(true)
+    try {
+      await api.put(`/admin/sessions/${session.id}`, {
+        capacity: parseInt(capacity),
+        bay: bay || null,
+        instructor_id: selectedInstructorId || null,
+      })
+      showToast('Session updated')
+      onUpdate()
+    } catch (e) {
+      showToast(e.message || 'Update failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCancelSession() {
+    setSaving(true)
+    try {
+      await api.put(`/admin/sessions/${session.id}`, {
+        is_cancelled: 1,
+        cancel_reason: cancelReason,
+      })
+      showToast('Session cancelled')
+      onUpdate()
+      setShowCancelForm(false)
+    } catch (e) {
+      showToast(e.message || 'Cancel failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleUncancelSession() {
+    setSaving(true)
+    try {
+      await api.put(`/admin/sessions/${session.id}`, { is_cancelled: 0, cancel_reason: null })
+      showToast('Session restored')
+      onUpdate()
+    } catch (e) {
+      showToast(e.message || 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCheckin(bookingId) {
+    try {
+      const res = await api.post(`/admin/bookings/${bookingId}/checkin`, {})
+      setRoster(prev => ({
+        ...prev,
+        bookings: prev.bookings.map(b =>
+          b.id === bookingId ? { ...b, checked_in: res.checked_in } : b
+        )
+      }))
+    } catch (e) {
+      showToast('Check-in failed')
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-white border-r border-gray-100">
+      {toast && (
+        <div className="absolute top-4 left-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">
+          {toast}
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-gray-100">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold text-[#1D9E75] uppercase tracking-wider">{session.program_name}</p>
+            <h2 className="font-display text-xl text-[#064029] tracking-wide mt-0.5">{formatDate(session.date)}</h2>
+            <p className="text-sm text-gray-400">{formatTime(session.start_time)} – {formatTime(session.end_time)}</p>
           </div>
-        ) : roster.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-st-cloud p-10 text-center">
-            <p className="font-display text-xl text-st-phantom tracking-widest">NO BOOKINGS YET</p>
-            <p className="text-st-graphite text-sm font-medium mt-2">Use the Add Member button to book someone in.</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-st-cloud overflow-hidden flex-1 flex flex-col">
-            <div className="overflow-auto flex-1">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-st-offwhite border-b border-st-cloud">
-                  <tr>
-                    <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite">Child / Student</th>
-                    <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden md:table-cell">Parent</th>
-                    <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden lg:table-cell">Phone</th>
-                    <th className="text-center px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite">Check In</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roster.map((row, i) => (
-                    <tr key={row.booking_id} className={`${i < roster.length - 1 ? 'border-b border-st-cloud' : ''} ${row.checked_in ? 'bg-st-light/30' : ''}`}>
-                      <td className="px-5 py-4 font-semibold text-st-phantom">
-                        {row.child_first_name || row.parent_name}
-                        {row.child_age && <span className="text-st-graphite font-normal ml-1 text-xs">age {row.child_age}</span>}
-                      </td>
-                      <td className="px-5 py-4 text-st-graphite hidden md:table-cell">{row.parent_name}</td>
-                      <td className="px-5 py-4 text-st-graphite hidden lg:table-cell">
-                        {row.parent_phone
-                          ? <a href={`tel:${row.parent_phone}`} className="hover:text-st-green transition-colors">{row.parent_phone}</a>
-                          : '—'}
-                      </td>
-                      <td className="px-5 py-4 text-center">
-                        <button
-                          onClick={() => handleCheckin(row.booking_id, row.checked_in)}
-                          disabled={!!checkingIn[row.booking_id]}
-                          className={`w-10 h-6 rounded-full transition-all duration-200 relative
-                            ${row.checked_in ? 'bg-st-green' : 'bg-st-cloud'}
-                            ${checkingIn[row.booking_id] ? 'opacity-50' : ''}`}
-                        >
-                          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200
-                            ${row.checked_in ? 'left-[18px]' : 'left-0.5'}`}
-                          />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+
+        {session.is_cancelled && (
+          <div className="mt-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <p className="text-xs font-semibold text-red-600">CANCELLED</p>
+            {session.cancel_reason && <p className="text-xs text-red-500 mt-0.5">{session.cancel_reason}</p>}
           </div>
         )}
       </div>
 
-      {showAddModal && (
-        <AddMemberModal
-          session={session}
-          onClose={() => setShowAddModal(false)}
-          onBooked={(name) => {
-            setSuccessMsg(`${name} booked successfully.`)
-            setTimeout(() => setSuccessMsg(null), 4000)
-            loadRoster()
-            onCheckinChange?.()
-          }}
-        />
-      )}
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
 
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
-            <h2 className="font-display text-2xl text-st-phantom tracking-widest">CANCEL SESSION</h2>
-            <p className="text-st-graphite text-sm font-medium mt-1 mb-5">
-              All booked members will be notified by email.
-            </p>
-            <div className="mb-5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Reason (optional)</label>
-              <input
-                type="text"
-                value={cancelReason}
-                onChange={e => setCancelReason(e.target.value)}
-                placeholder="e.g. Instructor unavailable"
-                className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom focus:outline-none focus:border-st-green"
-              />
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowCancelModal(false); setCancelReason('') }}
-                className="flex-1 border border-st-smoke text-st-graphite font-semibold py-3 rounded-xl hover:bg-st-offwhite transition-colors"
-              >
-                Go Back
-              </button>
-              <button
-                onClick={handleCancelSession}
-                disabled={cancelling}
-                className="flex-1 bg-red-500 text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                {cancelling ? 'Cancelling...' : 'Cancel Session'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
-export default function AdminSessions() {
-  const { getToken } = useAuth()
-  const navigate = useNavigate()
-  const [monday, setMonday] = useState(getWeekMonday())
-  const [metrics, setMetrics] = useState({ total_members: 0, sessions_this_week: 0, checked_in_today: 0, upcoming_sessions: 0 })
-  const [weekSessions, setWeekSessions] = useState([])
-  const [allSessions, setAllSessions] = useState([])
-  const [recentMembers, setRecentMembers] = useState([])
-  const [selectedSession, setSelectedSession] = useState(null)
-  const [selectedDate, setSelectedDate] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const todayStr = new Date().toISOString().split('T')[0]
-
-  useEffect(() => { loadData() }, [monday])
-
-  async function loadData() {
-    setLoading(true)
-    try {
-      const token = await getToken()
-      const headers = { Authorization: `Bearer ${token}` }
-      const weekStr = monday.toISOString().split('T')[0]
-
-      // Calculate 8-week range end date
-      const rangeEnd = new Date(monday)
-      rangeEnd.setDate(monday.getDate() + 55) // 8 weeks
-      const rangeEndStr = rangeEnd.toISOString().split('T')[0]
-
-      // Fire all 3 requests in parallel — 1 call for all sessions instead of 8
-      const [membersRes, weekRes, rangeRes] = await Promise.all([
-        fetch(`${API_URL}/admin/members?status=active`, { headers }),
-        fetch(`${API_URL}/admin/sessions?week=${weekStr}`, { headers }),
-        fetch(`${API_URL}/admin/sessions/range?start=${weekStr}&end=${rangeEndStr}`, { headers }),
-      ])
-
-      const membersData = await membersRes.json()
-      const weekData = await weekRes.json()
-      const rangeData = await rangeRes.json()
-
-      setMetrics({
-        total_members: (membersData.members || []).length,
-        sessions_this_week: (weekData.sessions || []).length,
-        checked_in_today: (weekData.sessions || []).filter(s => s.date === todayStr).reduce((sum, s) => sum + (s.checked_in_count || 0), 0),
-        upcoming_sessions: (rangeData.sessions || []).filter(s => s.date >= todayStr && s.is_cancelled !== 1).length
-      })
-      
-      setWeekSessions(weekData.sessions || [])
-      setAllSessions(rangeData.sessions || [])
-      setRecentMembers((membersData.members || []).slice(0, 5))
-
-      // Auto-select today's first session if available
-      if (!selectedSession) {
-        const todaySess = (weekData.sessions || []).find(s => s.date === todayStr)
-        if (todaySess) { setSelectedSession(todaySess); setSelectedDate(todaySess.date) }
-        else if ((weekData.sessions || []).length > 0) {
-          setSelectedSession(weekData.sessions[0])
-          setSelectedDate(weekData.sessions[0].date)
-        }
-      }
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  function prevWeek() {
-    const d = new Date(monday); d.setDate(d.getDate() - 7); setMonday(d); setSelectedSession(null); setSelectedDate(null)
-  }
-  function nextWeek() {
-    const d = new Date(monday); d.setDate(d.getDate() + 7); setMonday(d); setSelectedSession(null); setSelectedDate(null)
-  }
-
-  function handleDateSelect(dateStr) {
-    setSelectedDate(dateStr)
-    const session = allSessions.find(s => s.date === dateStr)
-    if (session) setSelectedSession(session)
-  }
-
-  return (
-    <AdminLayout>
-      <div className="space-y-8">
-
-        {/* Page header */}
+        {/* ── Instructor Assignment ── */}
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-st-accent mb-1">Admin</p>
-          <h1 className="font-display text-4xl lg:text-5xl text-st-phantom tracking-widest">SESSIONS</h1>
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Instructor</label>
+          <select
+            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+            value={selectedInstructorId}
+            onChange={e => setSelectedInstructorId(e.target.value)}
+          >
+            <option value="">— Unassigned —</option>
+            {instructors.map(i => (
+              <option key={i.id} value={i.id}>{i.full_name}</option>
+            ))}
+          </select>
         </div>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 text-sm font-semibold px-5 py-3.5 rounded-xl flex justify-between">
-            {error}
-            <button onClick={() => setError(null)} className="underline ml-4">Dismiss</button>
+        {/* ── Capacity + Bay ── */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Capacity</label>
+            <input
+              type="number" min="1" max="50"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              value={capacity}
+              onChange={e => setCapacity(e.target.value)}
+            />
           </div>
-        )}
-
-        {/* Metrics cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: 'Total Members', value: metrics.total_members, color: 'text-st-green' },
-            { label: 'Sessions This Week', value: metrics.sessions_this_week, color: 'text-st-accent' },
-            { label: 'Checked In Today', value: metrics.checked_in_today, color: 'text-st-green' },
-            { label: 'Upcoming Sessions', value: metrics.upcoming_sessions, color: 'text-st-phantom' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="bg-white rounded-2xl border border-st-cloud p-5 text-center">
-              <p className={`font-display text-4xl tracking-widest ${color}`}>{value}</p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mt-2">{label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Week view */}
-        <div>
-          <div className="flex items-center gap-4 mb-4">
-            <button onClick={prevWeek} className="w-9 h-9 flex items-center justify-center rounded-lg border border-st-cloud hover:border-st-green bg-white text-st-graphite hover:text-st-green transition-colors text-lg">‹</button>
-            <p className="font-semibold text-st-phantom text-sm">{formatWeekLabel(monday)}</p>
-            <button onClick={nextWeek} className="w-9 h-9 flex items-center justify-center rounded-lg border border-st-cloud hover:border-st-green bg-white text-st-graphite hover:text-st-green transition-colors text-lg">›</button>
-            <button onClick={() => { setMonday(getWeekMonday()); setSelectedSession(null); setSelectedDate(null) }}
-              className="text-xs font-bold text-st-green uppercase tracking-widest hover:underline">
-              This Week
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center h-24">
-              <p className="text-st-green font-bold tracking-wide">Loading...</p>
-            </div>
-          ) : weekSessions.length === 0 ? (
-            <div className="bg-white rounded-xl border border-st-cloud p-6 text-center">
-              <p className="font-display text-lg text-st-phantom tracking-widest">NO SESSIONS THIS WEEK</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {weekSessions.map(session => {
-                const isActive = selectedSession?.id === session.id
-                const isToday = session.date === todayStr
-                return (
-                  <button
-                    key={session.id}
-                    onClick={() => { setSelectedSession(session); setSelectedDate(session.date) }}
-                    className={`text-left rounded-xl border p-4 transition-all
-                      ${isActive ? 'bg-st-green border-st-green' : 'bg-white border-st-cloud hover:border-st-green'}
-                      ${session.is_cancelled === 1 ? 'opacity-50' : ''}
-                    `}
-                  >
-                    <div className="flex items-start justify-between gap-1">
-                      <div>
-                        <p className={`font-bold text-xs ${isActive ? 'text-white' : 'text-st-phantom'}`}>
-                          {formatDateShort(session.date)}
-                          {isToday && <span className={`ml-1 text-[10px] font-bold ${isActive ? 'text-white/60' : 'text-st-accent'}`}>Today</span>}
-                        </p>
-                        <p className={`text-[10px] font-medium mt-0.5 ${isActive ? 'text-white/70' : 'text-st-graphite'}`}>
-                          {session.program_name}
-                        </p>
-                      </div>
-                      <p className={`font-display text-xl tracking-widest shrink-0 ${isActive ? 'text-white' : 'text-st-phantom'}`}>
-                        {session.booked_count || 0}<span className={`text-sm ${isActive ? 'text-white/50' : 'text-st-graphite'}`}>/{session.capacity}</span>
-                      </p>
-                    </div>
-                    {session.is_cancelled === 1 && (
-                      <span className={`inline-block mt-1.5 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full
-                        ${isActive ? 'bg-white/20 text-white' : 'bg-red-50 text-red-500 border border-red-100'}`}>
-                        Cancelled
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Roster (left) + Calendar (right) */}
-        <div className="flex flex-col lg:flex-row gap-8">
-
-          {/* Left: Roster panel */}
-          <div className="flex-1 min-w-0 lg:order-1">
-            {selectedSession ? (
-              <SessionRosterPanel
-                key={selectedSession.id}
-                session={selectedSession}
-                onCheckinChange={loadData}
-                onCancelSession={loadData}
-              />
-            ) : (
-              <div className="bg-white rounded-2xl border border-st-cloud p-12 text-center h-full flex flex-col items-center justify-center">
-                <p className="font-display text-xl text-st-phantom tracking-widest">SELECT A SESSION</p>
-                <p className="text-st-graphite text-sm font-medium mt-2">
-                  Click a session above or tap a date on the calendar.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Right: Calendar */}
-          <div className="lg:w-80 xl:w-96 shrink-0 lg:order-2">
-            <MonthCalendar
-              sessions={allSessions}
-              selectedDate={selectedDate}
-              onSelectDate={handleDateSelect}
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Bay</label>
+            <input
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              value={bay}
+              onChange={e => setBay(e.target.value)}
+              placeholder="e.g. Bay 3"
             />
           </div>
         </div>
 
-        {/* Recent members */}
-        <div className="bg-white rounded-2xl border border-st-cloud overflow-hidden">
-          <div className="px-6 py-4 border-b border-st-cloud bg-st-offwhite">
-            <p className="font-display text-lg text-st-phantom tracking-widest">RECENT MEMBERS</p>
+        {/* Save session settings */}
+        <button
+          onClick={handleUpdateSession}
+          disabled={saving}
+          className="w-full py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
+        >
+          {saving ? 'Saving…' : 'Save Session Settings'}
+        </button>
+
+        {/* Cancel/Restore */}
+        {!session.is_cancelled ? (
+          !showCancelForm ? (
+            <button
+              onClick={() => setShowCancelForm(true)}
+              className="w-full py-2 border border-red-200 text-red-500 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors"
+            >
+              Cancel This Session
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <textarea
+                rows={2}
+                className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+                placeholder="Cancellation reason (optional)"
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setShowCancelForm(false)} className="flex-1 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
+                  Never mind
+                </button>
+                <button onClick={handleCancelSession} disabled={saving} className="flex-1 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50">
+                  Confirm Cancel
+                </button>
+              </div>
+            </div>
+          )
+        ) : (
+          <button
+            onClick={handleUncancelSession}
+            disabled={saving}
+            className="w-full py-2 border border-[#1D9E75] text-[#1D9E75] text-sm font-medium rounded-lg hover:bg-[#E1F5EE] transition-colors"
+          >
+            Restore Session
+          </button>
+        )}
+
+        {/* ── Roster ── */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              Roster {roster && `(${roster.bookings?.length || 0}/${session.capacity})`}
+            </p>
           </div>
-          <div className="divide-y divide-st-cloud">
-            {recentMembers.map(m => (
-              <button
-                key={m.id}
-                onClick={() => navigate(`/admin/members/${m.id}`)}
-                className="w-full px-6 py-4 flex items-center justify-between hover:bg-st-offwhite transition-colors text-left"
-              >
-                <div>
-                  <p className="font-semibold text-st-phantom text-sm">{m.full_name}</p>
-                  <p className="text-st-graphite text-xs mt-0.5">{m.email}</p>
+
+          {loading ? (
+            <div className="text-center py-6 text-sm text-gray-300">Loading roster…</div>
+          ) : !roster || roster.bookings?.length === 0 ? (
+            <div className="text-center py-6 text-sm text-gray-300 italic">No bookings yet</div>
+          ) : (
+            <div className="space-y-2">
+              {roster.bookings.map(b => (
+                <div key={b.id} className={`flex items-center justify-between rounded-lg px-3 py-2.5 border ${
+                  b.checked_in ? 'bg-[#E1F5EE] border-[#1D9E75]/20' : 'bg-gray-50 border-gray-100'
+                }`}>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {b.child_name || b.full_name}
+                    </p>
+                    {b.child_name && (
+                      <p className="text-xs text-gray-400">Parent: {b.full_name}</p>
+                    )}
+                    {b.phone && <p className="text-xs text-gray-400">{b.phone}</p>}
+                  </div>
+                  <button
+                    onClick={() => handleCheckin(b.id)}
+                    className={`min-w-[72px] py-1.5 px-3 text-xs font-semibold rounded-lg transition-colors ${
+                      b.checked_in
+                        ? 'bg-[#1D9E75] text-white hover:bg-[#178a64]'
+                        : 'bg-white border border-gray-200 text-gray-500 hover:border-[#1D9E75] hover:text-[#1D9E75]'
+                    }`}
+                  >
+                    {b.checked_in ? '✓ In' : 'Check In'}
+                  </button>
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-st-graphite">
-                  {new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Mini Calendar ────────────────────────────────────────────────────────────
+function MiniCalendar({ sessions, selectedDate, onSelectDate, currentMonth, onMonthChange }) {
+  const year = currentMonth.getFullYear()
+  const month = currentMonth.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const startPad = (firstDay.getDay() + 6) % 7 // Mon = 0
+
+  const sessionsByDate = {}
+  sessions.forEach(s => {
+    if (!sessionsByDate[s.date]) sessionsByDate[s.date] = []
+    sessionsByDate[s.date].push(s)
+  })
+
+  const days = []
+  for (let i = 0; i < startPad; i++) days.push(null)
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    days.push(new Date(year, month, d))
+  }
+
+  const today = isoDate(new Date())
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      {/* Month nav */}
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={() => onMonthChange(-1)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+          ‹
+        </button>
+        <h3 className="font-display text-lg text-[#064029] tracking-wide">
+          {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase()}
+        </h3>
+        <button onClick={() => onMonthChange(1)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+          ›
+        </button>
+      </div>
+
+      {/* Day headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+          <div key={i} className="text-center text-xs font-semibold text-gray-300 py-1">{d}</div>
+        ))}
+      </div>
+
+      {/* Days */}
+      <div className="grid grid-cols-7 gap-y-1">
+        {days.map((day, i) => {
+          if (!day) return <div key={`pad-${i}`} />
+          const dateStr = isoDate(day)
+          const hasSessions = !!sessionsByDate[dateStr]
+          const isSelected = selectedDate === dateStr
+          const isToday = dateStr === today
+          const hasAll = hasSessions && sessionsByDate[dateStr].some(s => !s.is_cancelled)
+
+          return (
+            <button
+              key={dateStr}
+              onClick={() => onSelectDate(dateStr)}
+              className={`relative flex flex-col items-center justify-center h-9 w-full rounded-lg text-sm transition-all ${
+                isSelected
+                  ? 'bg-[#064029] text-white font-semibold'
+                  : isToday
+                  ? 'border border-[#1D9E75] text-[#064029] font-semibold'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {day.getDate()}
+              {hasSessions && (
+                <div className={`absolute bottom-1 w-1 h-1 rounded-full ${
+                  isSelected ? 'bg-[#1D9E75]' : 'bg-[#1D9E75]'
+                }`} />
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Main AdminSessions Page ──────────────────────────────────────────────────
+export default function AdminSessions() {
+  const [weekStart, setWeekStart] = useState(getWeekStart(new Date()))
+  const [sessions, setSessions] = useState([])
+  const [allSessions, setAllSessions] = useState([]) // for calendar dots
+  const [selectedSession, setSelectedSession] = useState(null)
+  const [selectedDate, setSelectedDate] = useState(null)
+  const [calendarMonth, setCalendarMonth] = useState(new Date())
+  const [loading, setLoading] = useState(true)
+  const [metrics, setMetrics] = useState({ totalThisWeek: 0, totalBooked: 0, totalCapacity: 0, upcoming: 0 })
+
+  // Fetch week sessions
+  const fetchSessions = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await api.get(`/admin/sessions?week=${isoDate(weekStart)}`)
+      setSessions(data.sessions || [])
+
+      // Metrics
+      const s = data.sessions || []
+      setMetrics({
+        totalThisWeek: s.length,
+        totalBooked: s.reduce((a, b) => a + (b.booked_count || 0), 0),
+        totalCapacity: s.reduce((a, b) => a + (b.capacity || 0), 0),
+        upcoming: s.filter(x => !x.is_cancelled && x.date >= isoDate(new Date())).length,
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [weekStart])
+
+  // Fetch calendar month sessions for dots
+  useEffect(() => {
+    const start = isoDate(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1))
+    const end = isoDate(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0))
+    api.get(`/admin/sessions/range?start=${start}&end=${end}`).then(d => setAllSessions(d.sessions || []))
+  }, [calendarMonth])
+
+  useEffect(() => { fetchSessions() }, [fetchSessions])
+
+  function handleCalendarDateSelect(dateStr) {
+    setSelectedDate(dateStr)
+    // Jump week to that date
+    setWeekStart(getWeekStart(new Date(dateStr + 'T12:00:00')))
+    // Select first session on that date if any
+    const daySession = sessions.find(s => s.date === dateStr)
+    if (daySession) setSelectedSession(daySession)
+  }
+
+  function handleMonthChange(dir) {
+    const m = new Date(calendarMonth)
+    m.setMonth(m.getMonth() + dir)
+    setCalendarMonth(m)
+  }
+
+  // Filter sessions by selected date if one is active
+  const displayedSessions = selectedDate
+    ? sessions.filter(s => s.date === selectedDate)
+    : sessions
+
+  return (
+    <AdminLayout>
+      <div className="flex h-[calc(100vh-64px)]">
+
+        {/* ── LEFT: Roster Panel (conditionally shown) ── */}
+        {selectedSession && (
+          <div className="w-80 min-w-[300px] flex-shrink-0 overflow-hidden">
+            <RosterPanel
+              session={selectedSession}
+              onClose={() => setSelectedSession(null)}
+              onUpdate={() => {
+                fetchSessions()
+                setSelectedSession(null)
+              }}
+            />
+          </div>
+        )}
+
+        {/* ── MIDDLE: Sessions List ── */}
+        <div className={`flex flex-col flex-1 min-w-0 border-r border-gray-100 bg-[#F9FAFB] overflow-hidden ${selectedSession ? '' : ''}`}>
+
+          {/* Header + Week Nav */}
+          <div className="bg-white border-b border-gray-100 px-6 py-4">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="font-display text-2xl text-[#064029] tracking-wide">SESSIONS</h1>
+              {selectedDate && (
+                <button
+                  onClick={() => { setSelectedDate(null) }}
+                  className="text-xs font-medium text-[#1D9E75] hover:text-[#064029]"
+                >
+                  ← Show full week
+                </button>
+              )}
+            </div>
+
+            {/* Metrics */}
+            <div className="grid grid-cols-4 gap-3 mb-4">
+              <MetricCard label="Sessions" value={metrics.totalThisWeek} sub="this week" />
+              <MetricCard label="Booked" value={metrics.totalBooked} sub={`of ${metrics.totalCapacity} spots`} />
+              <MetricCard label="Upcoming" value={metrics.upcoming} sub="not cancelled" />
+              <MetricCard
+                label="Fill Rate"
+                value={metrics.totalCapacity > 0 ? `${Math.round((metrics.totalBooked / metrics.totalCapacity) * 100)}%` : '—'}
+                sub="this week"
+              />
+            </div>
+
+            {/* Week navigation */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setWeekStart(d => addDays(d, -7))}
+                className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500"
+              >
+                ‹
               </button>
-            ))}
+              <span className="text-sm font-semibold text-gray-700 flex-1 text-center">
+                {isoDate(weekStart)} — {isoDate(addDays(weekStart, 6))}
+              </span>
+              <button
+                onClick={() => setWeekStart(d => addDays(d, 7))}
+                className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500"
+              >
+                ›
+              </button>
+              <button
+                onClick={() => { setWeekStart(getWeekStart(new Date())); setSelectedDate(null) }}
+                className="px-3 py-1.5 text-xs font-semibold text-[#064029] bg-[#E1F5EE] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors"
+              >
+                Today
+              </button>
+            </div>
+          </div>
+
+          {/* Session Cards */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {loading ? (
+              <div className="text-center py-12 text-sm text-gray-300">Loading…</div>
+            ) : displayedSessions.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-sm text-gray-300 italic">
+                  {selectedDate ? 'No sessions on this date' : 'No sessions this week'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {displayedSessions.map(s => (
+                  <SessionCard
+                    key={s.id}
+                    session={s}
+                    isSelected={selectedSession?.id === s.id}
+                    onClick={() => setSelectedSession(selectedSession?.id === s.id ? null : s)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
+        {/* ── RIGHT: Mini Calendar ── */}
+        <div className="w-72 flex-shrink-0 bg-white border-l border-gray-100 px-5 py-5 overflow-y-auto">
+          <MiniCalendar
+            sessions={allSessions}
+            selectedDate={selectedDate}
+            onSelectDate={handleCalendarDateSelect}
+            currentMonth={calendarMonth}
+            onMonthChange={handleMonthChange}
+          />
+
+          {/* Date detail */}
+          {selectedDate && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                {formatDateShort(selectedDate)}
+              </p>
+              {allSessions.filter(s => s.date === selectedDate).length === 0 ? (
+                <p className="text-xs text-gray-300 italic">No sessions</p>
+              ) : (
+                allSessions.filter(s => s.date === selectedDate).map(s => (
+                  <div key={s.id} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                    <div>
+                      <p className="text-xs font-medium text-gray-700">{s.program_name}</p>
+                      <p className="text-xs text-gray-400">{formatTime(s.start_time)}</p>
+                    </div>
+                    <span className="text-xs text-gray-400">{s.booked_count}/{s.capacity}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </AdminLayout>
   )
