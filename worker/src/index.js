@@ -7,7 +7,7 @@ const app = new Hono()
 // ─── CORS ────────────────────────────────────────────────────────────────────
 app.use('*', cors({
   origin: ['https://mm-1a4.pages.dev', 'https://mm.swingtheory.golf'],
-  allowHeaders: ['Content-Type', 'Authorization'],
+  allowHeaders: ['Content-Type', 'Authorization', 'x-subdomain'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
 }))
