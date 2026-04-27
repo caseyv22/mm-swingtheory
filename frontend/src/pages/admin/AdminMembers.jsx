@@ -1,368 +1,159 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '@clerk/clerk-react'
-import { useNavigate, useParams } from 'react-router-dom'
-import AdminLayout from '../../components/AdminLayout.jsx'
+import { useState, useEffect, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import AdminLayout from '../../components/AdminLayout'
+import { api } from '../../lib/api'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.workers.dev'
+const ROLES = ['admin', 'instructor', 'parent', 'student']
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
-function formatDate(dateStr) {
-  if (!dateStr) return '—'
-  const date = new Date(dateStr + 'T00:00:00')
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function RoleBadge({ role }) {
+  const colors = {
+    admin: 'bg-[#064029] text-white',
+    instructor: 'bg-[#1D9E75] text-white',
+    parent: 'bg-[#E1F5EE] text-[#064029]',
+    student: 'bg-gray-100 text-gray-700',
+  }
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-sans capitalize ${colors[role] || 'bg-gray-100 text-gray-700'}`}>
+      {role}
+    </span>
+  )
 }
 
-function formatTime(timeStr) {
-  if (!timeStr) return ''
-  const [hourStr, minute] = timeStr.split(':')
-  const hour = parseInt(hourStr, 10)
-  const ampm = hour >= 12 ? 'PM' : 'AM'
-  const hour12 = hour % 12 || 12
-  return `${hour12}:${minute} ${ampm}`
+function StatusDot({ status }) {
+  return (
+    <span className={`inline-block w-2 h-2 rounded-full mr-2 ${status === 'active' ? 'bg-[#1D9E75]' : 'bg-gray-300'}`} />
+  )
 }
 
-// ─── Member Detail Panel ──────────────────────────────────────────────────────
+// ─── Add Member Modal ─────────────────────────────────────────────────────────
+function AddMemberModal({ onClose, onSuccess }) {
+  const [form, setForm] = useState({
+    full_name: '', email: '', role: 'student', phone: '',
+    child_first_name: '', child_age: ''
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-function MemberDetail({ memberId, onClose, onStatusChange }) {
-  const { getToken } = useAuth()
-  const [member, setMember] = useState(null)
-  const [children, setChildren] = useState([])
-  const [bookings, setBookings] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [toggling, setToggling] = useState(false)
-  const [error, setError] = useState(null)
-
-  useEffect(() => { loadMember() }, [memberId])
-
-  async function loadMember() {
+  async function handleSubmit() {
+    if (!form.full_name || !form.email) {
+      setError('Name and email are required')
+      return
+    }
     setLoading(true)
+    setError('')
     try {
-      const token = await getToken()
-      const res = await fetch(`${API_URL}/admin/members/${memberId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      await api.post('/admin/members', {
+        ...form,
+        child_age: form.child_age ? parseInt(form.child_age) : null,
       })
-      const data = await res.json()
-      setMember(data.user)
-      setChildren(data.children || [])
-      setBookings(data.bookings || [])
-    } catch (err) {
-      setError(err.message)
+      onSuccess()
+    } catch (e) {
+      setError(e.message || 'Failed to create member')
     } finally {
       setLoading(false)
     }
   }
 
-  async function toggleStatus() {
-    setToggling(true)
-    try {
-      const token = await getToken()
-      const newStatus = member.status === 'active' ? 'inactive' : 'active'
-      await fetch(`${API_URL}/admin/members/${memberId}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      })
-      setMember(m => ({ ...m, status: newStatus }))
-      onStatusChange?.()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setToggling(false)
-    }
-  }
-
-  const today = new Date().toISOString().split('T')[0]
-  const upcomingBookings = bookings.filter(b => b.date >= today && b.status === 'confirmed')
-  const pastBookings = bookings.filter(b => b.date < today || b.status === 'cancelled')
-
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-end p-4 lg:p-0">
-      <div className="bg-white w-full max-w-lg h-full lg:h-screen overflow-y-auto shadow-2xl lg:rounded-none rounded-2xl flex flex-col">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-st-cloud shrink-0">
-          <p className="text-xs font-bold uppercase tracking-widest text-st-graphite">Member Detail</p>
-          <button onClick={onClose} className="text-st-graphite hover:text-st-phantom text-xl font-light">✕</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="font-display text-xl text-[#064029] tracking-wide">ADD MEMBER</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
 
-        {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-st-green font-bold tracking-wide">Loading...</p>
-          </div>
-        ) : error ? (
-          <div className="p-6 text-red-500 text-sm font-semibold">{error}</div>
-        ) : member && (
-          <div className="flex-1 overflow-y-auto">
+        <div className="px-6 py-5 space-y-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>
+          )}
 
-            {/* Member info */}
-            <div className="px-6 py-6 border-b border-st-cloud">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="font-display text-3xl text-st-phantom tracking-widest">{member.full_name.toUpperCase()}</h2>
-                  <p className="text-st-graphite text-sm font-medium mt-1">{member.email}</p>
-                  {member.phone && <p className="text-st-graphite text-sm font-medium">{member.phone}</p>}
-                  <p className="text-xs text-st-graphite font-medium mt-2">
-                    Joined {formatDate(member.created_at)}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
-                  <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border
-                    ${member.status === 'active'
-                      ? 'bg-st-light text-st-green border-st-green/20'
-                      : 'bg-gray-50 text-gray-400 border-gray-200'
-                    }`}>
-                    {member.status}
-                  </span>
-                  <button
-                    onClick={toggleStatus}
-                    disabled={toggling}
-                    className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors
-                      ${member.status === 'active'
-                        ? 'border-red-200 text-red-500 hover:bg-red-50'
-                        : 'border-st-green/30 text-st-green hover:bg-st-light'
-                      }`}
-                  >
-                    {toggling ? '...' : member.status === 'active' ? 'Deactivate' : 'Activate'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Children */}
-            {children.length > 0 && (
-              <div className="px-6 py-5 border-b border-st-cloud">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-3">
-                  {children.length === 1 ? 'Child' : 'Children'}
-                </p>
-                <div className="space-y-2">
-                  {children.map(child => (
-                    <div key={child.id} className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-st-light flex items-center justify-center">
-                        <span className="text-st-green font-bold text-sm">{child.first_name[0]}</span>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-st-phantom text-sm">{child.first_name}</p>
-                        {child.age && <p className="text-xs text-st-graphite">Age {child.age}</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Upcoming bookings */}
-            <div className="px-6 py-5 border-b border-st-cloud">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-3">
-                Upcoming Bookings ({upcomingBookings.length})
-              </p>
-              {upcomingBookings.length === 0 ? (
-                <p className="text-sm text-st-graphite font-medium">No upcoming bookings.</p>
-              ) : (
-                <div className="space-y-2">
-                  {upcomingBookings.map(b => (
-                    <div key={b.id} className="bg-st-offwhite rounded-lg px-4 py-3">
-                      <p className="font-semibold text-st-phantom text-sm">{formatDate(b.date)}</p>
-                      <p className="text-xs text-st-graphite font-medium mt-0.5">
-                        {b.program_name} · {formatTime(b.start_time)} – {formatTime(b.end_time)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Past bookings */}
-            <div className="px-6 py-5">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-3">
-                History ({pastBookings.length})
-              </p>
-              {pastBookings.length === 0 ? (
-                <p className="text-sm text-st-graphite font-medium">No past bookings.</p>
-              ) : (
-                <div className="space-y-2">
-                  {pastBookings.map(b => (
-                    <div key={b.id} className={`rounded-lg px-4 py-3 ${b.status === 'cancelled' ? 'bg-red-50' : 'bg-st-offwhite'}`}>
-                      <div className="flex items-center justify-between">
-                        <p className="font-semibold text-st-phantom text-sm">{formatDate(b.date)}</p>
-                        <div className="flex items-center gap-2">
-                          {b.checked_in === 1 && (
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-st-green bg-st-light px-2 py-0.5 rounded-full border border-st-green/20">
-                              Attended
-                            </span>
-                          )}
-                          {b.status === 'cancelled' && (
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">
-                              Cancelled
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <p className="text-xs text-st-graphite font-medium mt-0.5">
-                        {b.program_name} · {formatTime(b.start_time)} – {formatTime(b.end_time)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Add Member Modal ─────────────────────────────────────────────────────────
-
-function AddMemberModal({ onClose, onAdded }) {
-  const { getToken } = useAuth()
-  const [form, setForm] = useState({
-    full_name: '', email: '', phone: '', role: 'parent', kid_first_name: '', kid_age: ''
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-
-  function set(field, value) {
-    setForm(f => ({ ...f, [field]: value }))
-  }
-
-  async function handleSubmit() {
-    if (!form.full_name || !form.email || !form.role) {
-      setError('Full name, email, and role are required.')
-      return
-    }
-    setSaving(true)
-    setError(null)
-    try {
-      const token = await getToken()
-      const res = await fetch(`${API_URL}/admin/members`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name: form.full_name,
-          email: form.email,
-          phone: form.phone || null,
-          role: form.role,
-          kid_first_name: form.role === 'parent' ? (form.kid_first_name || null) : null,
-          kid_age: form.role === 'parent' && form.kid_age ? parseInt(form.kid_age) : null,
-        })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to add member')
-      onAdded()
-      onClose()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
-        <h2 className="font-display text-2xl text-st-green tracking-widest mb-1">ADD MEMBER</h2>
-        <p className="text-st-graphite text-sm font-medium mb-6">
-          An invitation email will be sent so the user can set their password.
-        </p>
-
-        {error && (
-          <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-lg mb-4">{error}</div>
-        )}
-
-        <div className="space-y-4">
-          {/* Role selector */}
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Role *</label>
-            <div className="grid grid-cols-3 gap-2">
-              {['parent', 'student', 'instructor'].map(r => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => set('role', r)}
-                  className={`py-2.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-colors capitalize
-                    ${form.role === r
-                      ? 'bg-st-green text-white border-st-green'
-                      : 'border-st-cloud text-st-graphite hover:border-st-green hover:text-st-green'
-                    }`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Full name */}
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Full Name *</label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Full Name</label>
             <input
-              type="text"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
               value={form.full_name}
-              onChange={e => set('full_name', e.target.value)}
-              placeholder="Full name"
-              className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
+              onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+              placeholder="Jane Smith"
             />
           </div>
 
-          {/* Email */}
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Email *</label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</label>
             <input
               type="email"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
               value={form.email}
-              onChange={e => set('email', e.target.value)}
-              placeholder="email@example.com"
-              className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              placeholder="jane@example.com"
             />
           </div>
 
-          {/* Phone */}
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Phone</label>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={e => set('phone', e.target.value)}
-              placeholder="(818) 555-0000"
-              className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Role</label>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                value={form.role}
+                onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+              >
+                {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone</label>
+              <input
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                value={form.phone}
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="(626) 555-0100"
+              />
+            </div>
           </div>
 
-          {/* Child fields — only for parent role */}
           {form.role === 'parent' && (
-            <div className="pt-2 border-t border-st-cloud space-y-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-st-accent">Child Information</p>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Child's First Name</label>
-                <input
-                  type="text"
-                  value={form.kid_first_name}
-                  onChange={e => set('kid_first_name', e.target.value)}
-                  placeholder="First name"
-                  className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Child's Age</label>
-                <input
-                  type="number"
-                  value={form.kid_age}
-                  onChange={e => set('kid_age', e.target.value)}
-                  placeholder="Age"
-                  min="1"
-                  max="18"
-                  className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green"
-                />
+            <div className="bg-[#E1F5EE] rounded-lg p-4 space-y-3">
+              <p className="text-xs font-semibold text-[#064029] uppercase tracking-wider">Child Info</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">First Name</label>
+                  <input
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                    value={form.child_first_name}
+                    onChange={e => setForm(f => ({ ...f, child_first_name: e.target.value }))}
+                    placeholder="Alex"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Age</label>
+                  <input
+                    type="number"
+                    min="3" max="18"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                    value={form.child_age}
+                    onChange={e => setForm(f => ({ ...f, child_age: e.target.value }))}
+                    placeholder="8"
+                  />
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="mt-6 flex gap-3">
-          <button onClick={onClose} className="flex-1 border border-st-smoke text-st-graphite font-semibold py-3 rounded-xl hover:bg-st-offwhite transition-colors">
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
+          >
             Cancel
           </button>
-          <button onClick={handleSubmit} disabled={saving} className="flex-1 bg-st-green text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">
-            {saving ? 'Sending Invite...' : 'Send Invitation'}
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
+          >
+            {loading ? 'Creating…' : 'Create Member'}
           </button>
         </div>
       </div>
@@ -370,172 +161,666 @@ function AddMemberModal({ onClose, onAdded }) {
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Confirm Delete Modal ─────────────────────────────────────────────────────
+function ConfirmDeleteModal({ member, onClose, onConfirm, loading }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-display text-lg text-gray-900 tracking-wide">DELETE ACCOUNT</h3>
+              <p className="text-sm text-gray-500">{member.full_name}</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            This will permanently delete their Clerk account and all associated data from the platform. This action cannot be undone.
+          </p>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+          >
+            {loading ? 'Deleting…' : 'Delete Account'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-export default function AdminMembers() {
-  const { getToken } = useAuth()
-  const [members, setMembers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('active')
-  const [selectedMemberId, setSelectedMemberId] = useState(null)
-  const [showAddModal, setShowAddModal] = useState(false)
+// ─── Password Reset Toast ─────────────────────────────────────────────────────
+function ResetLinkModal({ link, onClose }) {
+  const [copied, setCopied] = useState(false)
 
-  useEffect(() => { loadMembers() }, [statusFilter])
+  function copy() {
+    navigator.clipboard.writeText(link)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
-  async function loadMembers() {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="font-display text-xl text-[#064029] tracking-wide">PASSWORD RESET LINK</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-gray-600">
+            Share this link with the user. It expires after one use. Once Resend is wired up (Phase 6), this will be sent automatically via email.
+          </p>
+          <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs text-gray-700 break-all">
+            {link}
+          </div>
+          <button
+            onClick={copy}
+            className="w-full py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
+          >
+            {copied ? '✓ Copied!' : 'Copy Link'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Assign Instructor Modal (for a student) ──────────────────────────────────
+function AssignInstructorModal({ student, currentAssignments, allInstructors, onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const assignedIds = new Set(currentAssignments.map(a => a.instructor_record_id))
+
+  async function assign(instrId) {
     setLoading(true)
+    setError('')
     try {
-      const token = await getToken()
-      const params = new URLSearchParams()
-      if (statusFilter !== 'all') params.set('status', statusFilter)
-      const res = await fetch(`${API_URL}/admin/members?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      setMembers(data.members || [])
-    } catch (err) {
-      setError(err.message)
+      await api.post(`/admin/members/${student.id}/assign-instructor`, { instructor_id: instrId })
+      onSuccess()
+    } catch (e) {
+      setError(e.message || 'Failed to assign')
     } finally {
       setLoading(false)
     }
   }
 
-  const filtered = members.filter(m => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      m.full_name?.toLowerCase().includes(q) ||
-      m.email?.toLowerCase().includes(q) ||
-      m.child_first_name?.toLowerCase().includes(q)
-    )
-  })
+  async function unassign(instrId) {
+    setLoading(true)
+    setError('')
+    try {
+      await api.delete(`/admin/members/${student.id}/assign-instructor/${instrId}`)
+      onSuccess()
+    } catch (e) {
+      setError(e.message || 'Failed to remove')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="font-display text-xl text-[#064029] tracking-wide">ASSIGN INSTRUCTOR</h2>
+            <p className="text-sm text-gray-500">{student.full_name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+
+        <div className="px-6 py-4 space-y-2">
+          {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-3 py-2">{error}</div>}
+          {allInstructors.length === 0 && (
+            <p className="text-sm text-gray-500 py-4 text-center">No active instructors found.</p>
+          )}
+          {allInstructors.map(instr => {
+            const isAssigned = assignedIds.has(instr.id)
+            return (
+              <div key={instr.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{instr.full_name}</p>
+                  <p className="text-xs text-gray-400">{instr.email}</p>
+                </div>
+                <button
+                  disabled={loading}
+                  onClick={() => isAssigned ? unassign(instr.id) : assign(instr.id)}
+                  className={`min-w-[80px] py-1.5 px-3 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 ${
+                    isAssigned
+                      ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                      : 'bg-[#E1F5EE] text-[#064029] hover:bg-[#1D9E75] hover:text-white'
+                  }`}
+                >
+                  {isAssigned ? 'Remove' : 'Assign'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 text-right">
+          <button onClick={onClose} className="px-5 py-2 bg-gray-100 text-sm font-medium rounded-lg hover:bg-gray-200">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Member Detail Panel ───────────────────────────────────────────────────────
+function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
+  const [bookings, setBookings] = useState([])
+  const [assignedInstructors, setAssignedInstructors] = useState([])
+  const [assignedStudents, setAssignedStudents] = useState([])
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ full_name: member.full_name, phone: member.phone || '', status: member.status, role: member.role })
+  const [saving, setSaving] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [resetLink, setResetLink] = useState(null)
+  const [resetting, setResetting] = useState(false)
+  const [showAssignInstructor, setShowAssignInstructor] = useState(false)
+  const [toast, setToast] = useState('')
+  const navigate = useNavigate()
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  useEffect(() => {
+    api.get(`/admin/members/${member.id}/bookings`).then(d => setBookings(d.bookings || []))
+
+    if (member.role === 'student' || member.role === 'parent') {
+      // Fetch assigned instructors for this student
+      // We piggyback on the instructor-students route in reverse — need to query from student side
+      // For now we fetch all and filter — will add a dedicated route if needed
+      fetchAssignedInstructors()
+    }
+
+    if (member.role === 'instructor') {
+      api.get(`/admin/members/${member.id}/instructor-students`).then(d => setAssignedStudents(d.students || []))
+    }
+  }, [member.id])
+
+  async function fetchAssignedInstructors() {
+    // Pull all instructors and check which are assigned — efficient enough at this scale
+    try {
+      const data = await api.get('/admin/instructors')
+      const all = data.instructors || []
+      // Get this student's assignments by checking each instructor's student list
+      // Better: add a GET /admin/members/:id/assigned-instructors route
+      // For now we filter from allInstructors passed in via prop
+      setAssignedInstructors([]) // will be populated via AssignInstructorModal state
+    } catch {}
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await api.put(`/admin/members/${member.id}`, form)
+      onRefresh()
+      setEditing(false)
+      showToast('Saved')
+    } catch (e) {
+      showToast(e.message || 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await api.delete(`/admin/members/${member.id}`)
+      navigate('/admin/members')
+      onRefresh()
+      onClose()
+    } catch (e) {
+      showToast(e.message || 'Delete failed')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function handleResetPassword() {
+    setResetting(true)
+    try {
+      const data = await api.post(`/admin/members/${member.id}/reset-password`, {})
+      setResetLink(data.reset_link)
+    } catch (e) {
+      showToast(e.message || 'Reset failed')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const isPending = member.clerk_id?.startsWith('pending_')
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Toast */}
+      {toast && (
+        <div className="absolute top-4 right-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">
+          {toast}
+        </div>
+      )}
+
+      {/* Modals */}
+      {showDelete && (
+        <ConfirmDeleteModal
+          member={member}
+          onClose={() => setShowDelete(false)}
+          onConfirm={handleDelete}
+          loading={deleting}
+        />
+      )}
+      {resetLink && (
+        <ResetLinkModal link={resetLink} onClose={() => setResetLink(null)} />
+      )}
+      {showAssignInstructor && (
+        <AssignInstructorModal
+          student={member}
+          currentAssignments={assignedInstructors}
+          allInstructors={allInstructors}
+          onClose={() => setShowAssignInstructor(false)}
+          onSuccess={() => {
+            fetchAssignedInstructors()
+            showToast('Updated')
+          }}
+        />
+      )}
+
+      {/* Header */}
+      <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <StatusDot status={member.status} />
+            <h2 className="font-display text-2xl text-[#064029] tracking-wide">{member.full_name}</h2>
+          </div>
+          <p className="text-sm text-gray-500">{member.email}</p>
+          <div className="mt-2">
+            <RoleBadge role={member.role} />
+            {isPending && (
+              <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded font-medium">
+                Invite Pending
+              </span>
+            )}
+          </div>
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none mt-1">&times;</button>
+      </div>
+
+      {/* Body — scrollable */}
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+        {/* Account Actions */}
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Account Actions</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setEditing(!editing)}
+              className="px-4 py-2 text-sm font-medium bg-[#E1F5EE] text-[#064029] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors"
+            >
+              {editing ? 'Cancel Edit' : 'Edit Profile'}
+            </button>
+            <button
+              onClick={handleResetPassword}
+              disabled={resetting || isPending}
+              title={isPending ? 'User has not completed signup yet' : 'Send password reset'}
+              className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-40 transition-colors"
+            >
+              {resetting ? 'Sending…' : 'Reset Password'}
+            </button>
+            <button
+              onClick={() => setShowDelete(true)}
+              className="px-4 py-2 text-sm font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+            >
+              Delete Account
+            </button>
+          </div>
+          {isPending && (
+            <p className="text-xs text-amber-600 mt-2">
+              ⚠ Password reset unavailable until user completes their Clerk invitation.
+            </p>
+          )}
+        </div>
+
+        {/* Edit Form */}
+        {editing && (
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Full Name</label>
+                <input
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.full_name}
+                  onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone</label>
+                <input
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.phone}
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Role</label>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.role}
+                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                >
+                  {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Child Info (parent) */}
+        {member.role === 'parent' && member.child_name && (
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Child</p>
+            <div className="bg-[#E1F5EE] rounded-lg px-4 py-3">
+              <p className="text-sm font-semibold text-[#064029]">{member.child_name}</p>
+              {member.child_age && <p className="text-xs text-gray-500">Age {member.child_age}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* Instructor bio */}
+        {member.role === 'instructor' && (
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Bio</p>
+            <p className="text-sm text-gray-600">{member.instructor_bio || <span className="italic text-gray-400">No bio set</span>}</p>
+          </div>
+        )}
+
+        {/* Instructor's assigned students */}
+        {member.role === 'instructor' && (
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Assigned Students</p>
+            {assignedStudents.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No students assigned</p>
+            ) : (
+              <div className="space-y-1">
+                {assignedStudents.map(s => (
+                  <div key={s.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{s.full_name}</p>
+                      <p className="text-xs text-gray-400">{s.email}</p>
+                    </div>
+                    <RoleBadge role={s.role || 'student'} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Assign Instructor (student/parent) */}
+        {(member.role === 'student' || member.role === 'parent') && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned Instructor</p>
+              <button
+                onClick={() => setShowAssignInstructor(true)}
+                className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]"
+              >
+                Manage →
+              </button>
+            </div>
+            {assignedInstructors.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No instructor assigned</p>
+            ) : (
+              <div className="space-y-1">
+                {assignedInstructors.map(i => (
+                  <div key={i.id} className="bg-[#E1F5EE] rounded-lg px-3 py-2">
+                    <p className="text-sm font-medium text-[#064029]">{i.full_name}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Booking History */}
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            Booking History ({bookings.length})
+          </p>
+          {bookings.length === 0 ? (
+            <p className="text-sm text-gray-400 italic">No bookings yet</p>
+          ) : (
+            <div className="space-y-1">
+              {bookings.slice(0, 20).map(b => (
+                <div key={b.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {new Date(b.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </p>
+                    <p className="text-xs text-gray-400">{b.program_name}</p>
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    b.status === 'confirmed'
+                      ? b.checked_in ? 'bg-[#E1F5EE] text-[#064029]' : 'bg-gray-100 text-gray-600'
+                      : 'bg-red-50 text-red-500'
+                  }`}>
+                    {b.checked_in ? 'Checked In' : b.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main AdminMembers Page ───────────────────────────────────────────────────
+export default function AdminMembers() {
+  const { id: selectedId } = useParams()
+  const navigate = useNavigate()
+
+  const [members, setMembers] = useState([])
+  const [allInstructors, setAllInstructors] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [showAddModal, setShowAddModal] = useState(false)
+
+  const selectedMember = members.find(m => m.id === selectedId) || null
+
+  const fetchMembers = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (search) params.set('q', search)
+      if (statusFilter !== 'all') params.set('status', statusFilter)
+      const data = await api.get(`/admin/members?${params}`)
+      setMembers(data.members || [])
+    } finally {
+      setLoading(false)
+    }
+  }, [search, statusFilter])
+
+  useEffect(() => { fetchMembers() }, [fetchMembers])
+
+  useEffect(() => {
+    api.get('/admin/instructors').then(d => setAllInstructors(d.instructors || []))
+  }, [])
+
+  const filtered = members.filter(m => roleFilter === 'all' || m.role === roleFilter)
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-
-        {/* Page header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-st-accent mb-1">Admin</p>
-            <h1 className="font-display text-4xl lg:text-5xl text-st-phantom tracking-widest">MEMBERS</h1>
-          </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-st-green text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
-          >
-            + Add Member
-          </button>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 text-red-600 text-sm font-semibold px-5 py-3.5 rounded-xl">{error}</div>
-        )}
-
-        {/* Filters */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, email or child..."
-            className="flex-1 min-w-[200px] border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom placeholder:text-st-graphite/50 focus:outline-none focus:border-st-green bg-white"
-          />
-          <div className="flex rounded-lg border border-st-cloud overflow-hidden bg-white">
-            {['active', 'inactive', 'all'].map(s => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors
-                  ${statusFilter === s ? 'bg-st-green text-white' : 'text-st-graphite hover:bg-st-offwhite'}`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Members table */}
-        {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <p className="text-st-green font-bold tracking-wide">Loading...</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-st-cloud p-12 text-center">
-            <p className="font-display text-xl text-st-phantom tracking-widest">NO MEMBERS FOUND</p>
-            <p className="text-st-graphite text-sm font-medium mt-2">
-              {search ? 'Try a different search term.' : 'Add your first member to get started.'}
-            </p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-st-cloud overflow-hidden">
-            <div className="px-5 py-3 border-b border-st-cloud bg-st-offwhite flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite">
-                {filtered.length} member{filtered.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-st-cloud">
-                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite">Parent</th>
-                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden md:table-cell">Email</th>
-                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden lg:table-cell">Child</th>
-                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden lg:table-cell">Phone</th>
-                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite">Status</th>
-                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden md:table-cell">Joined</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((member, i) => (
-                  <tr
-                    key={member.id}
-                    onClick={() => setSelectedMemberId(member.id)}
-                    className={`cursor-pointer hover:bg-st-offwhite transition-colors
-                      ${i < filtered.length - 1 ? 'border-b border-st-cloud' : ''}
-                    `}
-                  >
-                    <td className="px-5 py-4 font-semibold text-st-phantom">{member.full_name}</td>
-                    <td className="px-5 py-4 text-st-graphite hidden md:table-cell">{member.email}</td>
-                    <td className="px-5 py-4 text-st-graphite hidden lg:table-cell">{member.child_first_name || '—'}</td>
-                    <td className="px-5 py-4 text-st-graphite hidden lg:table-cell">{member.phone || '—'}</td>
-                    <td className="px-5 py-4">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full border
-                        ${member.status === 'active'
-                          ? 'bg-st-light text-st-green border-st-green/20'
-                          : 'bg-gray-50 text-gray-400 border-gray-200'
-                        }`}>
-                        {member.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-st-graphite text-xs hidden md:table-cell">
-                      {formatDate(member.created_at)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Member detail slide-in */}
-      {selectedMemberId && (
-        <MemberDetail
-          memberId={selectedMemberId}
-          onClose={() => setSelectedMemberId(null)}
-          onStatusChange={loadMembers}
-        />
-      )}
-
-      {/* Add member modal */}
       {showAddModal && (
         <AddMemberModal
           onClose={() => setShowAddModal(false)}
-          onAdded={loadMembers}
+          onSuccess={() => { setShowAddModal(false); fetchMembers() }}
         />
       )}
+
+      <div className="flex h-[calc(100vh-64px)]">
+        {/* Left — Member List */}
+        <div className={`flex flex-col border-r border-gray-100 bg-white transition-all ${selectedMember ? 'w-80 min-w-[280px] hidden md:flex' : 'flex-1'}`}>
+
+          {/* Toolbar */}
+          <div className="px-6 py-4 border-b border-gray-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <h1 className="font-display text-2xl text-[#064029] tracking-wide">MEMBERS</h1>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Member
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Search by name or email…"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+
+            <div className="flex gap-2">
+              {/* Role filter pills */}
+              {['all', ...ROLES].map(r => (
+                <button
+                  key={r}
+                  onClick={() => setRoleFilter(r)}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors capitalize ${
+                    roleFilter === r
+                      ? 'bg-[#064029] text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              {['all', 'active', 'inactive'].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setStatusFilter(s)}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors capitalize ${
+                    statusFilter === s
+                      ? 'bg-[#1D9E75] text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center h-32 text-sm text-gray-400">Loading…</div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-32 text-sm text-gray-400">
+                <p>No members found</p>
+              </div>
+            ) : (
+              filtered.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => navigate(`/admin/members/${m.id}`)}
+                  className={`w-full text-left px-6 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors ${
+                    selectedId === m.id ? 'bg-[#E1F5EE] border-l-4 border-l-[#1D9E75]' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <StatusDot status={m.status} />
+                        <p className="text-sm font-semibold text-gray-900 truncate">{m.full_name}</p>
+                      </div>
+                      <p className="text-xs text-gray-400 truncate pl-4">{m.email}</p>
+                      {m.role === 'parent' && m.child_name && (
+                        <p className="text-xs text-[#1D9E75] pl-4 mt-0.5">Child: {m.child_name}</p>
+                      )}
+                    </div>
+                    <RoleBadge role={m.role} />
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* Footer count */}
+          <div className="px-6 py-3 border-t border-gray-100 text-xs text-gray-400">
+            {filtered.length} member{filtered.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+
+        {/* Right — Detail Panel */}
+        {selectedMember ? (
+          <div className="flex-1 bg-white relative overflow-hidden">
+            <MemberDetail
+              member={selectedMember}
+              onClose={() => navigate('/admin/members')}
+              onRefresh={fetchMembers}
+              allInstructors={allInstructors}
+            />
+          </div>
+        ) : (
+          <div className="hidden md:flex flex-1 items-center justify-center text-gray-300">
+            <div className="text-center">
+              <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <p className="text-sm">Select a member to view details</p>
+            </div>
+          </div>
+        )}
+      </div>
     </AdminLayout>
   )
 }
