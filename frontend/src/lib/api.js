@@ -22,7 +22,7 @@ export const api = {
   getPrograms: (token) => authFetch('/programs', token),
   getProgram: (token, slug) => authFetch(`/programs/${slug}`, token),
   getSessions: (token, slug) => authFetch(`/programs/${slug}/sessions`, token),
-  getMyBookings: (token) => authFetch('/my-bookings', token),
+  getMyBookings: (token) => authFetch('/bookings/mine', token),
   createBooking: (token, sessionId) =>
     authFetch('/bookings', token, { method: 'POST', body: JSON.stringify({ session_id: sessionId }) }),
   cancelBooking: (token, bookingId) =>
