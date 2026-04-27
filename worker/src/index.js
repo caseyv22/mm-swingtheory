@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { verifyClerkJWT } from './lib/auth.js'
+import { verifyAuth } from './lib/auth.js'
 
 const app = new Hono()
 
@@ -13,40 +13,38 @@ app.use('*', cors({
 }))
 
 // ─── AUTH MIDDLEWARE ──────────────────────────────────────────────────────────
+// Wraps your existing auth.js verifyAuth into Hono middleware.
+// Role is checked against D1 users table (source of truth for the app).
+
 async function requireAuth(c, next) {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
-  if (!token) return c.json({ error: 'Unauthorized' }, 401)
-  try {
-    const payload = await verifyClerkJWT(token, c.env.CLERK_JWKS_URL)
-    c.set('clerkId', payload.sub)
-    await next()
-  } catch {
-    return c.json({ error: 'Invalid token' }, 401)
-  }
+  const payload = await verifyAuth(c.req.raw, c.env)
+  if (!payload) return c.json({ error: 'Unauthorized' }, 401)
+  c.set('clerkId', payload.sub)
+  await next()
 }
 
 async function requireAdmin(c, next) {
-  await requireAuth(c, async () => {})
-  if (c.res.status === 401) return
-  const clerkId = c.get('clerkId')
+  const payload = await verifyAuth(c.req.raw, c.env)
+  if (!payload) return c.json({ error: 'Unauthorized' }, 401)
   const user = await c.env.DB.prepare(
     'SELECT * FROM users WHERE clerk_id = ?'
-  ).bind(clerkId).first()
+  ).bind(payload.sub).first()
   if (!user || user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+  c.set('clerkId', payload.sub)
   c.set('user', user)
   await next()
 }
 
 async function requireInstructor(c, next) {
-  await requireAuth(c, async () => {})
-  if (c.res.status === 401) return
-  const clerkId = c.get('clerkId')
+  const payload = await verifyAuth(c.req.raw, c.env)
+  if (!payload) return c.json({ error: 'Unauthorized' }, 401)
   const user = await c.env.DB.prepare(
     'SELECT * FROM users WHERE clerk_id = ?'
-  ).bind(clerkId).first()
+  ).bind(payload.sub).first()
   if (!user || (user.role !== 'instructor' && user.role !== 'admin')) {
     return c.json({ error: 'Forbidden' }, 403)
   }
+  c.set('clerkId', payload.sub)
   c.set('user', user)
   await next()
 }
