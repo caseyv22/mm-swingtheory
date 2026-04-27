@@ -11,6 +11,8 @@ import AdminSessions from './pages/admin/AdminSessions.jsx'
 import AdminMembers from './pages/admin/AdminMembers.jsx'
 import AdminPrograms from './pages/admin/AdminPrograms.jsx'
 import AdminSettings from './pages/admin/AdminSettings.jsx'
+import InstructorSessions from './pages/instructor/InstructorSessions.jsx'
+import InstructorStudents from './pages/instructor/InstructorStudents.jsx'
 
 function RoleRouter() {
   const { getToken, isLoaded } = useAuth()
@@ -67,7 +69,7 @@ function RoleRouter() {
   if (role === 'parent' && firstLogin) return <Navigate to="/account?onboarding=true" replace />
   if (role === 'parent') return <Navigate to="/home" replace />
   if (role === 'student') return <Navigate to="/programs" replace />
-  if (role === 'instructor') return <Navigate to="/instructor" replace />
+  if (role === 'instructor') return <Navigate to="/instructor/sessions" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
   return <Navigate to="/programs" replace />
 }
@@ -153,13 +155,9 @@ export default function App() {
           <ProtectedRoute><MyBookingsPage /></ProtectedRoute>
         } />
 
-        <Route path="/instructor" element={
-          <ProtectedRoute>
-            <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
-              <p className="text-st-green font-bold text-lg">Instructor panel coming soon</p>
-            </div>
-          </ProtectedRoute>
-        } />
+        <Route path="/instructor" element={<ProtectedRoute><InstructorSessions /></ProtectedRoute>} />
+        <Route path="/instructor/sessions" element={<ProtectedRoute><InstructorSessions /></ProtectedRoute>} />
+        <Route path="/instructor/students" element={<ProtectedRoute><InstructorStudents /></ProtectedRoute>} />
 
         <Route path="/admin" element={<ProtectedRoute><AdminSessions /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
