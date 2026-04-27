@@ -34,7 +34,7 @@ function BookingCard({ booking, past }) {
                 Cancelled
               </span>
             )}
-            {booking.checked_in && (
+            {!!booking.checked_in && (
               <span className="text-[10px] font-bold uppercase tracking-widest text-st-green bg-st-light px-2.5 py-0.5 rounded-full border border-st-green/20">
                 Checked In
               </span>
