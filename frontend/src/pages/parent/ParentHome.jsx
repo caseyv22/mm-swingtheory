@@ -38,7 +38,8 @@ export default function ParentHome() {
       // Get user info to get child name
       const meRes = await fetch(`${API_URL}/users/me`, { headers })
       const meData = await meRes.json()
-      setChildName(meData.user?.child_first_name || 'your child')
+      const child = meData.children?.[0]
+      setChildName(child?.first_name || 'your child')
 
       // Get upcoming bookings
       const bookingsRes = await fetch(`${API_URL}/bookings`, { headers })
