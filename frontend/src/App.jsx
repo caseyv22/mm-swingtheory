@@ -3,6 +3,7 @@ import { useAuth, SignIn } from '@clerk/clerk-react'
 import { useState, useEffect } from 'react'
 import { api } from './lib/api.js'
 import ProgramSelector from './pages/ProgramSelector.jsx'
+import ParentHome from './pages/parent/ParentHome.jsx'
 import CalendarPage from './pages/parent/CalendarPage.jsx'
 import MyBookingsPage from './pages/parent/MyBookingsPage.jsx'
 import ChildInfoPage from './pages/parent/ChildInfoPage.jsx'
@@ -62,7 +63,7 @@ function RoleRouter() {
   )
 
   if (role === 'parent' && firstLogin) return <Navigate to="/child-info" replace />
-  if (role === 'parent') return <Navigate to="/book/mini-mulligans" replace />
+  if (role === 'parent') return <ParentHome />
   if (role === 'student') return <Navigate to="/programs" replace />
   if (role === 'instructor') return <Navigate to="/instructor" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
