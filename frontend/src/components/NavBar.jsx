@@ -2,10 +2,22 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
 
-const NAV_LINKS = [
+const PARENT_LINKS = [
   { label: 'Home', href: '/home' },
   { label: 'My Bookings', href: '/my-bookings' },
-  { label: 'Child Info', href: '/child-info' },
+  { label: 'Account', href: '/account' },
+]
+
+const STUDENT_LINKS = [
+  { label: 'Home', href: '/home' },
+  { label: 'My Bookings', href: '/my-bookings' },
+  { label: 'Account', href: '/account' },
+]
+
+const INSTRUCTOR_LINKS = [
+  { label: 'My Sessions', href: '/instructor/sessions' },
+  { label: 'My Students', href: '/instructor/students' },
+  { label: 'Account', href: '/account' },
 ]
 
 export default function NavBar({ role = 'student' }) {
@@ -14,13 +26,12 @@ export default function NavBar({ role = 'student' }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const links = role === 'admin'
-    ? [
-        { label: 'Roster', href: '/admin/roster' },
-        { label: 'Members', href: '/admin/members' },
-        { label: 'Programs', href: '/admin/programs' },
-        { label: 'Settings', href: '/admin/settings' },
-      ]
-    : NAV_LINKS
+    ? []
+    : role === 'instructor'
+    ? INSTRUCTOR_LINKS
+    : role === 'student'
+    ? STUDENT_LINKS
+    : PARENT_LINKS
 
   function isActive(href) {
     return location.pathname === href || location.pathname.startsWith(href + '/')
@@ -32,7 +43,7 @@ export default function NavBar({ role = 'student' }) {
 
         {/* Logo */}
         <button
-          onClick={() => navigate(role === 'admin' ? '/admin/roster' : '/programs')}
+          onClick={() => navigate(role === 'admin' ? '/admin' : '/home')}
           className="flex items-center gap-3 shrink-0"
         >
           <img src="/STEmblem.svg" alt="Swing Theory" width={30} height={17} className="brightness-0 invert" />
