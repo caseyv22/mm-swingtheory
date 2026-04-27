@@ -536,34 +536,31 @@ export default function AdminSessions() {
       const headers = { Authorization: `Bearer ${token}` }
       const weekStr = monday.toISOString().split('T')[0]
 
-      // Metrics
-      const membersRes = await fetch(`${API_URL}/admin/members?status=active`, { headers })
-      const membersData = await membersRes.json()
-      
-      // Week sessions
-      const weekRes = await fetch(`${API_URL}/admin/sessions?week=${weekStr}`, { headers })
-      const weekData = await weekRes.json()
+      // Calculate 8-week range end date
+      const rangeEnd = new Date(monday)
+      rangeEnd.setDate(monday.getDate() + 55) // 8 weeks
+      const rangeEndStr = rangeEnd.toISOString().split('T')[0]
 
-      // 8 weeks of sessions for calendar
-      const calSessions = []
-      for (let w = 0; w < 8; w++) {
-        const d = new Date(monday)
-        d.setDate(monday.getDate() + w * 7)
-        const wStr = d.toISOString().split('T')[0]
-        const r = await fetch(`${API_URL}/admin/sessions?week=${wStr}`, { headers })
-        const rd = await r.json()
-        calSessions.push(...(rd.sessions || []))
-      }
+      // Fire all 3 requests in parallel — 1 call for all sessions instead of 8
+      const [membersRes, weekRes, rangeRes] = await Promise.all([
+        fetch(`${API_URL}/admin/members?status=active`, { headers }),
+        fetch(`${API_URL}/admin/sessions?week=${weekStr}`, { headers }),
+        fetch(`${API_URL}/admin/sessions/range?start=${weekStr}&end=${rangeEndStr}`, { headers }),
+      ])
+
+      const membersData = await membersRes.json()
+      const weekData = await weekRes.json()
+      const rangeData = await rangeRes.json()
 
       setMetrics({
         total_members: (membersData.members || []).length,
         sessions_this_week: (weekData.sessions || []).length,
         checked_in_today: (weekData.sessions || []).filter(s => s.date === todayStr).reduce((sum, s) => sum + (s.checked_in_count || 0), 0),
-        upcoming_sessions: calSessions.filter(s => s.date >= todayStr && s.is_cancelled !== 1).length
+        upcoming_sessions: (rangeData.sessions || []).filter(s => s.date >= todayStr && s.is_cancelled !== 1).length
       })
       
       setWeekSessions(weekData.sessions || [])
-      setAllSessions(calSessions)
+      setAllSessions(rangeData.sessions || [])
       setRecentMembers((membersData.members || []).slice(0, 5))
 
       // Auto-select today's first session if available
