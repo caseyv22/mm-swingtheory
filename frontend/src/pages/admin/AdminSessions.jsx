@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@clerk/clerk-react'
+import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../../components/AdminLayout.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.workers.dev'
@@ -38,7 +39,7 @@ function formatWeekLabel(monday) {
   return `${monday.toLocaleDateString('en-US', opts)} – ${sunday.toLocaleDateString('en-US', opts)}`
 }
 
-// ─── Month Calendar ───────────────────────────────────────────────────────────
+// ─── Month Calendar (same as before, keeping it compact) ──────────────────────
 
 function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
   const today = new Date()
@@ -72,7 +73,7 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-st-cloud p-6 select-none">
+    <div className="bg-white rounded-2xl border border-st-cloud p-6 select-none h-full flex flex-col">
       <div className="flex items-center justify-between mb-5">
         <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-st-offwhite transition-colors text-st-graphite text-xl">‹</button>
         <p className="font-display text-xl tracking-widest text-st-phantom">{monthName.toUpperCase()} {viewYear}</p>
@@ -85,7 +86,7 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-y-1">
+      <div className="grid grid-cols-7 gap-y-1 flex-1">
         {cells.map((day, i) => {
           if (!day) return <div key={`e${i}`} />
           const mm = String(viewMonth + 1).padStart(2, '0')
@@ -144,7 +145,7 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
   )
 }
 
-// ─── Add Member Modal ─────────────────────────────────────────────────────────
+// ─── Add Member Modal (keeping compact) ───────────────────────────────────────
 
 function AddMemberModal({ session, onClose, onBooked }) {
   const { getToken } = useAuth()
@@ -221,7 +222,7 @@ function AddMemberModal({ session, onClose, onBooked }) {
             autoFocus
           />
           {results.length > 0 && !selected && (
-            <div className="mt-1 border border-st-cloud rounded-lg overflow-hidden shadow-sm">
+            <div className="mt-1 border border-st-cloud rounded-lg overflow-hidden shadow-sm max-h-48 overflow-y-auto">
               {results.map((m, i) => (
                 <button
                   key={m.id}
@@ -267,7 +268,7 @@ function AddMemberModal({ session, onClose, onBooked }) {
   )
 }
 
-// ─── Session Roster Panel ─────────────────────────────────────────────────────
+// ─── Session Roster Panel (keeping compact) ────────────────────────────────────
 
 function SessionRosterPanel({ session, onCheckinChange, onCancelSession }) {
   const { getToken } = useAuth()
@@ -338,7 +339,7 @@ function SessionRosterPanel({ session, onCheckinChange, onCancelSession }) {
   const checkedInCount = roster.filter(r => r.checked_in).length
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-full flex flex-col">
       {/* Session header */}
       <div className="bg-white rounded-2xl border border-st-cloud p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -362,30 +363,31 @@ function SessionRosterPanel({ session, onCheckinChange, onCancelSession }) {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite">Checked In</p>
               </div>
             )}
-            <div className="flex gap-2">
-              {session.is_cancelled !== 1 && (
-                <>
-                  <button
-                    onClick={() => setShowAddModal(true)}
-                    className="bg-st-green text-white font-bold text-sm px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
-                  >
-                    + Add Member
-                  </button>
-                  <button
-                    onClick={() => setShowCancelModal(true)}
-                    className="border border-red-200 text-red-500 font-semibold text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors"
-                  >
-                    Cancel Session
-                  </button>
-                </>
-              )}
-              {session.is_cancelled === 1 && (
-                <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 px-3 py-1.5 rounded-full border border-red-100">
-                  Cancelled
-                </span>
-              )}
-            </div>
           </div>
+        </div>
+        
+        <div className="flex gap-2 mt-4">
+          {session.is_cancelled !== 1 && (
+            <>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="bg-st-green text-white font-bold text-sm px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+              >
+                + Add Member
+              </button>
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="border border-red-200 text-red-500 font-semibold text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                Cancel Session
+              </button>
+            </>
+          )}
+          {session.is_cancelled === 1 && (
+            <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 px-3 py-1.5 rounded-full border border-red-100">
+              Cancelled
+            </span>
+          )}
         </div>
       </div>
 
@@ -400,62 +402,62 @@ function SessionRosterPanel({ session, onCheckinChange, onCancelSession }) {
       )}
 
       {/* Roster table */}
-      {loading ? (
-        <div className="bg-white rounded-2xl border border-st-cloud p-8 text-center">
-          <p className="text-st-green font-bold tracking-wide">Loading roster...</p>
-        </div>
-      ) : roster.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-st-cloud p-10 text-center">
-          <p className="font-display text-xl text-st-phantom tracking-widest">NO BOOKINGS YET</p>
-          <p className="text-st-graphite text-sm font-medium mt-2">Use the Add Member button to book someone in.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-st-cloud overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-st-cloud bg-st-offwhite">
-                <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite">Child / Student</th>
-                <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden md:table-cell">Parent</th>
-                <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden lg:table-cell">Phone</th>
-                <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden lg:table-cell">Booked</th>
-                <th className="text-center px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite">Check In</th>
-              </tr>
-            </thead>
-            <tbody>
-              {roster.map((row, i) => (
-                <tr key={row.booking_id} className={`${i < roster.length - 1 ? 'border-b border-st-cloud' : ''} ${row.checked_in ? 'bg-st-light/30' : ''}`}>
-                  <td className="px-5 py-4 font-semibold text-st-phantom">
-                    {row.child_first_name || row.parent_name}
-                    {row.child_age && <span className="text-st-graphite font-normal ml-1 text-xs">age {row.child_age}</span>}
-                  </td>
-                  <td className="px-5 py-4 text-st-graphite hidden md:table-cell">{row.parent_name}</td>
-                  <td className="px-5 py-4 text-st-graphite hidden lg:table-cell">
-                    {row.parent_phone
-                      ? <a href={`tel:${row.parent_phone}`} className="hover:text-st-green transition-colors">{row.parent_phone}</a>
-                      : '—'}
-                  </td>
-                  <td className="px-5 py-4 text-st-graphite text-xs hidden lg:table-cell">
-                    {new Date(row.booked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </td>
-                  <td className="px-5 py-4 text-center">
-                    <button
-                      onClick={() => handleCheckin(row.booking_id, row.checked_in)}
-                      disabled={!!checkingIn[row.booking_id]}
-                      className={`w-10 h-6 rounded-full transition-all duration-200 relative
-                        ${row.checked_in ? 'bg-st-green' : 'bg-st-cloud'}
-                        ${checkingIn[row.booking_id] ? 'opacity-50' : ''}`}
-                    >
-                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200
-                        ${row.checked_in ? 'left-[18px]' : 'left-0.5'}`}
-                      />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {loading ? (
+          <div className="bg-white rounded-2xl border border-st-cloud p-8 text-center">
+            <p className="text-st-green font-bold tracking-wide">Loading roster...</p>
+          </div>
+        ) : roster.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-st-cloud p-10 text-center">
+            <p className="font-display text-xl text-st-phantom tracking-widest">NO BOOKINGS YET</p>
+            <p className="text-st-graphite text-sm font-medium mt-2">Use the Add Member button to book someone in.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-st-cloud overflow-hidden flex-1 flex flex-col">
+            <div className="overflow-auto flex-1">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-st-offwhite border-b border-st-cloud">
+                  <tr>
+                    <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite">Child / Student</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden md:table-cell">Parent</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite hidden lg:table-cell">Phone</th>
+                    <th className="text-center px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-st-graphite">Check In</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {roster.map((row, i) => (
+                    <tr key={row.booking_id} className={`${i < roster.length - 1 ? 'border-b border-st-cloud' : ''} ${row.checked_in ? 'bg-st-light/30' : ''}`}>
+                      <td className="px-5 py-4 font-semibold text-st-phantom">
+                        {row.child_first_name || row.parent_name}
+                        {row.child_age && <span className="text-st-graphite font-normal ml-1 text-xs">age {row.child_age}</span>}
+                      </td>
+                      <td className="px-5 py-4 text-st-graphite hidden md:table-cell">{row.parent_name}</td>
+                      <td className="px-5 py-4 text-st-graphite hidden lg:table-cell">
+                        {row.parent_phone
+                          ? <a href={`tel:${row.parent_phone}`} className="hover:text-st-green transition-colors">{row.parent_phone}</a>
+                          : '—'}
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <button
+                          onClick={() => handleCheckin(row.booking_id, row.checked_in)}
+                          disabled={!!checkingIn[row.booking_id]}
+                          className={`w-10 h-6 rounded-full transition-all duration-200 relative
+                            ${row.checked_in ? 'bg-st-green' : 'bg-st-cloud'}
+                            ${checkingIn[row.booking_id] ? 'opacity-50' : ''}`}
+                        >
+                          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200
+                            ${row.checked_in ? 'left-[18px]' : 'left-0.5'}`}
+                          />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
 
       {showAddModal && (
         <AddMemberModal
@@ -509,127 +511,19 @@ function SessionRosterPanel({ session, onCheckinChange, onCancelSession }) {
   )
 }
 
-// ─── Add Session Modal ────────────────────────────────────────────────────────
-
-function AddSessionModal({ programs, onClose, onAdded }) {
-  const { getToken } = useAuth()
-  const [form, setForm] = useState({
-    program_id: programs[0]?.id || '',
-    date: '',
-    start_time: programs[0]?.start_time || '',
-    end_time: programs[0]?.end_time || '',
-    capacity: programs[0]?.default_capacity || 10,
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-
-  function set(field, value) {
-    setForm(f => {
-      const updated = { ...f, [field]: value }
-      if (field === 'program_id') {
-        const prog = programs.find(p => p.id === value)
-        if (prog) {
-          updated.start_time = prog.start_time || ''
-          updated.end_time = prog.end_time || ''
-          updated.capacity = prog.default_capacity || 10
-        }
-      }
-      return updated
-    })
-  }
-
-  async function handleSubmit() {
-    if (!form.program_id || !form.date) { setError('Program and date are required.'); return }
-    setSaving(true)
-    setError(null)
-    try {
-      const token = await getToken()
-      const res = await fetch(`${API_URL}/admin/sessions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          program_id: form.program_id,
-          date: form.date,
-          start_time: form.start_time || null,
-          end_time: form.end_time || null,
-          capacity: form.capacity ? parseInt(form.capacity) : null,
-        })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to add session')
-      onAdded()
-      onClose()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
-        <h2 className="font-display text-2xl text-st-green tracking-widest mb-1">ADD SESSION</h2>
-        <p className="text-st-graphite text-sm font-medium mb-5">Add a one-off session outside the regular schedule.</p>
-
-        {error && <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-lg mb-4">{error}</div>}
-
-        <div className="space-y-4">
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Program *</label>
-            <select value={form.program_id} onChange={e => set('program_id', e.target.value)}
-              className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom focus:outline-none focus:border-st-green bg-white">
-              {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Date *</label>
-            <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
-              className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom focus:outline-none focus:border-st-green" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Start Time</label>
-              <input type="time" value={form.start_time} onChange={e => set('start_time', e.target.value)}
-                className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom focus:outline-none focus:border-st-green" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">End Time</label>
-              <input type="time" value={form.end_time} onChange={e => set('end_time', e.target.value)}
-                className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom focus:outline-none focus:border-st-green" />
-            </div>
-          </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-st-graphite block mb-1.5">Capacity</label>
-            <input type="number" value={form.capacity} onChange={e => set('capacity', e.target.value)}
-              min="1" max="50"
-              className="w-full border border-st-cloud rounded-lg px-4 py-2.5 text-sm font-medium text-st-phantom focus:outline-none focus:border-st-green" />
-          </div>
-        </div>
-
-        <div className="mt-6 flex gap-3">
-          <button onClick={onClose} className="flex-1 border border-st-smoke text-st-graphite font-semibold py-3 rounded-xl hover:bg-st-offwhite transition-colors">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving} className="flex-1 bg-st-green text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">
-            {saving ? 'Adding...' : 'Add Session'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminSessions() {
   const { getToken } = useAuth()
+  const navigate = useNavigate()
   const [monday, setMonday] = useState(getWeekMonday())
+  const [metrics, setMetrics] = useState({ total_members: 0, sessions_this_week: 0, checked_in_today: 0, upcoming_sessions: 0 })
   const [weekSessions, setWeekSessions] = useState([])
   const [allSessions, setAllSessions] = useState([])
-  const [programs, setPrograms] = useState([])
+  const [recentMembers, setRecentMembers] = useState([])
   const [selectedSession, setSelectedSession] = useState(null)
   const [selectedDate, setSelectedDate] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [showAddModal, setShowAddModal] = useState(false)
   const [error, setError] = useState(null)
   const todayStr = new Date().toISOString().split('T')[0]
 
@@ -642,7 +536,11 @@ export default function AdminSessions() {
       const headers = { Authorization: `Bearer ${token}` }
       const weekStr = monday.toISOString().split('T')[0]
 
-      // Week sessions for top panel
+      // Metrics
+      const membersRes = await fetch(`${API_URL}/admin/members?status=active`, { headers })
+      const membersData = await membersRes.json()
+      
+      // Week sessions
       const weekRes = await fetch(`${API_URL}/admin/sessions?week=${weekStr}`, { headers })
       const weekData = await weekRes.json()
 
@@ -657,12 +555,16 @@ export default function AdminSessions() {
         calSessions.push(...(rd.sessions || []))
       }
 
-      const progRes = await fetch(`${API_URL}/admin/programs`, { headers })
-      const progData = await progRes.json()
-
+      setMetrics({
+        total_members: (membersData.members || []).length,
+        sessions_this_week: (weekData.sessions || []).length,
+        checked_in_today: (weekData.sessions || []).filter(s => s.date === todayStr).reduce((sum, s) => sum + (s.checked_in_count || 0), 0),
+        upcoming_sessions: calSessions.filter(s => s.date >= todayStr && s.is_cancelled !== 1).length
+      })
+      
       setWeekSessions(weekData.sessions || [])
       setAllSessions(calSessions)
-      setPrograms(progData.programs || [])
+      setRecentMembers((membersData.members || []).slice(0, 5))
 
       // Auto-select today's first session if available
       if (!selectedSession) {
@@ -689,7 +591,6 @@ export default function AdminSessions() {
 
   function handleDateSelect(dateStr) {
     setSelectedDate(dateStr)
-    // Find the first session on this date
     const session = allSessions.find(s => s.date === dateStr)
     if (session) setSelectedSession(session)
   }
@@ -699,17 +600,9 @@ export default function AdminSessions() {
       <div className="space-y-8">
 
         {/* Page header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-st-accent mb-1">Admin</p>
-            <h1 className="font-display text-4xl lg:text-5xl text-st-phantom tracking-widest">SESSIONS</h1>
-          </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-st-green text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
-          >
-            + Add Session
-          </button>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-st-accent mb-1">Admin</p>
+          <h1 className="font-display text-4xl lg:text-5xl text-st-phantom tracking-widest">SESSIONS</h1>
         </div>
 
         {error && (
@@ -719,7 +612,22 @@ export default function AdminSessions() {
           </div>
         )}
 
-        {/* ── TOP: Week View ── */}
+        {/* Metrics cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: 'Total Members', value: metrics.total_members, color: 'text-st-green' },
+            { label: 'Sessions This Week', value: metrics.sessions_this_week, color: 'text-st-accent' },
+            { label: 'Checked In Today', value: metrics.checked_in_today, color: 'text-st-green' },
+            { label: 'Upcoming Sessions', value: metrics.upcoming_sessions, color: 'text-st-phantom' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-white rounded-2xl border border-st-cloud p-5 text-center">
+              <p className={`font-display text-4xl tracking-widest ${color}`}>{value}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mt-2">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Week view */}
         <div>
           <div className="flex items-center gap-4 mb-4">
             <button onClick={prevWeek} className="w-9 h-9 flex items-center justify-center rounded-lg border border-st-cloud hover:border-st-green bg-white text-st-graphite hover:text-st-green transition-colors text-lg">‹</button>
@@ -780,11 +688,11 @@ export default function AdminSessions() {
           )}
         </div>
 
-        {/* ── BOTTOM: Calendar + Roster ── */}
+        {/* Roster (left) + Calendar (right) */}
         <div className="flex flex-col lg:flex-row gap-8">
 
           {/* Left: Roster panel */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 lg:order-1">
             {selectedSession ? (
               <SessionRosterPanel
                 key={selectedSession.id}
@@ -793,7 +701,7 @@ export default function AdminSessions() {
                 onCancelSession={loadData}
               />
             ) : (
-              <div className="bg-white rounded-2xl border border-st-cloud p-12 text-center">
+              <div className="bg-white rounded-2xl border border-st-cloud p-12 text-center h-full flex flex-col items-center justify-center">
                 <p className="font-display text-xl text-st-phantom tracking-widest">SELECT A SESSION</p>
                 <p className="text-st-graphite text-sm font-medium mt-2">
                   Click a session above or tap a date on the calendar.
@@ -803,7 +711,7 @@ export default function AdminSessions() {
           </div>
 
           {/* Right: Calendar */}
-          <div className="lg:w-80 xl:w-96 shrink-0">
+          <div className="lg:w-80 xl:w-96 shrink-0 lg:order-2">
             <MonthCalendar
               sessions={allSessions}
               selectedDate={selectedDate}
@@ -811,15 +719,32 @@ export default function AdminSessions() {
             />
           </div>
         </div>
-      </div>
 
-      {showAddModal && (
-        <AddSessionModal
-          programs={programs}
-          onClose={() => setShowAddModal(false)}
-          onAdded={loadData}
-        />
-      )}
+        {/* Recent members */}
+        <div className="bg-white rounded-2xl border border-st-cloud overflow-hidden">
+          <div className="px-6 py-4 border-b border-st-cloud bg-st-offwhite">
+            <p className="font-display text-lg text-st-phantom tracking-widest">RECENT MEMBERS</p>
+          </div>
+          <div className="divide-y divide-st-cloud">
+            {recentMembers.map(m => (
+              <button
+                key={m.id}
+                onClick={() => navigate(`/admin/members/${m.id}`)}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-st-offwhite transition-colors text-left"
+              >
+                <div>
+                  <p className="font-semibold text-st-phantom text-sm">{m.full_name}</p>
+                  <p className="text-st-graphite text-xs mt-0.5">{m.email}</p>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-st-graphite">
+                  {new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
     </AdminLayout>
   )
 }
