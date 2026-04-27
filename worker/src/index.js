@@ -382,6 +382,39 @@ app.get('/admin/sessions', async (c) => {
   return c.json({ sessions: sessions.results, startDate, endDate });
 });
 
+// Single query for a date range — replaces multiple weekly fetches
+app.get('/admin/sessions/range', async (c) => {
+  const { error } = await requireAdmin(c.req.raw, c.env);
+  if (error) return error;
+
+  const { start, end, program_id } = c.req.query();
+  if (!start || !end) return c.json({ error: 'start and end dates required' }, 400);
+
+  let query = `
+    SELECT s.*,
+      p.name as program_name,
+      u.full_name as instructor_name,
+      COUNT(CASE WHEN b.status = 'confirmed' THEN 1 END) as booked_count
+    FROM sessions s
+    JOIN programs p ON s.program_id = p.id
+    LEFT JOIN instructors i ON s.instructor_id = i.id
+    LEFT JOIN users u ON i.user_id = u.id
+    LEFT JOIN bookings b ON s.id = b.session_id
+    WHERE s.date >= ? AND s.date <= ?
+  `;
+  const binds = [start, end];
+
+  if (program_id) {
+    query += ' AND s.program_id = ?';
+    binds.push(program_id);
+  }
+
+  query += ' GROUP BY s.id ORDER BY s.date ASC, s.start_time ASC';
+
+  const sessions = await c.env.DB.prepare(query).bind(...binds).all();
+  return c.json({ sessions: sessions.results });
+});
+
 app.post('/admin/sessions', async (c) => {
   const { error } = await requireAdmin(c.req.raw, c.env);
   if (error) return error;
