@@ -611,6 +611,8 @@ app.post('/admin/members', requireAdmin, async (c) => {
   // If clerk_id provided directly (manual link), use it. Otherwise invite via Clerk.
   let finalClerkId = clerk_id
 
+  let invitationUrl = null
+
   if (!finalClerkId) {
     // Send Clerk invitation
     const clerkRes = await fetch('https://api.clerk.com/v1/invitations', {
@@ -627,7 +629,10 @@ app.post('/admin/members', requireAdmin, async (c) => {
       return c.json({ error: 'Clerk invitation failed', detail: err }, 500)
     }
 
-    // For now we store a placeholder clerk_id — it gets updated on first login
+    const clerkData = await clerkRes.json()
+    invitationUrl = clerkData.url || null
+
+    // Store a placeholder clerk_id — it gets updated on first login via the /users/me sync
     finalClerkId = 'pending_' + uid()
   }
 
@@ -652,9 +657,9 @@ app.post('/admin/members', requireAdmin, async (c) => {
     ).bind(instrId, userId).run()
   }
 
-  // Send welcome email
+  // Send welcome email with invitation link — skip Clerk's default invitation email
   try {
-    const { subject: ws, html: wh } = welcomeEmail({ recipientName: full_name, role })
+    const { subject: ws, html: wh } = welcomeEmail({ recipientName: full_name, role, email, invitationUrl })
     await sendEmail(c.env, { to: email, subject: ws, html: wh })
   } catch (e) {
     console.error('Welcome email failed:', e.message)
