@@ -13,6 +13,7 @@ import AdminPrograms from './pages/admin/AdminPrograms.jsx'
 import AdminSettings from './pages/admin/AdminSettings.jsx'
 import InstructorSessions from './pages/instructor/InstructorSessions.jsx'
 import InstructorStudents from './pages/instructor/InstructorStudents.jsx'
+import InstructorSchedule from './pages/instructor/InstructorSchedule.jsx'
 
 function RoleRouter() {
   const { getToken, isLoaded } = useAuth()
@@ -158,6 +159,7 @@ export default function App() {
         <Route path="/instructor" element={<ProtectedRoute><InstructorSessions /></ProtectedRoute>} />
         <Route path="/instructor/sessions" element={<ProtectedRoute><InstructorSessions /></ProtectedRoute>} />
         <Route path="/instructor/students" element={<ProtectedRoute><InstructorStudents /></ProtectedRoute>} />
+        <Route path="/instructor/schedule" element={<ProtectedRoute><InstructorSchedule /></ProtectedRoute>} />
 
         <Route path="/admin" element={<ProtectedRoute><AdminSessions /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
