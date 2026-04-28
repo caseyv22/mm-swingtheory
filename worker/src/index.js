@@ -1,6 +1,16 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { verifyAuth } from './lib/auth.js'
+import {
+  sendEmail,
+  bookingConfirmedEmail,
+  bookingConfirmedAdminEmail,
+  bookingCancelledEmail,
+  bookingCancelledAdminEmail,
+  sessionCancelledEmail,
+  reminderEmail,
+  welcomeEmail,
+} from './lib/email.js'
 
 const app = new Hono()
 
@@ -208,6 +218,48 @@ app.post('/bookings', requireAuth, async (c) => {
   } catch (e) {
     if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already booked' }, 400)
     throw e
+  }
+
+  // Send confirmation emails (non-blocking)
+  try {
+    const session2 = await c.env.DB.prepare(`
+      SELECT s.*, p.name as program_name, p.booker_type,
+        u2.full_name as instructor_name
+      FROM sessions s
+      JOIN programs p ON s.program_id = p.id
+      LEFT JOIN instructors i ON s.instructor_id = i.id
+      LEFT JOIN users u2 ON i.user_id = u2.id
+      WHERE s.id = ?
+    `).bind(session_id).first()
+
+    const child2 = child_id ? await c.env.DB.prepare('SELECT first_name FROM children WHERE id = ?').bind(child_id).first() : null
+    const config = await c.env.DB.prepare('SELECT admin_email FROM config WHERE id = 1').first()
+    const adminEmail = config?.admin_email || 'info@swingtheory.golf'
+
+    const { subject, html } = bookingConfirmedEmail({
+      recipientName: user.full_name,
+      programName: session2.program_name,
+      date: session2.date,
+      startTime: session2.start_time,
+      endTime: session2.end_time,
+      bay: session2.bay,
+      instructorName: session2.instructor_name,
+      bookerType: user.role,
+      childName: child2?.first_name,
+    })
+    await sendEmail(c.env, { to: user.email, subject, html })
+
+    const { subject: aSubj, html: aHtml } = bookingConfirmedAdminEmail({
+      recipientName: user.full_name,
+      recipientEmail: user.email,
+      programName: session2.program_name,
+      date: session2.date,
+      startTime: session2.start_time,
+      childName: child2?.first_name,
+    })
+    await sendEmail(c.env, { to: adminEmail, subject: aSubj, html: aHtml })
+  } catch (e) {
+    console.error('Email send failed:', e.message)
   }
 
   return c.json({ ok: true, booking_id: id })
@@ -420,6 +472,32 @@ app.put('/admin/sessions/:id', requireAdmin, async (c) => {
     id
   ).run()
 
+  // If session was just cancelled, email all booked users
+  if (body.is_cancelled === 1 && !session.is_cancelled) {
+    try {
+      const bookedUsers = await c.env.DB.prepare(`
+        SELECT b.*, u.email, u.full_name, u.role, ch.first_name as child_name
+        FROM bookings b
+        JOIN users u ON b.user_id = u.id
+        LEFT JOIN children ch ON b.child_id = ch.id
+        WHERE b.session_id = ? AND b.status = 'confirmed'
+      `).bind(id).all()
+      const prog = await c.env.DB.prepare('SELECT name FROM programs WHERE id = ?').bind(session.program_id).first()
+      for (const booking of bookedUsers.results) {
+        const { subject: ss, html: sh } = sessionCancelledEmail({
+          recipientName: booking.full_name,
+          programName: prog?.name || 'Session',
+          date: session.date,
+          startTime: session.start_time,
+          cancelReason: body.cancel_reason,
+        })
+        await sendEmail(c.env, { to: booking.email, subject: ss, html: sh })
+      }
+    } catch (e) {
+      console.error('Session cancel emails failed:', e.message)
+    }
+  }
+
   return c.json({ ok: true })
 })
 
@@ -572,6 +650,14 @@ app.post('/admin/members', requireAdmin, async (c) => {
     await c.env.DB.prepare(
       'INSERT INTO instructors (id, user_id) VALUES (?, ?)'
     ).bind(instrId, userId).run()
+  }
+
+  // Send welcome email
+  try {
+    const { subject: ws, html: wh } = welcomeEmail({ recipientName: full_name, role })
+    await sendEmail(c.env, { to: email, subject: ws, html: wh })
+  } catch (e) {
+    console.error('Welcome email failed:', e.message)
   }
 
   return c.json({ ok: true, user_id: userId })
@@ -996,7 +1082,7 @@ export default {
       ctx.waitUntil(generateSessions(env))
     }
     if (event.cron === '0 15 * * *') {
-      // sendReminders(env) — Phase 6
+      ctx.waitUntil(sendReminders(env))
     }
   }
 }
@@ -1036,6 +1122,52 @@ async function generateSessions(env) {
           INSERT INTO sessions (id, program_id, date, day_of_week, start_time, end_time, capacity)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `).bind(id, program.id, dateStr, dayName, program.start_time, program.end_time, program.default_capacity).run()
+      }
+    }
+  }
+}
+
+async function sendReminders(env) {
+  // Find all sessions happening tomorrow
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowStr = tomorrow.toISOString().split('T')[0]
+
+  const sessions = await env.DB.prepare(`
+    SELECT s.*, p.name as program_name, p.booker_type,
+      u2.full_name as instructor_name
+    FROM sessions s
+    JOIN programs p ON s.program_id = p.id
+    LEFT JOIN instructors i ON s.instructor_id = i.id
+    LEFT JOIN users u2 ON i.user_id = u2.id
+    WHERE s.date = ? AND s.is_cancelled = 0
+  `).bind(tomorrowStr).all()
+
+  for (const session of sessions.results) {
+    const bookings = await env.DB.prepare(`
+      SELECT b.*, u.email, u.full_name, u.role, ch.first_name as child_name
+      FROM bookings b
+      JOIN users u ON b.user_id = u.id
+      LEFT JOIN children ch ON b.child_id = ch.id
+      WHERE b.session_id = ? AND b.status = 'confirmed'
+    `).bind(session.id).all()
+
+    for (const booking of bookings.results) {
+      try {
+        const { subject, html } = reminderEmail({
+          recipientName: booking.full_name,
+          programName: session.program_name,
+          date: session.date,
+          startTime: session.start_time,
+          endTime: session.end_time,
+          bay: session.bay,
+          instructorName: session.instructor_name,
+          bookerType: booking.role,
+          childName: booking.child_name,
+        })
+        await sendEmail(env, { to: booking.email, subject, html })
+      } catch (e) {
+        console.error('Reminder email failed for', booking.email, e.message)
       }
     }
   }
