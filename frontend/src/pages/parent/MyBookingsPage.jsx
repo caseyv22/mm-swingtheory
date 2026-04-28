@@ -140,7 +140,7 @@ export default function MyBookingsPage() {
       setPast(bookingsData.past || [])
       if (meData.user) {
         setUser(meData.user)
-        if (meData.user.role === 'student') {
+        if (meData.user.role === 'student' || meData.user.role === 'parent') {
           try {
             const lessonsData = await api.get('/student/lessons')
             setLessons(lessonsData.lessons || [])
@@ -154,7 +154,7 @@ export default function MyBookingsPage() {
     }
   }
 
-  const isStudent = user?.role === 'student'
+  const isStudent = user?.role === 'student' || user?.role === 'parent'
   const hasLessons = lessons.length > 0
 
   const tabs = [
