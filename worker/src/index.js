@@ -626,7 +626,8 @@ app.post('/admin/members', requireAdmin, async (c) => {
 
     if (!clerkRes.ok) {
       const err = await clerkRes.json()
-      return c.json({ error: 'Clerk invitation failed', detail: err }, 500)
+      const clerkMsg = err?.errors?.[0]?.long_message || err?.errors?.[0]?.message || 'Clerk invitation failed'
+      return c.json({ error: clerkMsg }, 500)
     }
 
     const clerkData = await clerkRes.json()
