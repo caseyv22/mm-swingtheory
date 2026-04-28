@@ -168,10 +168,18 @@ app.post('/bookings', requireAuth, async (c) => {
 
   const { session_id } = await c.req.json()
   const session = await c.env.DB.prepare(
-    'SELECT s.*, p.max_bookings_per_week, p.cancellation_hours FROM sessions s JOIN programs p ON s.program_id = p.id WHERE s.id = ?'
+    'SELECT s.*, p.max_bookings_per_week, p.cancellation_hours, p.booker_type FROM sessions s JOIN programs p ON s.program_id = p.id WHERE s.id = ?'
   ).bind(session_id).first()
   if (!session) return c.json({ error: 'Session not found' }, 404)
   if (session.is_cancelled) return c.json({ error: 'Session is cancelled' }, 400)
+
+  // Enforce booker_type — only the correct role can book this program
+  if (session.booker_type === 'parent' && user.role !== 'parent') {
+    return c.json({ error: 'This program can only be booked by a parent' }, 403)
+  }
+  if (session.booker_type === 'student' && user.role !== 'student') {
+    return c.json({ error: 'This program can only be booked by a student' }, 403)
+  }
 
   const now = new Date()
   const sessionDate = new Date(session.date + 'T' + session.start_time)
@@ -1077,6 +1085,174 @@ app.post('/instructor/students/:id/notes', requireInstructor, async (c) => {
   await c.env.DB.prepare(
     'INSERT INTO lesson_notes (id, instructor_id, student_id, session_id, note) VALUES (?, ?, ?, ?, ?)'
   ).bind(noteId, instr.id, id, session_id || null, note.trim()).run()
+  return c.json({ ok: true, note_id: noteId })
+})
+
+
+// ─── PRIVATE LESSON ROUTES ────────────────────────────────────────────────────
+
+// GET /instructor/lessons — all private lessons for this instructor (schedule view)
+app.get('/instructor/lessons', requireInstructor, async (c) => {
+  const user = c.get('user')
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ lessons: [] })
+
+  const lessons = await c.env.DB.prepare(`
+    SELECT pl.*,
+      u.full_name as student_name, u.role as student_role,
+      ch.first_name as child_name,
+      ln.note as coaching_note, ln.updated_at as note_updated_at,
+      CASE WHEN ln.id IS NOT NULL THEN 1 ELSE 0 END as has_note
+    FROM private_lessons pl
+    JOIN users u ON pl.student_id = u.id
+    LEFT JOIN children ch ON ch.parent_id = u.id
+    LEFT JOIN lesson_notes ln ON ln.lesson_id = pl.id AND ln.instructor_id = ?
+    WHERE pl.instructor_id = ?
+    ORDER BY pl.date DESC, pl.start_time ASC
+  `).bind(instr.id, instr.id).all()
+
+  const result = lessons.results.map(l => ({
+    ...l,
+    student_name: l.child_name || l.student_name,
+  }))
+
+  return c.json({ lessons: result })
+})
+
+// GET /instructor/students/:id/lessons — lessons for a specific student
+app.get('/instructor/students/:id/lessons', requireInstructor, async (c) => {
+  const { id } = c.req.param()
+  const user = c.get('user')
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  const assigned = await c.env.DB.prepare(
+    'SELECT id FROM student_instructors WHERE student_id = ? AND instructor_id = ?'
+  ).bind(id, instr.id).first()
+  if (!assigned) return c.json({ error: 'Student not assigned to you' }, 403)
+
+  const lessons = await c.env.DB.prepare(`
+    SELECT pl.*,
+      ln.note as coaching_note, ln.updated_at as note_updated_at,
+      CASE WHEN ln.id IS NOT NULL THEN 1 ELSE 0 END as has_note
+    FROM private_lessons pl
+    LEFT JOIN lesson_notes ln ON ln.lesson_id = pl.id AND ln.instructor_id = ?
+    WHERE pl.instructor_id = ? AND pl.student_id = ?
+    ORDER BY pl.date DESC, pl.start_time ASC
+  `).bind(instr.id, instr.id, id).all()
+
+  return c.json({ lessons: lessons.results })
+})
+
+// POST /instructor/students/:id/lessons — create a private lesson
+app.post('/instructor/students/:id/lessons', requireInstructor, async (c) => {
+  const { id } = c.req.param()
+  const user = c.get('user')
+  const { date, start_time, end_time, bay, notes } = await c.req.json()
+
+  if (!date || !start_time || !end_time) return c.json({ error: 'Date and times are required' }, 400)
+
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  const assigned = await c.env.DB.prepare(
+    'SELECT id FROM student_instructors WHERE student_id = ? AND instructor_id = ?'
+  ).bind(id, instr.id).first()
+  if (!assigned) return c.json({ error: 'Student not assigned to you' }, 403)
+
+  const lessonId = 'pl_' + uid()
+  await c.env.DB.prepare(`
+    INSERT INTO private_lessons (id, instructor_id, student_id, date, start_time, end_time, bay, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(lessonId, instr.id, id, date, start_time, end_time, bay || null, notes || null).run()
+
+  return c.json({ ok: true, lesson_id: lessonId })
+})
+
+// PUT /instructor/lessons/:id — edit a private lesson
+app.put('/instructor/lessons/:id', requireInstructor, async (c) => {
+  const { id } = c.req.param()
+  const user = c.get('user')
+  const { date, start_time, end_time, bay, notes } = await c.req.json()
+
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  const lesson = await c.env.DB.prepare(
+    'SELECT * FROM private_lessons WHERE id = ? AND instructor_id = ?'
+  ).bind(id, instr.id).first()
+  if (!lesson) return c.json({ error: 'Lesson not found' }, 404)
+
+  await c.env.DB.prepare(`
+    UPDATE private_lessons SET
+      date = ?, start_time = ?, end_time = ?, bay = ?, notes = ?,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    date ?? lesson.date,
+    start_time ?? lesson.start_time,
+    end_time ?? lesson.end_time,
+    bay ?? lesson.bay,
+    notes ?? lesson.notes,
+    id
+  ).run()
+
+  return c.json({ ok: true })
+})
+
+// DELETE /instructor/lessons/:id — cancel a private lesson
+app.delete('/instructor/lessons/:id', requireInstructor, async (c) => {
+  const { id } = c.req.param()
+  const user = c.get('user')
+
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  const lesson = await c.env.DB.prepare(
+    'SELECT * FROM private_lessons WHERE id = ? AND instructor_id = ?'
+  ).bind(id, instr.id).first()
+  if (!lesson) return c.json({ error: 'Lesson not found' }, 404)
+
+  await c.env.DB.prepare(
+    "UPDATE private_lessons SET is_cancelled = 1, updated_at = datetime('now') WHERE id = ?"
+  ).bind(id).run()
+
+  return c.json({ ok: true })
+})
+
+// POST /instructor/students/:id/notes — upsert coaching note for a private lesson
+app.post('/instructor/students/:id/notes', requireInstructor, async (c) => {
+  const { id } = c.req.param()
+  const user = c.get('user')
+  const { lesson_id, note } = await c.req.json()
+
+  if (!note?.trim()) return c.json({ error: 'Note cannot be empty' }, 400)
+  if (!lesson_id) return c.json({ error: 'lesson_id is required' }, 400)
+
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  const assigned = await c.env.DB.prepare(
+    'SELECT id FROM student_instructors WHERE student_id = ? AND instructor_id = ?'
+  ).bind(id, instr.id).first()
+  if (!assigned) return c.json({ error: 'Student not assigned to you' }, 403)
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM lesson_notes WHERE instructor_id = ? AND student_id = ? AND lesson_id = ?'
+  ).bind(instr.id, id, lesson_id).first()
+
+  if (existing) {
+    await c.env.DB.prepare(
+      "UPDATE lesson_notes SET note = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(note.trim(), existing.id).run()
+    return c.json({ ok: true, updated: true })
+  }
+
+  const noteId = 'note_' + uid()
+  await c.env.DB.prepare(
+    'INSERT INTO lesson_notes (id, instructor_id, student_id, lesson_id, note) VALUES (?, ?, ?, ?, ?)'
+  ).bind(noteId, instr.id, id, lesson_id, note.trim()).run()
+
   return c.json({ ok: true, note_id: noteId })
 })
 
