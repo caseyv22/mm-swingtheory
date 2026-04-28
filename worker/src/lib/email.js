@@ -329,31 +329,39 @@ export function reminderEmail({ recipientName, programName, date, startTime, end
 }
 
 // ─── 7. Welcome (account created) ────────────────────────────────────────────
-export function welcomeEmail({ recipientName, role, tempPassword }) {
+export function welcomeEmail({ recipientName, role, email, invitationUrl }) {
   const subject = 'Welcome to Swing Theory'
+  const loginUrl = invitationUrl || APP_URL
 
   const html = baseLayout({
-    preheader: 'Your Swing Theory account is ready.',
+    preheader: 'Your Swing Theory account is ready. Click to set your password.',
     body: `
   <tr>
     <td style="padding:32px 32px 8px">
       <div style="font-size:22px;font-weight:700;color:#064029;margin-bottom:8px">Welcome, ${recipientName}!</div>
       <p style="font-size:14px;color:#555555;line-height:1.6;margin:0">
-        Your Swing Theory account has been created. Click below to set your password and get started.
+        Your Swing Theory account has been created. Click the button below to set your password and access the booking platform.
       </p>
     </td>
   </tr>
   <tr>
-    <td style="padding:24px 32px">
+    <td style="padding:16px 32px 24px">
       <div style="background:#f7faf8;border:1px solid #d8e8dc;border-radius:12px;padding:20px 24px">
         <table width="100%" cellpadding="0" cellspacing="0">
-          ${infoRow('Email', '')}
+          ${infoRow('Email', email || '')}
           ${infoRow('Role', role.charAt(0).toUpperCase() + role.slice(1))}
         </table>
       </div>
     </td>
   </tr>
-  ${ctaButton('Set My Password & Log In', APP_URL)}`,
+  <tr>
+    <td style="padding:0 32px 16px">
+      <p style="font-size:13px;color:#888888;line-height:1.6;margin:0">
+        This link expires in 24 hours. If you need a new one, contact your administrator.
+      </p>
+    </td>
+  </tr>
+  ${ctaButton('Set My Password & Log In', loginUrl)}`,
   })
 
   return { subject, html }
