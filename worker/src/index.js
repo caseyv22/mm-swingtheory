@@ -881,8 +881,8 @@ app.post('/admin/programs', requireAdmin, async (c) => {
       id, name, slug, description, booking_type, booker_type,
       session_days, start_time, end_time, default_capacity, price_display,
       show_instructor, forward_view_weeks, cancellation_hours, max_bookings_per_week,
-      is_active
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      start_date, end_date, is_active
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).bind(
     id, name, slug, description || null,
     booking_type || 'group', booker_type || 'student',
@@ -890,7 +890,8 @@ app.post('/admin/programs', requireAdmin, async (c) => {
     start_time || '09:00', end_time || '10:00',
     default_capacity || 10, price_display || null,
     show_instructor ? 1 : 0,
-    forward_view_weeks || 2, cancellation_hours || 24, max_bookings_per_week || 1
+    forward_view_weeks || 2, cancellation_hours || 24, max_bookings_per_week || 1,
+    start_date || null, end_date || null
   ).run()
 
   return c.json({ ok: true, program_id: id, slug })
@@ -910,7 +911,7 @@ app.put('/admin/programs/:id', requireAdmin, async (c) => {
       session_days = ?, start_time = ?, end_time = ?, default_capacity = ?,
       price_display = ?, show_instructor = ?, forward_view_weeks = ?,
       forward_view_enabled = ?, cancellation_hours = ?, max_bookings_per_week = ?,
-      is_active = ?, updated_at = datetime('now')
+      is_active = ?, start_date = ?, end_date = ?, updated_at = datetime('now')
     WHERE id = ?
   `).bind(
     body.name ?? program.name,
@@ -928,6 +929,8 @@ app.put('/admin/programs/:id', requireAdmin, async (c) => {
     body.cancellation_hours ?? program.cancellation_hours,
     body.max_bookings_per_week ?? program.max_bookings_per_week,
     body.is_active !== undefined ? (body.is_active ? 1 : 0) : program.is_active,
+    'start_date' in body ? (body.start_date || null) : program.start_date,
+    'end_date' in body ? (body.end_date || null) : program.end_date,
     id
   ).run()
 
@@ -1275,9 +1278,15 @@ async function generateSessions(env) {
   ).all()
 
   const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
   for (const program of programs.results) {
+    // Skip if program hasn't started yet
+    if (program.start_date && todayStr < program.start_date) continue
+    // Skip if program has ended
+    if (program.end_date && todayStr > program.end_date) continue
+
     const days = program.session_days.split(',').map(d => d.trim().toLowerCase())
     const weeksAhead = program.forward_view_weeks || 2
 
@@ -1292,6 +1301,10 @@ async function generateSessions(env) {
         if (diff < 0) diff += 7
         date.setDate(today.getDate() + diff)
         const dateStr = date.toISOString().split('T')[0]
+
+        // Don't generate sessions before start_date or after end_date
+        if (program.start_date && dateStr < program.start_date) continue
+        if (program.end_date && dateStr > program.end_date) continue
 
         // Skip if already exists
         const existing = await env.DB.prepare(
