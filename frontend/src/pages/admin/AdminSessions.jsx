@@ -40,13 +40,25 @@ function isoDate(d) {
 }
 
 // ─── Create Session Modal ─────────────────────────────────────────────────────
-function CreateSessionModal({ programs, prefilledDate, onClose, onCreated }) {
+function CreateSessionModal({ programs: propPrograms, prefilledDate, onClose, onCreated }) {
   const [form, setForm] = useState({
     program_id: '',
     date: prefilledDate || '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [localPrograms, setLocalPrograms] = useState(propPrograms || [])
+
+  // Load programs inside modal in case parent hasn't loaded them yet
+  useEffect(() => {
+    if (propPrograms && propPrograms.length > 0) {
+      setLocalPrograms(propPrograms)
+    } else {
+      api.get('/admin/programs').then(d => setLocalPrograms(d.programs || [])).catch(() => {})
+    }
+  }, [propPrograms])
+
+  const programs = localPrograms
 
   async function handleCreate() {
     if (!form.program_id || !form.date) {
