@@ -557,15 +557,6 @@ export default function AdminSessions() {
                     ← Show full week
                   </button>
                 )}
-                <button
-                  onClick={() => { setCreatePrefilledDate(selectedDate || null); setShowCreateModal(true) }}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  New Session
-                </button>
               </div>
             </div>
 
