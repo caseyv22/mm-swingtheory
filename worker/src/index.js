@@ -312,6 +312,38 @@ app.delete('/bookings/:id', requireAuth, async (c) => {
     "UPDATE bookings SET status = 'cancelled', cancelled_at = datetime('now') WHERE id = ?"
   ).bind(id).run()
 
+  // Send cancellation emails
+  try {
+    const session3 = await c.env.DB.prepare(`
+      SELECT s.*, p.name as program_name, p.booker_type
+      FROM sessions s JOIN programs p ON s.program_id = p.id
+      WHERE s.id = ?
+    `).bind(booking.session_id).first()
+    const child3 = booking.child_id ? await c.env.DB.prepare('SELECT first_name FROM children WHERE id = ?').bind(booking.child_id).first() : null
+    const config2 = await c.env.DB.prepare('SELECT admin_email FROM config WHERE id = 1').first()
+    const adminEmail2 = config2?.admin_email || 'info@swingtheory.golf'
+
+    const { subject: cs, html: ch } = bookingCancelledEmail({
+      recipientName: user.full_name,
+      programName: session3.program_name,
+      date: session3.date,
+      startTime: session3.start_time,
+      bookerType: user.role,
+      childName: child3?.first_name,
+    })
+    await sendEmail(c.env, { to: user.email, subject: cs, html: ch })
+
+    const { subject: cas, html: cah } = bookingCancelledAdminEmail({
+      recipientName: user.full_name,
+      programName: session3.program_name,
+      date: session3.date,
+      startTime: session3.start_time,
+    })
+    await sendEmail(c.env, { to: adminEmail2, subject: cas, html: cah })
+  } catch (e) {
+    console.error('Cancellation email failed:', e.message)
+  }
+
   return c.json({ ok: true })
 })
 
