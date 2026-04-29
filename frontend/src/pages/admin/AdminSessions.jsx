@@ -57,9 +57,12 @@ function CreateSessionModal({ programs, prefilledDate, onClose, onCreated }) {
     setError('')
     try {
       const program = programs.find(p => p.id === form.program_id)
+      // Normalize date to ISO format YYYY-MM-DD regardless of browser locale
+      const rawDate = new Date(form.date)
+      const isoDate = isNaN(rawDate) ? form.date : rawDate.toISOString().split('T')[0]
       await api.post('/admin/sessions', {
         program_id: form.program_id,
-        date: form.date,
+        date: isoDate,
         start_time: program?.start_time || '09:00',
         end_time: program?.end_time || '10:00',
         capacity: program?.default_capacity || 10,
