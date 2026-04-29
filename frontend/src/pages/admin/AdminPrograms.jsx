@@ -36,6 +36,8 @@ function CreateProgramModal({ onClose, onSuccess }) {
     forward_view_weeks: 2,
     cancellation_hours: 24,
     max_bookings_per_week: 1,
+    start_date: '',
+    end_date: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -63,6 +65,8 @@ function CreateProgramModal({ onClose, onSuccess }) {
         forward_view_weeks: parseInt(form.forward_view_weeks),
         cancellation_hours: parseInt(form.cancellation_hours),
         max_bookings_per_week: parseInt(form.max_bookings_per_week),
+        start_date: form.start_date || null,
+        end_date: form.end_date || null,
       }
       await api.post('/admin/programs', payload)
       onSuccess()
@@ -201,6 +205,33 @@ function CreateProgramModal({ onClose, onSuccess }) {
             </div>
           </div>
 
+          {/* Program Dates */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Program Dates</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.start_date}
+                  onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">End Date</label>
+                <input
+                  type="date"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.end_date}
+                  onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
+                  placeholder="Leave blank for never"
+                />
+                <p className="text-xs text-gray-400 mt-1">Leave blank for no end date</p>
+              </div>
+            </div>
+          </div>
+
           {/* Capacity + Price */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -302,6 +333,8 @@ function ProgramEditor({ program, onSave }) {
     cancellation_hours: program.cancellation_hours,
     max_bookings_per_week: program.max_bookings_per_week,
     is_active: !!program.is_active,
+    start_date: program.start_date || '',
+    end_date: program.end_date || '',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -323,6 +356,8 @@ function ProgramEditor({ program, onSave }) {
         forward_view_weeks: parseInt(form.forward_view_weeks),
         cancellation_hours: parseInt(form.cancellation_hours),
         max_bookings_per_week: parseInt(form.max_bookings_per_week),
+        start_date: form.start_date || null,
+        end_date: form.end_date || null,
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -419,6 +454,20 @@ function ProgramEditor({ program, onSave }) {
           <label className="block text-xs text-gray-500 mb-1">Cancel Window (hrs)</label>
           <input type="number" min="0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
             value={form.cancellation_hours} onChange={e => setForm(f => ({ ...f, cancellation_hours: e.target.value }))} />
+        </div>
+      </div>
+
+      {/* Program Dates */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Start Date</label>
+          <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+            value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">End Date <span className="text-gray-300">(blank = never)</span></label>
+          <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+            value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
         </div>
       </div>
 
