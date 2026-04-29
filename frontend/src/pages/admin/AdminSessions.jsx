@@ -56,7 +56,14 @@ function CreateSessionModal({ programs, prefilledDate, onClose, onCreated }) {
     setSaving(true)
     setError('')
     try {
-      await api.post('/admin/sessions', form)
+      const program = programs.find(p => p.id === form.program_id)
+      await api.post('/admin/sessions', {
+        program_id: form.program_id,
+        date: form.date,
+        start_time: program?.start_time || '09:00',
+        end_time: program?.end_time || '10:00',
+        capacity: program?.default_capacity || 10,
+      })
       onCreated()
     } catch (e) {
       setError(e.message || 'Failed to create session')
