@@ -106,7 +106,7 @@ function SessionRow({ session, onBook, onCancel, cancellationHours, showInstruct
   const isPast = sessionStart < today
   const isFull = session.spots_remaining <= 0
   const hoursUntil = (sessionStart - today) / (1000 * 60 * 60)
-  const canCancel = session.is_booked_by_me && hoursUntil > (cancellationHours || 24)
+  const canCancel = !!(session.is_booked_by_me && hoursUntil > (cancellationHours || 24))
   const isBookable = !session.is_cancelled && !isPast && !session.is_booked_by_me && !isFull
 
   let statusLabel = "", statusStyle = ""
