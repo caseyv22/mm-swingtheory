@@ -233,14 +233,34 @@ app.post('/bookings', requireAuth, async (c) => {
     child_id = child.id
   }
 
-  const id = 'bkg_' + uid()
-  try {
+  // Check for existing confirmed booking
+  const existingConfirmed = await c.env.DB.prepare(
+    "SELECT id FROM bookings WHERE session_id = ? AND user_id = ? AND status = 'confirmed'"
+  ).bind(session_id, user.id).first()
+  if (existingConfirmed) return c.json({ error: 'Already booked' }, 400)
+
+  // Check for existing cancelled booking — reactivate it instead of inserting new
+  const existingCancelled = await c.env.DB.prepare(
+    "SELECT id FROM bookings WHERE session_id = ? AND user_id = ? AND status = 'cancelled'"
+  ).bind(session_id, user.id).first()
+
+  let id
+  if (existingCancelled) {
+    // Reactivate the cancelled booking
     await c.env.DB.prepare(
-      'INSERT INTO bookings (id, session_id, user_id, child_id, status) VALUES (?, ?, ?, ?, ?)'
-    ).bind(id, session_id, user.id, child_id, 'confirmed').run()
-  } catch (e) {
-    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already booked' }, 400)
-    throw e
+      "UPDATE bookings SET status = 'confirmed', cancelled_at = NULL, booked_at = datetime('now'), child_id = ? WHERE id = ?"
+    ).bind(child_id, existingCancelled.id).run()
+    id = existingCancelled.id
+  } else {
+    id = 'bkg_' + uid()
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO bookings (id, session_id, user_id, child_id, status) VALUES (?, ?, ?, ?, ?)'
+      ).bind(id, session_id, user.id, child_id, 'confirmed').run()
+    } catch (e) {
+      if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already booked' }, 400)
+      throw e
+    }
   }
 
   // Send confirmation emails (non-blocking)
