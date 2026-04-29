@@ -18,8 +18,6 @@ function formatTime(timeStr) {
   return `${hour12}:${minute} ${ampm}`
 }
 
-// ─── Month Calendar ───────────────────────────────────────────────────────────
-
 function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
@@ -58,18 +56,16 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
         <p className="font-display text-xl tracking-widest text-st-phantom">{monthName.toUpperCase()} {viewYear}</p>
         <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-st-offwhite transition-colors text-st-graphite text-xl">›</button>
       </div>
-
       <div className="grid grid-cols-7 mb-1">
-        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+        {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
           <div key={d} className="text-center text-[10px] font-bold uppercase tracking-widest text-st-graphite py-1">{d}</div>
         ))}
       </div>
-
       <div className="grid grid-cols-7 gap-y-1">
         {cells.map((day, i) => {
           if (!day) return <div key={`e${i}`} />
-          const mm = String(viewMonth + 1).padStart(2, '0')
-          const dd = String(day).padStart(2, '0')
+          const mm = String(viewMonth + 1).padStart(2, "0")
+          const dd = String(day).padStart(2, "0")
           const dateStr = `${viewYear}-${mm}-${dd}`
           const cellDate = new Date(viewYear, viewMonth, day)
           const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
@@ -78,42 +74,22 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
           const info = sessionMap[dateStr]
           const hasSession = !!info
           const isSelected = selectedDate === dateStr
-
-          let dotColor = 'bg-st-accent'
-          if (info?.booked) dotColor = 'bg-st-green'
-          else if (info?.full) dotColor = 'bg-orange-400'
-          else if (info?.cancelled) dotColor = 'bg-red-300'
-
+          let dotColor = "bg-st-accent"
+          if (info?.booked) dotColor = "bg-st-green"
+          else if (info?.full) dotColor = "bg-orange-400"
+          else if (info?.cancelled) dotColor = "bg-red-300"
           return (
-            <button
-              key={dateStr}
-              onClick={() => hasSession && onSelectDate(isSelected ? null : dateStr)}
-              disabled={!hasSession}
-              className={`
-                relative flex flex-col items-center justify-center rounded-xl py-2 transition-all duration-100
-                ${hasSession && !isSelected ? 'cursor-pointer hover:bg-st-light' : ''}
-                ${!hasSession ? 'cursor-default' : ''}
-                ${isSelected ? 'bg-st-green' : ''}
-                ${isPast && !isSelected ? 'opacity-35' : ''}
-              `}
-            >
-              <span className={`text-sm font-semibold leading-none
-                ${isSelected ? 'text-white' : isToday ? 'text-st-green font-bold' : 'text-st-phantom'}
-              `}>{day}</span>
+            <button key={dateStr} onClick={() => hasSession && onSelectDate(isSelected ? null : dateStr)} disabled={!hasSession}
+              className={`relative flex flex-col items-center justify-center rounded-xl py-2 transition-all duration-100 ${hasSession && !isSelected ? "cursor-pointer hover:bg-st-light" : ""} ${!hasSession ? "cursor-default" : ""} ${isSelected ? "bg-st-green" : ""} ${isPast && !isSelected ? "opacity-35" : ""}`}>
+              <span className={`text-sm font-semibold leading-none ${isSelected ? "text-white" : isToday ? "text-st-green font-bold" : "text-st-phantom"}`}>{day}</span>
               {isToday && !isSelected && !hasSession && <span className="w-1 h-1 rounded-full bg-st-green mt-0.5" />}
-              {hasSession && <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-white/70' : dotColor}`} />}
+              {hasSession && <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? "bg-white/70" : dotColor}`} />}
             </button>
           )
         })}
       </div>
-
       <div className="flex items-center gap-4 mt-5 pt-4 border-t border-st-cloud flex-wrap">
-        {[
-          { color: 'bg-st-accent', label: 'Available' },
-          { color: 'bg-st-green', label: 'Booked' },
-          { color: 'bg-orange-400', label: 'Full' },
-          { color: 'bg-red-300', label: 'Cancelled' },
-        ].map(({ color, label }) => (
+        {[{ color: "bg-st-accent", label: "Available" }, { color: "bg-st-green", label: "Booked" }, { color: "bg-orange-400", label: "Full" }, { color: "bg-red-300", label: "Cancelled" }].map(({ color, label }) => (
           <div key={label} className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${color}`} />
             <span className="text-[10px] font-semibold text-st-graphite uppercase tracking-widest">{label}</span>
@@ -124,8 +100,6 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
   )
 }
 
-// ─── Session Row ──────────────────────────────────────────────────────────────
-
 function SessionRow({ session, onBook, onCancel, cancellationHours, showInstructor }) {
   const today = new Date()
   const sessionStart = new Date(`${session.date}T${session.start_time}:00`)
@@ -135,35 +109,26 @@ function SessionRow({ session, onBook, onCancel, cancellationHours, showInstruct
   const canCancel = session.is_booked_by_me && hoursUntil > (cancellationHours || 24)
   const isBookable = !session.is_cancelled && !isPast && !session.is_booked_by_me && !isFull
 
-  let statusLabel = ''
-  let statusStyle = ''
-  if (session.is_cancelled)         { statusLabel = 'Cancelled'; statusStyle = 'bg-red-50 text-red-500 border-red-100' }
-  else if (isPast)                  { statusLabel = 'Past';      statusStyle = 'bg-gray-50 text-gray-400 border-gray-100' }
-  else if (session.is_booked_by_me) { statusLabel = 'Booked ✓'; statusStyle = 'bg-st-light text-st-green border-st-green/20' }
-  else if (isFull)                  { statusLabel = 'Full';      statusStyle = 'bg-orange-50 text-orange-500 border-orange-100' }
-  else                              { statusLabel = 'Available'; statusStyle = 'bg-st-light text-st-green border-st-green/20' }
+  let statusLabel = "", statusStyle = ""
+  if (session.is_cancelled)         { statusLabel = "Cancelled"; statusStyle = "bg-red-50 text-red-500 border-red-100" }
+  else if (isPast)                  { statusLabel = "Past";      statusStyle = "bg-gray-50 text-gray-400 border-gray-100" }
+  else if (session.is_booked_by_me) { statusLabel = "Booked ✓"; statusStyle = "bg-st-light text-st-green border-st-green/20" }
+  else if (isFull)                  { statusLabel = "Full";      statusStyle = "bg-orange-50 text-orange-500 border-orange-100" }
+  else                              { statusLabel = "Available"; statusStyle = "bg-st-light text-st-green border-st-green/20" }
 
   return (
-    <div className={`bg-white rounded-xl border p-5 transition-all
-      ${session.is_booked_by_me ? 'border-st-green/30 bg-st-light/20' : 'border-st-cloud'}
-    `}>
+    <div className={`bg-white rounded-xl border p-5 transition-all ${session.is_booked_by_me ? "border-st-green/30 bg-st-light/20" : "border-st-cloud"}`}>
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1">
           <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusStyle}`}>{statusLabel}</span>
           <p className="font-bold text-st-phantom text-base mt-2">{formatTime(session.start_time)} – {formatTime(session.end_time)}</p>
-          {!!showInstructor && session.instructor_name && (
-            <p className="text-sm text-st-accent font-semibold mt-0.5">with {session.instructor_name}</p>
-          )}
+          {!!showInstructor && session.instructor_name && <p className="text-sm text-st-accent font-semibold mt-0.5">with {session.instructor_name}</p>}
           <p className="text-sm text-st-graphite font-medium mt-1">
-            {session.is_cancelled
-              ? (session.cancel_reason || 'Session cancelled')
-              : `${session.spots_remaining ?? session.capacity} of ${session.capacity} spots open`}
+            {session.is_cancelled ? (session.cancel_reason || "Session cancelled") : `${session.spots_remaining ?? session.capacity} of ${session.capacity} spots open`}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {isBookable && (
-            <button onClick={() => onBook(session)} className="bg-st-green text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity">Book</button>
-          )}
+          {isBookable && <button onClick={() => onBook(session)} className="bg-st-green text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity">Book</button>}
           {session.is_booked_by_me && !isPast && (
             canCancel
               ? <button onClick={() => onCancel(session)} className="border border-st-smoke text-st-graphite font-medium text-sm px-4 py-2.5 rounded-lg hover:border-red-300 hover:text-red-500 transition-colors">Cancel</button>
@@ -175,15 +140,13 @@ function SessionRow({ session, onBook, onCancel, cancellationHours, showInstruct
   )
 }
 
-// ─── Confirm Modal ────────────────────────────────────────────────────────────
-
 function ConfirmModal({ session, program, onConfirm, onClose, loading, user, child }) {
   const rows = [
-    ['Program', program?.name],
-    ['Date', formatDate(session.date)],
-    ['Time', `${formatTime(session.start_time)} – ${formatTime(session.end_time)}`],
-    ['Location', '50 S De Lacey Ave, Pasadena CA'],
-    child ? ['Golfer', child.first_name] : user ? ['Student', user.full_name] : null,
+    ["Program", program?.name],
+    ["Date", formatDate(session.date)],
+    ["Time", `${formatTime(session.start_time)} – ${formatTime(session.end_time)}`],
+    ["Location", "50 S De Lacey Ave, Pasadena CA"],
+    child ? ["Golfer", child.first_name] : user ? ["Student", user.full_name] : null,
   ].filter(Boolean)
 
   return (
@@ -193,7 +156,7 @@ function ConfirmModal({ session, program, onConfirm, onClose, loading, user, chi
         <p className="text-st-graphite text-sm font-medium mt-1 mb-6">Review details before confirming.</p>
         <div className="border border-st-cloud rounded-xl overflow-hidden text-sm">
           {rows.map(([label, value], i) => (
-            <div key={label} className={`flex justify-between px-5 py-3.5 ${i < rows.length - 1 ? 'border-b border-st-cloud' : ''}`}>
+            <div key={label} className={`flex justify-between px-5 py-3.5 ${i < rows.length - 1 ? "border-b border-st-cloud" : ""}`}>
               <span className="text-st-graphite font-medium">{label}</span>
               <span className="text-st-phantom font-semibold text-right">{value}</span>
             </div>
@@ -202,15 +165,13 @@ function ConfirmModal({ session, program, onConfirm, onClose, loading, user, chi
         <div className="mt-6 flex gap-3">
           <button onClick={onClose} className="flex-1 border border-st-smoke text-st-graphite font-semibold py-3 rounded-xl hover:bg-st-offwhite transition-colors">Go Back</button>
           <button onClick={onConfirm} disabled={loading} className="flex-1 bg-st-green text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">
-            {loading ? 'Booking...' : 'Confirm Booking'}
+            {loading ? "Booking..." : "Confirm Booking"}
           </button>
         </div>
       </div>
     </div>
   )
 }
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CalendarPage() {
   const { slug } = useParams()
@@ -251,7 +212,7 @@ export default function CalendarPage() {
         setUser(meData.user)
         setChild((meData.children || [])[0] || null)
       } else {
-        navigate('/onboarding')
+        navigate("/onboarding")
       }
     } catch (err) {
       setError(err.message)
@@ -282,10 +243,10 @@ export default function CalendarPage() {
     try {
       const token = await getToken()
       const data = await api.getMyBookings(token)
-      const booking = data.upcoming?.find(b => b.session_id === session.id && b.status === 'confirmed')
+      const booking = data.upcoming?.find(b => b.session_id === session.id && b.status === "confirmed")
       if (booking) {
         await api.cancelBooking(await getToken(), booking.id)
-        setSuccessMessage('Booking cancelled.')
+        setSuccessMessage("Booking cancelled.")
         setTimeout(() => setSuccessMessage(null), 3000)
         await loadData()
       }
@@ -296,6 +257,8 @@ export default function CalendarPage() {
 
   const selectedDateSessions = selectedDate ? sessions.filter(s => s.date === selectedDate) : []
   const nextAvailable = sessions.find(s => !s.is_cancelled && s.spots_remaining > 0)
+  const today = new Date().toISOString().split("T")[0]
+  const isUpcoming = program?.start_date && today < program.start_date
 
   if (loading) return (
     <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
@@ -306,13 +269,10 @@ export default function CalendarPage() {
   return (
     <div className="min-h-screen bg-st-offwhite flex flex-col">
       <NavBar role={user?.role} />
-
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-10 py-8">
-
-        {/* Page title — in body */}
         <div className="mb-8">
           <p className="text-xs font-bold uppercase tracking-widest text-st-accent mb-1">
-            {user && (child ? `Booking for ${child.first_name}` : `Booking for ${user.full_name?.split(' ')[0]}`)}
+            {user && (child ? `Booking for ${child.first_name}` : `Booking for ${user.full_name?.split(" ")[0]}`)}
           </p>
           <h1 className="font-display text-4xl lg:text-5xl text-st-phantom tracking-widest leading-none">
             {program?.name?.toUpperCase() || slug?.toUpperCase()}
@@ -322,10 +282,7 @@ export default function CalendarPage() {
           )}
         </div>
 
-        {/* Alerts */}
-        {successMessage && (
-          <div className="bg-st-green text-white text-sm font-semibold px-5 py-3.5 rounded-xl mb-5">{successMessage}</div>
-        )}
+        {successMessage && <div className="bg-st-green text-white text-sm font-semibold px-5 py-3.5 rounded-xl mb-5">{successMessage}</div>}
         {error && (
           <div className="bg-red-50 text-red-600 text-sm font-semibold px-5 py-3.5 rounded-xl flex justify-between items-center mb-5">
             {error}
@@ -338,6 +295,13 @@ export default function CalendarPage() {
             <p className="font-display text-2xl text-st-green tracking-widest">BOOKING PAUSED</p>
             <p className="text-st-graphite text-sm mt-2">Check back soon.</p>
           </div>
+        ) : isUpcoming ? (
+          <div className="bg-white rounded-2xl p-12 text-center border border-st-cloud">
+            <p className="font-display text-2xl text-st-green tracking-widest">COMING SOON</p>
+            <p className="text-st-graphite text-sm mt-2">
+              Sessions begin {new Date(program.start_date + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            </p>
+          </div>
         ) : sessions.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-st-cloud">
             <p className="font-display text-2xl text-st-green tracking-widest">NO UPCOMING SESSIONS</p>
@@ -345,51 +309,35 @@ export default function CalendarPage() {
           </div>
         ) : (
           <div className="flex flex-col-reverse lg:flex-row gap-8">
-
-            {/* Left: Sessions panel */}
             <div className="flex-1 min-w-0">
               {selectedDate ? (
                 <>
                   <p className="text-xs font-bold uppercase tracking-widest text-st-graphite mb-4">{formatDate(selectedDate)}</p>
                   <div className="space-y-3">
                     {selectedDateSessions.map(session => (
-                      <SessionRow
-                        key={session.id}
-                        session={session}
-                        onBook={setSelectedSession}
-                        onCancel={handleCancel}
-                        cancellationHours={program?.cancellation_hours}
-                        showInstructor={program?.show_instructor}
-                      />
+                      <SessionRow key={session.id} session={session} onBook={setSelectedSession} onCancel={handleCancel} cancellationHours={program?.cancellation_hours} showInstructor={program?.show_instructor} />
                     ))}
                   </div>
                 </>
               ) : (
                 <div className="bg-white rounded-2xl border border-st-cloud p-10 text-center">
                   <p className="font-display text-xl text-st-phantom tracking-widest">SELECT A DATE</p>
-                  <p className="text-st-graphite text-sm font-medium mt-2 max-w-xs mx-auto">
-                    Tap a highlighted date on the calendar to view available sessions.
-                  </p>
+                  <p className="text-st-graphite text-sm font-medium mt-2 max-w-xs mx-auto">Tap a highlighted date on the calendar to view available sessions.</p>
                   {nextAvailable && (
-                    <button
-                      onClick={() => setSelectedDate(nextAvailable.date)}
-                      className="mt-6 bg-st-green text-white font-bold text-sm px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
-                    >
+                    <button onClick={() => setSelectedDate(nextAvailable.date)} className="mt-6 bg-st-green text-white font-bold text-sm px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity">
                       Next Available — {formatDate(nextAvailable.date)}
                     </button>
                   )}
                 </div>
               )}
             </div>
-
-            {/* Right: Calendar + info */}
             <div className="lg:w-80 xl:w-96 shrink-0">
               <MonthCalendar sessions={sessions} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
               <div className="mt-4 bg-white rounded-xl border border-st-cloud p-5 text-sm space-y-3 hidden lg:block">
                 {program?.session_days && (
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-st-graphite mb-0.5">Schedule</p>
-                    <p className="font-semibold text-st-phantom capitalize">{program.session_days.replace(/,/g, ' & ')}</p>
+                    <p className="font-semibold text-st-phantom capitalize">{program.session_days.replace(/,/g, " & ")}</p>
                   </div>
                 )}
                 {program?.start_time && (
@@ -410,15 +358,7 @@ export default function CalendarPage() {
       </main>
 
       {selectedSession && (
-        <ConfirmModal
-          session={selectedSession}
-          program={program}
-          onConfirm={handleConfirmBook}
-          onClose={() => setSelectedSession(null)}
-          loading={bookingLoading}
-          user={user}
-          child={child}
-        />
+        <ConfirmModal session={selectedSession} program={program} onConfirm={handleConfirmBook} onClose={() => setSelectedSession(null)} loading={bookingLoading} user={user} child={child} />
       )}
     </div>
   )
