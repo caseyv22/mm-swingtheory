@@ -22,6 +22,19 @@ const PROGRAM_TAG = {
   'theory-ai': 'Private Coaching',
 }
 
+function formatStartDate(dateStr) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric'
+  })
+}
+
+function getProgramStatus(program) {
+  const today = new Date().toISOString().split('T')[0]
+  if (program.start_date && today < program.start_date) return 'upcoming'
+  if (program.end_date && today > program.end_date) return 'ended'
+  return 'active'
+}
+
 export default function ProgramSelector() {
   const { getToken } = useAuth()
   const navigate = useNavigate()
@@ -66,7 +79,6 @@ export default function ProgramSelector() {
       <NavBar role={user?.role} />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-10 py-10">
-        {/* Page title — in body, not header */}
         <div className="mb-8">
           <p className="text-xs font-bold uppercase tracking-widest text-st-accent mb-1">Welcome back</p>
           <h1 className="font-display text-4xl lg:text-5xl text-st-phantom tracking-widest">
@@ -84,37 +96,64 @@ export default function ProgramSelector() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {visiblePrograms.map(program => (
-              <button
-                key={program.id}
-                onClick={() => navigate(`/book/${program.slug}`)}
-                className="group bg-white rounded-2xl border border-st-cloud hover:border-st-green hover:shadow-lg transition-all duration-200 text-left overflow-hidden"
-              >
-                <div className="h-0.5 bg-st-green scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
-                <div className="p-7">
-                  <div className="flex items-center justify-between mb-5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-st-accent bg-st-light px-3 py-1 rounded-full">
-                      {PROGRAM_TAG[program.slug] || 'Program'}
-                    </span>
-                    <span className="text-st-cloud group-hover:text-st-green transition-colors text-xl font-light">→</span>
-                  </div>
-                  <h2 className="font-display text-3xl text-st-phantom group-hover:text-st-green transition-colors tracking-widest leading-none mb-3">
-                    {program.name.toUpperCase()}
-                  </h2>
-                  <p className="text-st-graphite text-sm font-medium leading-relaxed mb-6">
-                    {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
-                  </p>
-                  <div className="pt-5 border-t border-st-cloud flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-bold text-st-graphite uppercase tracking-widest">
-                      {PROGRAM_SCHEDULE[program.slug] || ''}
+            {visiblePrograms.map(program => {
+              const status = getProgramStatus(program)
+              const isUpcoming = status === 'upcoming'
+              const isEnded = status === 'ended'
+              const isDisabled = isEnded
+
+              return (
+                <button
+                  key={program.id}
+                  onClick={() => !isDisabled && navigate(`/book/${program.slug}`)}
+                  disabled={isDisabled}
+                  className={`group bg-white rounded-2xl border border-st-cloud text-left overflow-hidden transition-all duration-200
+                    ${isDisabled ? 'opacity-60 cursor-default' : 'hover:border-st-green hover:shadow-lg cursor-pointer'}
+                  `}
+                >
+                  <div className={`h-0.5 bg-st-green transition-transform duration-300 origin-left ${isDisabled ? 'scale-x-0' : 'scale-x-0 group-hover:scale-x-100'}`} />
+                  <div className="p-7">
+                    <div className="flex items-center justify-between mb-5">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-st-accent bg-st-light px-3 py-1 rounded-full">
+                        {PROGRAM_TAG[program.slug] || 'Program'}
+                      </span>
+                      <span className={`text-st-cloud text-xl font-light transition-colors ${!isDisabled ? 'group-hover:text-st-green' : ''}`}>→</span>
+                    </div>
+                    <h2 className={`font-display text-3xl text-st-phantom tracking-widest leading-none mb-3 transition-colors ${!isDisabled ? 'group-hover:text-st-green' : ''}`}>
+                      {program.name.toUpperCase()}
+                    </h2>
+                    <p className="text-st-graphite text-sm font-medium leading-relaxed mb-4">
+                      {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
                     </p>
-                    {program.price_display && (
-                      <span className="text-sm font-bold text-st-green shrink-0">{program.price_display}</span>
+
+                    {/* Status message */}
+                    {isUpcoming && (
+                      <div className="bg-st-light border border-st-green/20 rounded-lg px-4 py-2.5 mb-4">
+                        <p className="text-xs font-bold uppercase tracking-widest text-st-green mb-0.5">Coming Soon</p>
+                        <p className="text-sm font-semibold text-st-phantom">
+                          Sessions begin {formatStartDate(program.start_date)}
+                        </p>
+                      </div>
                     )}
+                    {isEnded && (
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mb-4">
+                        <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-0.5">Program Ended</p>
+                        <p className="text-sm font-semibold text-gray-500">No upcoming sessions</p>
+                      </div>
+                    )}
+
+                    <div className="pt-5 border-t border-st-cloud flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold text-st-graphite uppercase tracking-widest">
+                        {PROGRAM_SCHEDULE[program.slug] || ''}
+                      </p>
+                      {program.price_display && (
+                        <span className="text-sm font-bold text-st-green shrink-0">{program.price_display}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
         )}
       </main>
