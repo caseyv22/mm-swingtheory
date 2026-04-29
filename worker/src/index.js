@@ -133,10 +133,16 @@ app.post('/users/child', requireAuth, async (c) => {
 // GET /programs/:slug/sessions
 app.get('/programs/:slug/sessions', requireAuth, async (c) => {
   const { slug } = c.req.param()
+  const clerkId = c.get('clerkId')
+
   const program = await c.env.DB.prepare(
     'SELECT * FROM programs WHERE slug = ? AND is_active = 1'
   ).bind(slug).first()
   if (!program) return c.json({ error: 'Program not found' }, 404)
+
+  const user = await c.env.DB.prepare(
+    'SELECT * FROM users WHERE clerk_id = ?'
+  ).bind(clerkId).first()
 
   const weeks = program.forward_view_enabled ? (program.forward_view_weeks || 2) : 0
   const today = new Date().toISOString().split('T')[0]
@@ -145,17 +151,26 @@ app.get('/programs/:slug/sessions', requireAuth, async (c) => {
   const endDate = futureDate.toISOString().split('T')[0]
 
   const sessions = await c.env.DB.prepare(`
-    SELECT s.*, 
+    SELECT s.*,
       (SELECT COUNT(*) FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed') as booked_count,
-      i.id as instr_id, u.full_name as instructor_name
+      i.id as instr_id, u2.full_name as instructor_name,
+      CASE WHEN EXISTS (
+        SELECT 1 FROM bookings b2 WHERE b2.session_id = s.id AND b2.user_id = ? AND b2.status = 'confirmed'
+      ) THEN 1 ELSE 0 END as is_booked_by_me
     FROM sessions s
     LEFT JOIN instructors i ON s.instructor_id = i.id
-    LEFT JOIN users u ON i.user_id = u.id
-    WHERE s.program_id = ? AND s.date >= ? AND s.date <= ? AND s.is_cancelled = 0
+    LEFT JOIN users u2 ON i.user_id = u2.id
+    WHERE s.program_id = ? AND s.date >= ? AND s.date <= ?
     ORDER BY s.date ASC, s.start_time ASC
-  `).bind(program.id, today, endDate).all()
+  `).bind(user?.id || '', program.id, today, endDate).all()
 
-  return c.json({ program, sessions: sessions.results })
+  // Add spots_remaining to each session
+  const sessionsWithSpots = sessions.results.map(s => ({
+    ...s,
+    spots_remaining: s.capacity - (s.booked_count || 0),
+  }))
+
+  return c.json({ program, sessions: sessionsWithSpots })
 })
 
 // POST /bookings
