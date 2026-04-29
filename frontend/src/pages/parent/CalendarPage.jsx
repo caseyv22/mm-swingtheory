@@ -27,7 +27,7 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
   sessions.forEach(s => {
     if (!sessionMap[s.date]) sessionMap[s.date] = { booked: false, available: false, cancelled: false, full: false }
     if (s.is_cancelled) sessionMap[s.date].cancelled = true
-    else if (s.is_booked_by_me) sessionMap[s.date].booked = true
+    else if (!!s.is_booked_by_me) sessionMap[s.date].booked = true
     else if (s.spots_remaining > 0) sessionMap[s.date].available = true
     else sessionMap[s.date].full = true
   })
@@ -106,13 +106,14 @@ function SessionRow({ session, onBook, onCancel, cancellationHours, showInstruct
   const isPast = sessionStart < today
   const isFull = session.spots_remaining <= 0
   const hoursUntil = (sessionStart - today) / (1000 * 60 * 60)
-  const canCancel = !!(session.is_booked_by_me && hoursUntil > (cancellationHours || 24))
-  const isBookable = !session.is_cancelled && !isPast && !session.is_booked_by_me && !isFull
+  const isBookedByMe = !!session.is_booked_by_me
+  const canCancel = !!(isBookedByMe && hoursUntil > (cancellationHours || 24))
+  const isBookable = !session.is_cancelled && !isPast && !isBookedByMe && !isFull
 
   let statusLabel = "", statusStyle = ""
   if (session.is_cancelled)         { statusLabel = "Cancelled"; statusStyle = "bg-red-50 text-red-500 border-red-100" }
   else if (isPast)                  { statusLabel = "Past";      statusStyle = "bg-gray-50 text-gray-400 border-gray-100" }
-  else if (session.is_booked_by_me) { statusLabel = "Booked ✓"; statusStyle = "bg-st-light text-st-green border-st-green/20" }
+  else if (isBookedByMe) { statusLabel = "Booked ✓"; statusStyle = "bg-st-light text-st-green border-st-green/20" }
   else if (isFull)                  { statusLabel = "Full";      statusStyle = "bg-orange-50 text-orange-500 border-orange-100" }
   else                              { statusLabel = "Available"; statusStyle = "bg-st-light text-st-green border-st-green/20" }
 
@@ -129,7 +130,7 @@ function SessionRow({ session, onBook, onCancel, cancellationHours, showInstruct
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isBookable && <button onClick={() => onBook(session)} className="bg-st-green text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity">Book</button>}
-          {session.is_booked_by_me && !isPast && (
+          {isBookedByMe && !isPast && (
             canCancel
               ? <button onClick={() => onCancel(session)} className="border border-st-smoke text-st-graphite font-medium text-sm px-4 py-2.5 rounded-lg hover:border-red-300 hover:text-red-500 transition-colors">Cancel</button>
               : <p className="text-xs text-st-graphite text-right max-w-[110px] font-medium leading-tight">Cancellation window closed</p>
