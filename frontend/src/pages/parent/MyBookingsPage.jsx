@@ -98,6 +98,9 @@ function LessonCard({ lesson }) {
           <p className="text-xs text-st-graphite mt-1">
             Instructor: <span className="font-semibold">{lesson.instructor_name}</span>
           </p>
+          {lesson.notes && (
+            <p className="text-xs text-st-graphite mt-1 italic">Focus: {lesson.notes}</p>
+          )}
         </div>
         {hasNote && (
           <button
