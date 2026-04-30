@@ -54,8 +54,8 @@ function LessonModal({ student, lesson, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="font-display text-xl text-[#064029] tracking-wide">{isEdit ? 'EDIT LESSON' : 'ADD LESSON'}</h2>
@@ -101,8 +101,8 @@ function LessonModal({ student, lesson, onClose, onSaved }) {
 
 function ConfirmCancelModal({ lesson, onClose, onConfirm, loading }) {
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm">
         <div className="px-6 py-5">
           <h3 className="font-display text-lg text-gray-900 tracking-wide mb-2">CANCEL LESSON</h3>
           <p className="text-sm text-gray-600">Cancel the lesson on <strong>{formatDate(lesson.date)}</strong> at <strong>{formatTime(lesson.start_time)}</strong>? This cannot be undone.</p>
@@ -241,8 +241,8 @@ function StudentDetail({ student, onClose }) {
       {editingLesson && <LessonModal student={student} lesson={editingLesson} onClose={() => setEditingLesson(null)} onSaved={() => { setEditingLesson(null); fetchLessons(); showToast('Lesson updated') }} />}
       {cancellingLesson && <ConfirmCancelModal lesson={cancellingLesson} onClose={() => setCancellingLesson(null)} onConfirm={handleCancelLesson} loading={cancelling} />}
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh] relative">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4">
+        <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-lg flex flex-col max-h-[90vh] relative">
           {toast && <div className="absolute top-4 right-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">{toast}</div>}
           <div className="px-6 py-5 border-b border-gray-100">
             <div className="flex items-start justify-between">
@@ -325,7 +325,7 @@ export default function InstructorStudents() {
     <div className="min-h-screen bg-[#F9FAFB]">
       <NavBar role="instructor" />
       {selected && <StudentDetail student={selected} onClose={() => setSelected(null)} />}
-      <div className="max-w-2xl mx-auto px-4 py-8">
+      <div className="max-w-2xl mx-auto px-4 py-6">
         <div className="mb-6">
           <h1 className="font-display text-3xl text-[#064029] tracking-wide">MY STUDENTS</h1>
           <p className="text-sm text-gray-400 mt-1">{students.length} student{students.length !== 1 ? 's' : ''} assigned</p>
