@@ -103,7 +103,7 @@ function RosterDrawer({ session, onClose }) {
         {/* Roster */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {loading ? (
-            <div className="text-center py-8 text-sm text-gray-300">Loading roster…</div>
+            <div className="text-center py-8 text-sm text-gray-400">Loading roster…</div>
           ) : bookings.length === 0 ? (
             <div className="text-center py-8 text-sm text-gray-300 italic">No bookings yet</div>
           ) : (
@@ -279,7 +279,7 @@ export default function InstructorSessions() {
 
         {/* Sessions list */}
         {loading ? (
-          <div className="text-center py-16 text-sm text-gray-300">Loading sessions…</div>
+          <div className="text-center py-16 text-sm text-gray-400">Loading sessions…</div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-gray-300 text-sm italic">No {filter} sessions</p>
