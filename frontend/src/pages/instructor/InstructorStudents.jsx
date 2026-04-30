@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import NavBar from '../../components/NavBar'
 import { api } from '../../lib/api'
+import TheoryAI from '../../components/TheoryAI'
 
 function formatDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -164,6 +165,11 @@ function LessonRow({ lesson, studentId, onEdit, onCancel, onNoteSaved }) {
         )}
       </div>
       {lesson.notes && <p className="text-xs text-gray-400 italic mt-1">Focus: {lesson.notes}</p>}
+      {!isCancelled && (
+        <div className="mt-3 border-t border-gray-50 pt-3">
+          <TheoryAI lessonId={lesson.id} isInstructor={true} />
+        </div>
+      )}
       {!isCancelled && (
         <div className="mt-2">
           {!editingNote && lesson.coaching_note && (
