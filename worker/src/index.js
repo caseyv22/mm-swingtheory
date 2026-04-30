@@ -397,7 +397,7 @@ app.get('/bookings/mine', requireAuth, async (c) => {
   return c.json({ bookings: bookings.results, upcoming, past })
 })
 
-// GET /student/lessons — instructor-assigned sessions + notes for this student
+// GET /student/lessons — private lessons assigned to this student
 app.get('/student/lessons', requireAuth, async (c) => {
   const clerkId = c.get('clerkId')
   const user = await c.env.DB.prepare(
@@ -405,62 +405,22 @@ app.get('/student/lessons', requireAuth, async (c) => {
   ).bind(clerkId).first()
   if (!user) return c.json({ error: 'User not found' }, 404)
 
-  // Get all instructors assigned to this student
-  const assignments = await c.env.DB.prepare(`
-    SELECT si.instructor_id, u.full_name as instructor_name
-    FROM student_instructors si
-    JOIN instructors i ON si.instructor_id = i.id
-    JOIN users u ON i.user_id = u.id
-    WHERE si.student_id = ?
-  `).bind(user.id).all()
-
-  if (!assignments.results.length) return c.json({ lessons: [], instructors: [] })
-
-  const instrIds = assignments.results.map(a => a.instructor_id)
-  const placeholders = instrIds.map(() => '?').join(',')
-
-  // Sessions where one of these instructors was assigned AND student was booked
   const lessons = await c.env.DB.prepare(`
-    SELECT s.*, p.name as program_name,
+    SELECT pl.*,
       u.full_name as instructor_name,
-      b.checked_in, b.id as booking_id
-    FROM sessions s
-    JOIN programs p ON s.program_id = p.id
-    JOIN bookings b ON b.session_id = s.id AND b.user_id = ?
-    JOIN instructors i ON s.instructor_id = i.id
+      ln.note as coaching_note,
+      ln.updated_at as note_updated_at
+    FROM private_lessons pl
+    JOIN instructors i ON pl.instructor_id = i.id
     JOIN users u ON i.user_id = u.id
-    WHERE s.instructor_id IN (${placeholders})
-      AND b.status = 'confirmed'
-    ORDER BY s.date DESC
-  `).bind(user.id, ...instrIds).all()
-
-  // Get all notes for this student from any of their instructors
-  const notes = await c.env.DB.prepare(`
-    SELECT ln.*, u.full_name as instructor_name
-    FROM lesson_notes ln
-    JOIN instructors i ON ln.instructor_id = i.id
-    JOIN users u ON i.user_id = u.id
-    WHERE ln.student_id = ?
-    ORDER BY ln.created_at DESC
+    LEFT JOIN lesson_notes ln ON ln.lesson_id = pl.id
+    WHERE pl.student_id = ?
+    ORDER BY pl.date DESC
   `).bind(user.id).all()
 
-  // Index notes by session_id
-  const notesBySession = {}
-  for (const n of notes.results) {
-    if (!notesBySession[n.session_id]) notesBySession[n.session_id] = []
-    notesBySession[n.session_id].push(n)
-  }
-
-  const lessonsWithNotes = lessons.results.map(l => ({
-    ...l,
-    notes: notesBySession[l.id] || []
-  }))
-
-  return c.json({
-    lessons: lessonsWithNotes,
-    instructors: assignments.results
-  })
+  return c.json({ lessons: lessons.results })
 })
+
 
 // ─── ADMIN ROUTES ─────────────────────────────────────────────────────────────
 
