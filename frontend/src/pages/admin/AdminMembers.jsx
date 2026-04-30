@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../../components/AdminLayout'
 import { api } from '../../lib/api'
+import TypeaheadSelect from '../../components/TypeaheadSelect'
 
 const ROLES = ['admin', 'instructor', 'parent', 'student']
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
@@ -278,33 +279,43 @@ function AssignInstructorModal({ student, currentAssignments, allInstructors, on
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
 
-        <div className="px-6 py-4 space-y-2">
+        <div className="px-6 py-4 space-y-4">
           {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-3 py-2">{error}</div>}
-          {allInstructors.length === 0 && (
+          {allInstructors.length === 0 ? (
             <p className="text-sm text-gray-500 py-4 text-center">No active instructors found.</p>
-          )}
-          {allInstructors.map(instr => {
-            const isAssigned = assignedIds.has(instr.id)
-            return (
-              <div key={instr.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{instr.full_name}</p>
-                  <p className="text-xs text-gray-400">{instr.email}</p>
+          ) : (
+            <>
+              <TypeaheadSelect
+                options={allInstructors.map(i => ({ value: i.id, label: i.full_name, sublabel: i.email }))}
+                value={[...assignedIds][0] || ''}
+                onChange={v => {
+                  const current = [...assignedIds][0]
+                  if (current && current !== v) unassign(current)
+                  if (v && v !== current) assign(v)
+                }}
+                placeholder="Search instructors…"
+              />
+              {[...assignedIds].length > 0 && (
+                <div className="space-y-1">
+                  {allInstructors.filter(i => assignedIds.has(i.id)).map(i => (
+                    <div key={i.id} className="flex items-center justify-between bg-[#E1F5EE] rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium text-[#064029]">{i.full_name}</p>
+                        <p className="text-xs text-gray-500">{i.email}</p>
+                      </div>
+                      <button
+                        onClick={() => unassign(i.id)}
+                        disabled={loading}
+                        className="text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <button
-                  disabled={loading}
-                  onClick={() => isAssigned ? unassign(instr.id) : assign(instr.id)}
-                  className={`min-w-[80px] py-1.5 px-3 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 ${
-                    isAssigned
-                      ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                      : 'bg-[#E1F5EE] text-[#064029] hover:bg-[#1D9E75] hover:text-white'
-                  }`}
-                >
-                  {isAssigned ? 'Remove' : 'Assign'}
-                </button>
-              </div>
-            )
-          })}
+              )}
+            </>
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 text-right">
