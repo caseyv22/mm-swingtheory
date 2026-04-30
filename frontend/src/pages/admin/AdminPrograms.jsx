@@ -609,7 +609,7 @@ export default function AdminPrograms() {
                   {/* Quick stats row */}
                   <div className="mt-3 flex gap-4 text-xs">
                     <div className="flex items-center gap-1.5 text-gray-400">
-                      <span className="font-mono text-gray-300">{p.id}</span>
+
                     </div>
                     <div className="text-gray-400">
                       Cancel window: <span className="font-medium text-gray-600">{p.cancellation_hours}h</span>
