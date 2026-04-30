@@ -549,21 +549,62 @@ app.get('/admin/sessions/:id/roster', requireAdmin, async (c) => {
   `).bind(id).first()
   if (!session) return c.json({ error: 'Session not found' }, 404)
 
-  const bookings = await c.env.DB.prepare(`
-    SELECT b.*, u.full_name, u.email, u.phone, ch.first_name as child_name
-    FROM bookings b
-    JOIN users u ON b.user_id = u.id
-    LEFT JOIN children ch ON b.child_id = ch.id
-    WHERE b.session_id = ? AND b.status = 'confirmed'
-    ORDER BY u.full_name ASC
-  `).bind(id).all()
+  const [bookings, allInstructors, assignedInstructors] = await Promise.all([
+    c.env.DB.prepare(`
+      SELECT b.*, u.full_name, u.email, u.phone, ch.first_name as child_name
+      FROM bookings b
+      JOIN users u ON b.user_id = u.id
+      LEFT JOIN children ch ON b.child_id = ch.id
+      WHERE b.session_id = ? AND b.status = 'confirmed'
+      ORDER BY u.full_name ASC
+    `).bind(id).all(),
+    c.env.DB.prepare(`
+      SELECT i.id, u.full_name, u.email
+      FROM instructors i JOIN users u ON i.user_id = u.id
+      WHERE u.status = 'active' ORDER BY u.full_name ASC
+    `).all(),
+    c.env.DB.prepare(`
+      SELECT si.instructor_id, u.full_name, u.email
+      FROM session_instructors si
+      JOIN instructors i ON si.instructor_id = i.id
+      JOIN users u ON i.user_id = u.id
+      WHERE si.session_id = ?
+      ORDER BY u.full_name ASC
+    `).bind(id).all(),
+  ])
 
-  // Get all instructors for the assignment dropdown
-  const instructors = await c.env.DB.prepare(`
-    SELECT i.id, u.full_name FROM instructors i JOIN users u ON i.user_id = u.id WHERE u.status = 'active'
-  `).all()
+  return c.json({
+    session,
+    bookings: bookings.results,
+    instructors: allInstructors.results,
+    assigned_instructors: assignedInstructors.results,
+  })
+})
 
-  return c.json({ session, bookings: bookings.results, instructors: instructors.results })
+// POST /admin/sessions/:id/instructors
+app.post('/admin/sessions/:id/instructors', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const { instructor_id } = await c.req.json()
+  if (!instructor_id) return c.json({ error: 'instructor_id required' }, 400)
+  const assignId = 'si_' + uid()
+  try {
+    await c.env.DB.prepare(
+      'INSERT INTO session_instructors (id, session_id, instructor_id) VALUES (?, ?, ?)'
+    ).bind(assignId, id, instructor_id).run()
+  } catch (e) {
+    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already assigned' }, 400)
+    throw e
+  }
+  return c.json({ ok: true })
+})
+
+// DELETE /admin/sessions/:id/instructors/:instructor_id
+app.delete('/admin/sessions/:id/instructors/:instructor_id', requireAdmin, async (c) => {
+  const { id, instructor_id } = c.req.param()
+  await c.env.DB.prepare(
+    'DELETE FROM session_instructors WHERE session_id = ? AND instructor_id = ?'
+  ).bind(id, instructor_id).run()
+  return c.json({ ok: true })
 })
 
 // POST /admin/bookings — manual booking bypasses all rules
