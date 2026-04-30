@@ -1357,7 +1357,7 @@ app.post('/instructor/lessons/:id/gspro', requireInstructor, async (c) => {
   // Upsert — replace existing upload for this lesson
   const existing = await c.env.DB.prepare('SELECT id FROM gspro_uploads WHERE lesson_id = ?').bind(lessonId).first()
   if (existing) {
-    await c.env.DB.prepare('UPDATE gspro_uploads SET csv_data = ?, uploaded_at = datetime('now') WHERE lesson_id = ?')
+    await c.env.DB.prepare("UPDATE gspro_uploads SET csv_data = ?, uploaded_at = datetime('now') WHERE lesson_id = ?")
       .bind(csv_data, lessonId).run()
   } else {
     const uploadId = 'gspro_' + uid()
