@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import NavBar from '../../components/NavBar'
 import { api } from '../../lib/api'
 import TypeaheadSelect from '../../components/TypeaheadSelect'
@@ -358,6 +359,7 @@ function MiniCalendar({ lessons, selectedDate, onSelectDate, currentMonth, onMon
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function InstructorSchedule() {
+  const navigate = useNavigate()
   const [lessons, setLessons] = useState([])
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
@@ -420,14 +422,7 @@ export default function InstructorSchedule() {
         <div className="fixed top-20 right-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">{toast}</div>
       )}
 
-      {editingLesson && (
-        <EditLessonModal
-          lesson={editingLesson}
-          students={students}
-          onClose={() => setEditingLesson(null)}
-          onSaved={() => { fetchData(); setEditingLesson(null); showToast('Lesson updated') }}
-        />
-      )}
+
 
       {showAddLesson && (
         <AddLessonModal
@@ -507,7 +502,7 @@ export default function InstructorSchedule() {
             ) : (
               <div className="space-y-3">
                 {filtered.map(l => (
-                  <LessonCard key={l.id} lesson={l} onClick={() => setEditingLesson(l)} />
+                  <LessonCard key={l.id} lesson={l} onClick={() => navigate(`/instructor/lessons/${l.id}`, { state: { studentId: l.student_id, studentName: l.full_name } })} />
                 ))}
               </div>
             )}
