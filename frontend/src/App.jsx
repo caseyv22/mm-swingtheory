@@ -13,6 +13,8 @@ import AdminPrograms from './pages/admin/AdminPrograms.jsx'
 import AdminSettings from './pages/admin/AdminSettings.jsx'
 import InstructorSessions from './pages/instructor/InstructorSessions.jsx'
 import InstructorStudents from './pages/instructor/InstructorStudents.jsx'
+import InstructorStudentProfile from './pages/instructor/InstructorStudentProfile.jsx'
+import InstructorLessonDetail from './pages/instructor/InstructorLessonDetail.jsx'
 import InstructorSchedule from './pages/instructor/InstructorSchedule.jsx'
 
 function RoleRouter() {
@@ -188,6 +190,8 @@ export default function App() {
         <Route path="/instructor/sessions" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSessions /></ProtectedRoute>} />
         <Route path="/instructor/students" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorStudents /></ProtectedRoute>} />
         <Route path="/instructor/schedule" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSchedule /></ProtectedRoute>} />
+        <Route path="/instructor/students/:studentId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorStudentProfile /></ProtectedRoute>} />
+        <Route path="/instructor/lessons/:lessonId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorLessonDetail /></ProtectedRoute>} />
 
         <Route path="/admin" element={<ProtectedRoute requiredRole={["admin"]}><AdminSessions /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
