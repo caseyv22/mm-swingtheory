@@ -184,8 +184,8 @@ function EditLessonModal({ lesson, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="font-display text-xl text-[#064029] tracking-wide">EDIT LESSON</h2>
@@ -428,11 +428,11 @@ export default function InstructorSchedule() {
         />
       )}
 
-      <div className="flex h-[calc(100vh-64px)]">
+      <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-64px)]">
 
         {/* Left — Lesson List */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <div className="bg-white border-b border-gray-100 px-6 py-4">
+        <div className="flex-1 flex flex-col min-w-0 lg:overflow-hidden">
+          <div className="bg-white border-b border-gray-100 px-4 lg:px-6 py-4">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="font-display text-2xl text-[#064029] tracking-wide">SCHEDULE</h1>
@@ -479,7 +479,7 @@ export default function InstructorSchedule() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 lg:overflow-y-auto px-4 lg:px-6 py-4">
             {loading ? (
               <div className="text-center py-16 text-sm text-gray-300">Loading…</div>
             ) : filtered.length === 0 ? (
@@ -505,7 +505,7 @@ export default function InstructorSchedule() {
         </div>
 
         {/* Right — Mini Calendar */}
-        <div className="w-72 flex-shrink-0 bg-white border-l border-gray-100 px-5 py-5 overflow-y-auto">
+        <div className="hidden lg:block lg:w-72 flex-shrink-0 bg-white border-t lg:border-t-0 lg:border-l border-gray-100 px-5 py-5 lg:overflow-y-auto">
           <MiniCalendar
             lessons={lessons.filter(l => !l.is_cancelled)}
             selectedDate={selectedDate}
