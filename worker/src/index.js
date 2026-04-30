@@ -1144,7 +1144,7 @@ app.get('/instructor/lessons', requireInstructor, async (c) => {
 
   const lessons = await c.env.DB.prepare(`
     SELECT pl.*,
-      u.full_name as student_name, u.role as student_role,
+      u.full_name as full_name, u.email as student_email, u.role as student_role,
       ch.first_name as child_name,
       ln.note as coaching_note, ln.updated_at as note_updated_at,
       CASE WHEN ln.id IS NOT NULL THEN 1 ELSE 0 END as has_note
@@ -1156,12 +1156,7 @@ app.get('/instructor/lessons', requireInstructor, async (c) => {
     ORDER BY pl.date DESC, pl.start_time ASC
   `).bind(instr.id, instr.id).all()
 
-  const result = lessons.results.map(l => ({
-    ...l,
-    student_name: l.child_name || l.student_name,
-  }))
-
-  return c.json({ lessons: result })
+  return c.json({ lessons: lessons.results })
 })
 
 // GET /instructor/students/:id/lessons — lessons for a specific student
