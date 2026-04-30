@@ -92,6 +92,56 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+function AdminRoute({ children }) {
+  const { getToken, isLoaded, isSignedIn } = useAuth()
+  const [role, setRole] = useState(null)
+  const [checking, setChecking] = useState(true)
+
+  if (isLoaded && isSignedIn) api.init(getToken)
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    api.getMe(getToken()).then(data => {
+      setRole(data?.user?.role || null)
+      setChecking(false)
+    }).catch(() => setChecking(false))
+  }, [isLoaded, isSignedIn])
+
+  if (!isLoaded || checking) return (
+    <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
+      <p className="text-st-green font-bold text-lg">Loading...</p>
+    </div>
+  )
+  if (!isSignedIn) return <Navigate to="/login" replace />
+  if (role !== 'admin') return <Navigate to="/home" replace />
+  return children
+}
+
+function InstructorRoute({ children }) {
+  const { getToken, isLoaded, isSignedIn } = useAuth()
+  const [role, setRole] = useState(null)
+  const [checking, setChecking] = useState(true)
+
+  if (isLoaded && isSignedIn) api.init(getToken)
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    api.getMe(getToken()).then(data => {
+      setRole(data?.user?.role || null)
+      setChecking(false)
+    }).catch(() => setChecking(false))
+  }, [isLoaded, isSignedIn])
+
+  if (!isLoaded || checking) return (
+    <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
+      <p className="text-st-green font-bold text-lg">Loading...</p>
+    </div>
+  )
+  if (!isSignedIn) return <Navigate to="/login" replace />
+  if (role !== 'instructor' && role !== 'admin') return <Navigate to="/home" replace />
+  return children
+}
+
 function LoginPage() {
   return (
     <div className="min-h-screen bg-st-green flex items-center justify-center p-4">
@@ -174,16 +224,16 @@ export default function App() {
           <ProtectedRoute><MyBookingsPage /></ProtectedRoute>
         } />
 
-        <Route path="/instructor" element={<ProtectedRoute><InstructorSessions /></ProtectedRoute>} />
-        <Route path="/instructor/sessions" element={<ProtectedRoute><InstructorSessions /></ProtectedRoute>} />
-        <Route path="/instructor/students" element={<ProtectedRoute><InstructorStudents /></ProtectedRoute>} />
-        <Route path="/instructor/schedule" element={<ProtectedRoute><InstructorSchedule /></ProtectedRoute>} />
+        <Route path="/instructor" element={<InstructorRoute><InstructorSessions /></InstructorRoute>} />
+        <Route path="/instructor/sessions" element={<InstructorRoute><InstructorSessions /></InstructorRoute>} />
+        <Route path="/instructor/students" element={<InstructorRoute><InstructorStudents /></InstructorRoute>} />
+        <Route path="/instructor/schedule" element={<InstructorRoute><InstructorSchedule /></InstructorRoute>} />
 
-        <Route path="/admin" element={<ProtectedRoute><AdminSessions /></ProtectedRoute>} />
-        <Route path="/admin/members" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
-        <Route path="/admin/members/:id" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
-        <Route path="/admin/programs" element={<ProtectedRoute><AdminPrograms /></ProtectedRoute>} />
-        <Route path="/admin/settings" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
+        <Route path="/admin" element={<AdminRoute><AdminSessions /></AdminRoute>} />
+        <Route path="/admin/members" element={<AdminRoute><AdminMembers /></AdminRoute>} />
+        <Route path="/admin/members/:id" element={<AdminRoute><AdminMembers /></AdminRoute>} />
+        <Route path="/admin/programs" element={<AdminRoute><AdminPrograms /></AdminRoute>} />
+        <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
