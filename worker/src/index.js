@@ -14,6 +14,12 @@ import {
 
 const app = new Hono()
 
+// Global error handler — always return JSON, never HTML
+app.onError((err, c) => {
+  console.error('Worker error:', err.message)
+  return c.json({ error: err.message || 'Internal server error' }, 500)
+})
+
 // ─── CORS ────────────────────────────────────────────────────────────────────
 app.use('*', cors({
   origin: ['https://mm-1a4.pages.dev', 'https://mm.swingtheory.golf'],
