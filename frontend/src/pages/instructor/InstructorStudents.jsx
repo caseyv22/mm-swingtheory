@@ -119,6 +119,7 @@ function ConfirmCancelModal({ lesson, onClose, onConfirm, loading }) {
 }
 
 function LessonRow({ lesson, studentId, onEdit, onCancel, onNoteSaved }) {
+  const isCancelled = !!lesson.is_cancelled
   const [editingNote, setEditingNote] = useState(false)
   const [noteText, setNoteText] = useState(lesson.coaching_note || '')
   const [savingNote, setSavingNote] = useState(false)
@@ -144,17 +145,17 @@ function LessonRow({ lesson, studentId, onEdit, onCancel, onNoteSaved }) {
   }
 
   return (
-    <div className={`border-b border-gray-50 last:border-0 py-4 ${lesson.is_cancelled ? 'opacity-50' : ''}`}>
+    <div className={`border-b border-gray-50 last:border-0 py-4 ${!!lesson.is_cancelled ? 'opacity-50' : ''}`}>
       <div className="flex items-start justify-between mb-1">
         <div>
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold text-gray-900">{formatDate(lesson.date)}</p>
-            {lesson.is_cancelled && <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>}
-            {!lesson.is_cancelled && !past && <span className="text-xs font-medium text-[#064029] bg-[#E1F5EE] px-2 py-0.5 rounded-full">Upcoming</span>}
+            {!!lesson.is_cancelled && <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>}
+            {!isCancelled && !past && <span className="text-xs font-medium text-[#064029] bg-[#E1F5EE] px-2 py-0.5 rounded-full">Upcoming</span>}
           </div>
           <p className="text-xs text-gray-400">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay && ` · ${lesson.bay}`}</p>
         </div>
-        {!lesson.is_cancelled && (
+        {!isCancelled && (
           <div className="flex items-center gap-2">
             <button onClick={() => onEdit(lesson)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029] transition-colors">Edit</button>
             <span className="text-gray-200">|</span>
@@ -163,7 +164,7 @@ function LessonRow({ lesson, studentId, onEdit, onCancel, onNoteSaved }) {
         )}
       </div>
       {lesson.notes && <p className="text-xs text-gray-400 italic mt-1">Focus: {lesson.notes}</p>}
-      {past && !lesson.is_cancelled && (
+      {past && !isCancelled && (
         <div className="mt-2">
           {!editingNote && lesson.coaching_note && (
             <div className="bg-[#E1F5EE] rounded-lg px-4 py-3">
