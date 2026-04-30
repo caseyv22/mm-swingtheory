@@ -335,23 +335,38 @@ function RosterPanel({ session, onClose, onUpdate }) {
         </div>
 
         {/* ── Capacity + Bay ── */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Capacity</p>
-            <input type="number" min="1" max="50"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={capacity} onChange={e => setCapacity(e.target.value)} />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Bay</p>
-            <select
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={BAYS.includes(bay) ? bay : ''} onChange={e => setBay(e.target.value)}
-            >
-              <option value="">— None —</option>
-              {BAYS.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-          </div>
+        <div>
+          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Capacity</p>
+          <input type="number" min="1" max="50"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+            value={capacity} onChange={e => setCapacity(e.target.value)} />
+        </div>
+        <div>
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Bays</p>
+            <div className="flex flex-wrap gap-1.5">
+              {BAYS.map(b => {
+                const selected = bay.split(',').map(x => x.trim()).filter(Boolean).includes(b)
+                return (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => {
+                      const current = bay.split(',').map(x => x.trim()).filter(Boolean)
+                      const updated = selected ? current.filter(x => x !== b) : [...current, b]
+                      setBay(updated.join(', '))
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                      selected
+                        ? 'bg-[#064029] text-white border-[#064029]'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#1D9E75] hover:text-[#1D9E75]'
+                    }`}
+                  >
+                    {b}
+                  </button>
+                )
+              })}
+            </div>
+            {bay && <p className="text-xs text-gray-400 mt-1.5">{bay}</p>}
         </div>
 
         <button onClick={handleUpdateSession} disabled={saving}
@@ -391,14 +406,14 @@ function RosterPanel({ session, onClose, onUpdate }) {
             Roster {roster && `(${roster.bookings?.length || 0}/${session.capacity})`}
           </p>
           {loading ? (
-            <div className="text-center py-6 text-sm text-gray-300">Loading roster…</div>
+            <div className="text-center py-6 text-sm text-gray-400">Loading roster…</div>
           ) : !roster || roster.bookings?.length === 0 ? (
             <div className="text-center py-6 text-sm text-gray-300 italic">No bookings yet</div>
           ) : (
             <div className="space-y-2">
               {roster.bookings.map(b => (
-                <div key={b.id} className={`flex items-center justify-between rounded-lg px-3 py-2.5 border ${
-                  b.checked_in ? 'bg-[#E1F5EE] border-[#1D9E75]/20' : 'bg-gray-50 border-gray-100'
+                <div key={b.id} className={`flex items-center justify-between rounded-xl px-4 py-3.5 border ${
+                  b.checked_in ? 'bg-[#E1F5EE] border-[#1D9E75]/20' : 'bg-white border-gray-200'
                 }`}>
                   <div>
                     <p className="text-sm font-semibold text-gray-900">{b.child_name || b.full_name}</p>
@@ -406,8 +421,10 @@ function RosterPanel({ session, onClose, onUpdate }) {
                     {b.phone && <p className="text-xs text-gray-400">{b.phone}</p>}
                   </div>
                   <button onClick={() => handleCheckin(b.id)}
-                    className={`min-w-[72px] py-1.5 px-3 text-xs font-semibold rounded-lg transition-colors ${
-                      b.checked_in ? 'bg-[#1D9E75] text-white hover:bg-[#178a64]' : 'bg-white border border-gray-200 text-gray-500 hover:border-[#1D9E75] hover:text-[#1D9E75]'
+                    className={`min-w-[88px] py-2.5 px-4 text-sm font-bold rounded-xl transition-all ${
+                      b.checked_in
+                        ? 'bg-[#1D9E75] text-white hover:bg-[#178a64] shadow-sm'
+                        : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-[#1D9E75] hover:text-[#1D9E75]'
                     }`}>
                     {b.checked_in ? '✓ In' : 'Check In'}
                   </button>
@@ -563,7 +580,7 @@ export default function AdminSessions() {
 
         {/* LEFT: Roster Panel */}
         {selectedSession && (
-          <div className="w-80 min-w-[300px] flex-shrink-0 overflow-hidden">
+          <div className="w-80 lg:w-96 min-w-[300px] flex-shrink-0 overflow-hidden">
             <RosterPanel
               session={selectedSession}
               onClose={() => setSelectedSession(null)}
@@ -597,7 +614,7 @@ export default function AdminSessions() {
               <button onClick={() => setWeekStart(d => addDays(d, -7))}
                 className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">‹</button>
               <span className="text-sm font-semibold text-gray-700 flex-1 text-center">
-                {isoDate(weekStart)} — {isoDate(addDays(weekStart, 6))}
+                {new Date(isoDate(weekStart) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} — {new Date(isoDate(addDays(weekStart, 6)) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               </span>
               <button onClick={() => setWeekStart(d => addDays(d, 7))}
                 className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">›</button>
@@ -610,7 +627,7 @@ export default function AdminSessions() {
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {loading ? (
-              <div className="text-center py-12 text-sm text-gray-300">Loading…</div>
+              <div className="text-center py-12 text-sm text-gray-400">Loading…</div>
             ) : displayedSessions.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-sm text-gray-300 italic">{selectedDate ? 'No sessions on this date' : 'No sessions this week'}</p>
