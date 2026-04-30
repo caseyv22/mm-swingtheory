@@ -807,18 +807,27 @@ app.delete('/admin/members/:id', requireAdmin, async (c) => {
     }
   }
 
-  // Cascade delete from D1 in order (FK constraints)
-  // 1. Bookings referencing this user
-  await c.env.DB.prepare("UPDATE bookings SET status = 'cancelled' WHERE user_id = ?").bind(id).run()
-  // 2. Children
-  await c.env.DB.prepare('DELETE FROM children WHERE parent_id = ?').bind(id).run()
-  // 3. Student-instructor assignments
-  await c.env.DB.prepare('DELETE FROM student_instructors WHERE student_id = ?').bind(id).run()
-  await c.env.DB.prepare('DELETE FROM student_instructors WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = ?)').bind(id).run()
-  // 4. Instructor record
-  await c.env.DB.prepare('DELETE FROM instructors WHERE user_id = ?').bind(id).run()
-  // 5. User
-  await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run()
+  // Cascade delete — order matters for FK constraints
+  const deletes = [
+    ['DELETE FROM bookings WHERE user_id = ?', [id]],
+    ['DELETE FROM lesson_notes WHERE student_id = ?', [id]],
+    ['DELETE FROM lesson_notes WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = ?)', [id]],
+    ['DELETE FROM private_lessons WHERE student_id = ?', [id]],
+    ['DELETE FROM private_lessons WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = ?)', [id]],
+    ['DELETE FROM session_instructors WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = ?)', [id]],
+    ['DELETE FROM children WHERE parent_id = ?', [id]],
+    ['DELETE FROM student_instructors WHERE student_id = ?', [id]],
+    ['DELETE FROM student_instructors WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = ?)', [id]],
+    ['DELETE FROM instructors WHERE user_id = ?', [id]],
+    ['DELETE FROM users WHERE id = ?', [id]],
+  ]
+  for (const [sql, params] of deletes) {
+    try {
+      await c.env.DB.prepare(sql).bind(...params).run()
+    } catch (e) {
+      console.error('Delete step failed:', sql, e.message)
+    }
+  }
 
   return c.json({ ok: true })
 })
@@ -984,7 +993,20 @@ app.post('/admin/programs', requireAdmin, async (c) => {
     start_date || null, end_date || null
   ).run()
 
+  // Auto-generate sessions for the new program
+  const newProgram = await c.env.DB.prepare('SELECT * FROM programs WHERE id = ?').bind(id).first()
+  if (newProgram) await generateSessionsForProgram(newProgram, c.env)
+
   return c.json({ ok: true, program_id: id, slug })
+})
+
+// POST /admin/programs/:id/generate-sessions
+app.post('/admin/programs/:id/generate-sessions', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const program = await c.env.DB.prepare('SELECT * FROM programs WHERE id = ?').bind(id).first()
+  if (!program) return c.json({ error: 'Program not found' }, 404)
+  const count = await generateSessionsForProgram(program, c.env)
+  return c.json({ ok: true, sessions_created: count })
 })
 
 // PUT /admin/programs/:id
@@ -1328,53 +1350,55 @@ export default {
   }
 }
 
-async function generateSessions(env) {
-  const programs = await env.DB.prepare(
-    'SELECT * FROM programs WHERE is_active = 1 AND forward_view_enabled = 1'
-  ).all()
-
+async function generateSessionsForProgram(program, env) {
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
-  for (const program of programs.results) {
-    // Skip if program hasn't started yet
-    if (program.start_date && todayStr < program.start_date) continue
-    // Skip if program has ended
-    if (program.end_date && todayStr > program.end_date) continue
+  if (program.start_date && todayStr < program.start_date) return 0
+  if (program.end_date && todayStr > program.end_date) return 0
 
-    const days = program.session_days.split(',').map(d => d.trim().toLowerCase())
-    const weeksAhead = program.forward_view_weeks || 2
+  const days = (program.session_days || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
+  const weeksAhead = program.forward_view_weeks || 2
+  let count = 0
 
-    for (let w = 0; w <= weeksAhead; w++) {
-      for (const dayName of days) {
-        const targetDayIndex = dayNames.indexOf(dayName)
-        if (targetDayIndex === -1) continue
+  for (let w = 0; w <= weeksAhead; w++) {
+    for (const dayName of days) {
+      const targetDayIndex = dayNames.indexOf(dayName)
+      if (targetDayIndex === -1) continue
 
-        const date = new Date(today)
-        const currentDay = date.getDay()
-        let diff = targetDayIndex - currentDay + (w * 7)
-        if (diff < 0) diff += 7
-        date.setDate(today.getDate() + diff)
-        const dateStr = date.toISOString().split('T')[0]
+      const date = new Date(today)
+      const currentDay = date.getDay()
+      let diff = targetDayIndex - currentDay + (w * 7)
+      if (diff < 0) diff += 7
+      date.setDate(today.getDate() + diff)
+      const dateStr = date.toISOString().split('T')[0]
 
-        // Don't generate sessions before start_date or after end_date
-        if (program.start_date && dateStr < program.start_date) continue
-        if (program.end_date && dateStr > program.end_date) continue
+      if (program.start_date && dateStr < program.start_date) continue
+      if (program.end_date && dateStr > program.end_date) continue
 
-        // Skip if already exists
-        const existing = await env.DB.prepare(
-          'SELECT id FROM sessions WHERE program_id = ? AND date = ?'
-        ).bind(program.id, dateStr).first()
-        if (existing) continue
+      const existing = await env.DB.prepare(
+        'SELECT id FROM sessions WHERE program_id = ? AND date = ?'
+      ).bind(program.id, dateStr).first()
+      if (existing) continue
 
-        const id = 'sess_' + crypto.randomUUID().replace(/-/g, '').slice(0, 20)
-        await env.DB.prepare(`
-          INSERT INTO sessions (id, program_id, date, day_of_week, start_time, end_time, capacity)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).bind(id, program.id, dateStr, dayName, program.start_time, program.end_time, program.default_capacity).run()
-      }
+      const id = 'sess_' + crypto.randomUUID().replace(/-/g, '').slice(0, 20)
+      await env.DB.prepare(`
+        INSERT INTO sessions (id, program_id, date, day_of_week, start_time, end_time, capacity)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(id, program.id, dateStr, dayName, program.start_time, program.end_time, program.default_capacity).run()
+      count++
     }
+  }
+  return count
+}
+
+async function generateSessions(env) {
+  const programs = await env.DB.prepare(
+    'SELECT * FROM programs WHERE is_active = 1 AND forward_view_enabled = 1'
+  ).all()
+  for (const program of programs.results) {
+    await generateSessionsForProgram(program, env)
   }
 }
 
