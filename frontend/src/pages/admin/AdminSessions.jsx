@@ -346,7 +346,7 @@ function RosterPanel({ session, onClose, onUpdate }) {
             <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Bay</p>
             <select
               className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={bay} onChange={e => setBay(e.target.value)}
+              value={BAYS.includes(bay) ? bay : ''} onChange={e => setBay(e.target.value)}
             >
               <option value="">— None —</option>
               {BAYS.map(b => <option key={b} value={b}>{b}</option>)}
