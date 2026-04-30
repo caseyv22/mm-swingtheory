@@ -1105,35 +1105,6 @@ app.get('/instructor/students/:id/notes', requireInstructor, async (c) => {
   return c.json({ notes: notes.results })
 })
 
-// POST /instructor/students/:id/notes
-app.post('/instructor/students/:id/notes', requireInstructor, async (c) => {
-  const { id } = c.req.param()
-  const user = c.get('user')
-  const { session_id, note } = await c.req.json()
-  if (!note?.trim()) return c.json({ error: 'Note cannot be empty' }, 400)
-  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
-  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
-  const assigned = await c.env.DB.prepare(
-    'SELECT id FROM student_instructors WHERE student_id = ? AND instructor_id = ?'
-  ).bind(id, instr.id).first()
-  if (!assigned) return c.json({ error: 'Student not assigned to you' }, 403)
-  const existing = await c.env.DB.prepare(
-    'SELECT id FROM lesson_notes WHERE instructor_id = ? AND student_id = ? AND session_id = ?'
-  ).bind(instr.id, id, session_id || null).first()
-  if (existing) {
-    await c.env.DB.prepare(
-      "UPDATE lesson_notes SET note = ?, updated_at = datetime('now') WHERE id = ?"
-    ).bind(note.trim(), existing.id).run()
-    return c.json({ ok: true, updated: true })
-  }
-  const noteId = 'note_' + uid()
-  await c.env.DB.prepare(
-    'INSERT INTO lesson_notes (id, instructor_id, student_id, session_id, note) VALUES (?, ?, ?, ?, ?)'
-  ).bind(noteId, instr.id, id, session_id || null, note.trim()).run()
-  return c.json({ ok: true, note_id: noteId })
-})
-
-
 // ─── PRIVATE LESSON ROUTES ────────────────────────────────────────────────────
 
 // GET /instructor/lessons — all private lessons for this instructor (schedule view)
