@@ -1,19 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import { api } from '../../lib/api'
+import TypeaheadSelect from '../../components/TypeaheadSelect'
+
+const BAYS = ['Chambers', 'Kapalua', 'Clearwater', 'Spanish']
 
 function formatDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric'
   })
 }
-
 function formatDateShort(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric'
   })
 }
-
 function formatTime(t) {
   if (!t) return ''
   const [h, m] = t.split(':')
@@ -21,70 +22,49 @@ function formatTime(t) {
   const ampm = hour >= 12 ? 'PM' : 'AM'
   return `${hour % 12 || 12}:${m} ${ampm}`
 }
-
 function getWeekStart(date) {
   const d = new Date(date)
   const day = d.getDay()
   d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
   return d
 }
-
 function addDays(date, n) {
   const d = new Date(date)
   d.setDate(d.getDate() + n)
   return d
 }
-
-function isoDate(d) {
-  return d.toISOString().split('T')[0]
-}
+function isoDate(d) { return d.toISOString().split('T')[0] }
 
 // ─── Create Session Modal ─────────────────────────────────────────────────────
 function CreateSessionModal({ programs: propPrograms, prefilledDate, onClose, onCreated }) {
-  const [form, setForm] = useState({
-    program_id: '',
-    date: prefilledDate || '',
-  })
+  const [form, setForm] = useState({ program_id: '', date: prefilledDate || '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [localPrograms, setLocalPrograms] = useState(propPrograms || [])
 
-  // Load programs inside modal in case parent hasn't loaded them yet
   useEffect(() => {
-    if (propPrograms && propPrograms.length > 0) {
-      setLocalPrograms(propPrograms)
-    } else {
-      api.get('/admin/programs').then(d => setLocalPrograms(d.programs || [])).catch(() => {})
-    }
+    if (propPrograms && propPrograms.length > 0) setLocalPrograms(propPrograms)
+    else api.get('/admin/programs').then(d => setLocalPrograms(d.programs || [])).catch(() => {})
   }, [propPrograms])
 
   const programs = localPrograms
 
   async function handleCreate() {
-    if (!form.program_id || !form.date) {
-      setError('Program and date are required')
-      return
-    }
-    setSaving(true)
-    setError('')
+    if (!form.program_id || !form.date) { setError('Program and date are required'); return }
+    setSaving(true); setError('')
     try {
       const program = programs.find(p => p.id === form.program_id)
-      // Normalize date to ISO format YYYY-MM-DD regardless of browser locale
       const rawDate = new Date(form.date)
-      const isoDate = isNaN(rawDate) ? form.date : rawDate.toISOString().split('T')[0]
+      const iso = isNaN(rawDate) ? form.date : rawDate.toISOString().split('T')[0]
       await api.post('/admin/sessions', {
-        program_id: form.program_id,
-        date: isoDate,
+        program_id: form.program_id, date: iso,
         start_time: program?.start_time || '09:00',
         end_time: program?.end_time || '10:00',
         capacity: program?.default_capacity || 10,
       })
       onCreated()
-    } catch (e) {
-      setError(e.message || 'Failed to create session')
-    } finally {
-      setSaving(false)
-    }
+    } catch (e) { setError(e.message || 'Failed to create session') }
+    finally { setSaving(false) }
   }
 
   const selectedProgram = programs.find(p => p.id === form.program_id)
@@ -96,54 +76,33 @@ function CreateSessionModal({ programs: propPrograms, prefilledDate, onClose, on
           <h2 className="font-display text-xl text-[#064029] tracking-wide">CREATE SESSION</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
-
         <div className="px-6 py-5 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>
-          )}
-
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Program</label>
-            <select
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={form.program_id}
-              onChange={e => setForm(f => ({ ...f, program_id: e.target.value }))}
-            >
+            <select className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              value={form.program_id} onChange={e => setForm(f => ({ ...f, program_id: e.target.value }))}>
               <option value="">Select a program…</option>
-              {programs.filter(p => p.is_active).map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
+              {programs.filter(p => p.is_active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
-
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input
-              type="date"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={form.date}
-              onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-            />
+            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </div>
-
-          {/* Preview defaults from program */}
           {selectedProgram && (
             <div className="bg-[#F9FAFB] border border-gray-100 rounded-lg px-4 py-3 space-y-1">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Session defaults from program</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Defaults from program</p>
               <p className="text-xs text-gray-600">Time: <span className="font-medium">{formatTime(selectedProgram.start_time)} – {formatTime(selectedProgram.end_time)}</span></p>
               <p className="text-xs text-gray-600">Capacity: <span className="font-medium">{selectedProgram.default_capacity} spots</span></p>
               <p className="text-xs text-gray-600">Days: <span className="font-medium capitalize">{selectedProgram.session_days?.replace(/,/g, ', ')}</span></p>
             </div>
           )}
         </div>
-
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Cancel</button>
-          <button
-            onClick={handleCreate}
-            disabled={saving}
-            className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
-          >
+          <button onClick={handleCreate} disabled={saving} className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors">
             {saving ? 'Creating…' : 'Create Session'}
           </button>
         </div>
@@ -169,16 +128,11 @@ function SessionCard({ session, isSelected, onClick }) {
   const isFull = session.booked_count >= session.capacity
 
   return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left rounded-xl border px-4 py-3.5 transition-all hover:shadow-md ${
-        isSelected
-          ? 'border-[#1D9E75] bg-[#E1F5EE] shadow-md'
-          : session.is_cancelled
-          ? 'border-red-100 bg-red-50 opacity-70'
-          : 'border-gray-100 bg-white hover:border-gray-200'
-      }`}
-    >
+    <button onClick={onClick} className={`w-full text-left rounded-xl border px-4 py-3.5 transition-all hover:shadow-md ${
+      isSelected ? 'border-[#1D9E75] bg-[#E1F5EE] shadow-md'
+      : session.is_cancelled ? 'border-red-100 bg-red-50 opacity-70'
+      : 'border-gray-100 bg-white hover:border-gray-200'
+    }`}>
       <div className="flex items-start justify-between mb-2">
         <div>
           <p className="text-xs font-semibold text-[#1D9E75] uppercase tracking-wider">{session.program_name}</p>
@@ -186,7 +140,7 @@ function SessionCard({ session, isSelected, onClick }) {
           <p className="text-xs text-gray-400">{formatTime(session.start_time)} – {formatTime(session.end_time)}</p>
         </div>
         <div className="text-right">
-          {session.is_cancelled ? (
+          {!!session.is_cancelled ? (
             <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>
           ) : (
             <span className={`text-xs font-semibold ${isFull ? 'text-red-500' : 'text-gray-600'}`}>
@@ -197,14 +151,18 @@ function SessionCard({ session, isSelected, onClick }) {
       </div>
       {!session.is_cancelled && (
         <div className="w-full bg-gray-100 rounded-full h-1.5">
-          <div
-            className={`h-1.5 rounded-full transition-all ${isFull ? 'bg-red-400' : 'bg-[#1D9E75]'}`}
-            style={{ width: `${Math.min(pct, 100)}%` }}
-          />
+          <div className={`h-1.5 rounded-full transition-all ${isFull ? 'bg-red-400' : 'bg-[#1D9E75]'}`}
+            style={{ width: `${Math.min(pct, 100)}%` }} />
         </div>
       )}
-      {session.instructor_name && <p className="text-xs text-gray-400 mt-2">👤 {session.instructor_name}</p>}
-      {session.bay && <p className="text-xs text-gray-400">📍 {session.bay}</p>}
+      <div className="mt-2 space-y-0.5">
+        {session.instructor_name && (
+          <p className="text-xs text-gray-500"><span className="font-semibold text-gray-700">Instructor</span> {session.instructor_name}</p>
+        )}
+        {session.bay && (
+          <p className="text-xs text-gray-500"><span className="font-semibold text-gray-700">Bay</span> {session.bay}</p>
+        )}
+      </div>
     </button>
   )
 }
@@ -212,86 +170,96 @@ function SessionCard({ session, isSelected, onClick }) {
 // ─── Roster Panel ─────────────────────────────────────────────────────────────
 function RosterPanel({ session, onClose, onUpdate }) {
   const [roster, setRoster] = useState(null)
-  const [instructors, setInstructors] = useState([])
+  const [allInstructors, setAllInstructors] = useState([])
+  const [assignedInstructors, setAssignedInstructors] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
   const [capacity, setCapacity] = useState(session.capacity)
   const [bay, setBay] = useState(session.bay || '')
-  const [selectedInstructorId, setSelectedInstructorId] = useState(session.instructor_id || '')
   const [cancelReason, setCancelReason] = useState(session.cancel_reason || '')
   const [showCancelForm, setShowCancelForm] = useState(false)
-
-  useEffect(() => {
-    setLoading(true)
-    api.get(`/admin/sessions/${session.id}/roster`).then(data => {
-      setRoster(data)
-      setInstructors(data.instructors || [])
-      setLoading(false)
-    })
-  }, [session.id])
+  const [addingInstructor, setAddingInstructor] = useState(false)
+  const [newInstructorId, setNewInstructorId] = useState('')
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 2500) }
+
+  async function loadRoster() {
+    setLoading(true)
+    try {
+      const data = await api.get(`/admin/sessions/${session.id}/roster`)
+      setRoster(data)
+      setAllInstructors(data.instructors || [])
+      setAssignedInstructors(data.assigned_instructors || [])
+    } finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadRoster() }, [session.id])
 
   async function handleUpdateSession() {
     setSaving(true)
     try {
-      await api.put(`/admin/sessions/${session.id}`, {
-        capacity: parseInt(capacity),
-        bay: bay || null,
-        instructor_id: selectedInstructorId || null,
-      })
+      await api.put(`/admin/sessions/${session.id}`, { capacity: parseInt(capacity), bay: bay || null })
       showToast('Session updated')
       onUpdate()
-    } catch (e) {
-      showToast(e.message || 'Update failed')
-    } finally {
-      setSaving(false)
-    }
+    } catch (e) { showToast(e.message || 'Update failed') }
+    finally { setSaving(false) }
+  }
+
+  async function handleAddInstructor() {
+    if (!newInstructorId) return
+    try {
+      await api.post(`/admin/sessions/${session.id}/instructors`, { instructor_id: newInstructorId })
+      setNewInstructorId('')
+      setAddingInstructor(false)
+      showToast('Instructor added')
+      loadRoster()
+      onUpdate()
+    } catch (e) { showToast(e.message || 'Failed to add instructor') }
+  }
+
+  async function handleRemoveInstructor(instructorId) {
+    try {
+      await api.delete(`/admin/sessions/${session.id}/instructors/${instructorId}`)
+      showToast('Instructor removed')
+      loadRoster()
+      onUpdate()
+    } catch (e) { showToast(e.message || 'Failed to remove') }
   }
 
   async function handleCancelSession() {
     setSaving(true)
     try {
       await api.put(`/admin/sessions/${session.id}`, { is_cancelled: 1, cancel_reason: cancelReason })
-      showToast('Session cancelled')
-      onUpdate()
-      setShowCancelForm(false)
-    } catch (e) {
-      showToast(e.message || 'Cancel failed')
-    } finally {
-      setSaving(false)
-    }
+      showToast('Session cancelled'); onUpdate(); setShowCancelForm(false)
+    } catch (e) { showToast(e.message || 'Cancel failed') }
+    finally { setSaving(false) }
   }
 
   async function handleUncancelSession() {
     setSaving(true)
     try {
       await api.put(`/admin/sessions/${session.id}`, { is_cancelled: 0, cancel_reason: null })
-      showToast('Session restored')
-      onUpdate()
-    } catch (e) {
-      showToast(e.message || 'Failed')
-    } finally {
-      setSaving(false)
-    }
+      showToast('Session restored'); onUpdate()
+    } catch (e) { showToast(e.message || 'Failed') }
+    finally { setSaving(false) }
   }
 
   async function handleCheckin(bookingId) {
     try {
       const res = await api.post(`/admin/bookings/${bookingId}/checkin`, {})
-      setRoster(prev => ({
-        ...prev,
-        bookings: prev.bookings.map(b => b.id === bookingId ? { ...b, checked_in: res.checked_in } : b)
-      }))
+      setRoster(prev => ({ ...prev, bookings: prev.bookings.map(b => b.id === bookingId ? { ...b, checked_in: res.checked_in } : b) }))
     } catch { showToast('Check-in failed') }
   }
 
+  const assignedIds = new Set(assignedInstructors.map(i => i.instructor_id))
+  const availableInstructors = allInstructors.filter(i => !assignedIds.has(i.id))
+
   return (
     <div className="flex flex-col h-full bg-white border-r border-gray-100">
-      {toast && (
-        <div className="absolute top-4 left-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">{toast}</div>
-      )}
+      {toast && <div className="absolute top-4 left-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">{toast}</div>}
+
+      {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100">
         <div className="flex items-start justify-between">
           <div>
@@ -301,7 +269,7 @@ function RosterPanel({ session, onClose, onUpdate }) {
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
-        {session.is_cancelled && (
+        {!!session.is_cancelled && (
           <div className="mt-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
             <p className="text-xs font-semibold text-red-600">CANCELLED</p>
             {session.cancel_reason && <p className="text-xs text-red-500 mt-0.5">{session.cancel_reason}</p>}
@@ -309,32 +277,80 @@ function RosterPanel({ session, onClose, onUpdate }) {
         )}
       </div>
 
+      {/* Body */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+
+        {/* ── Instructors ── */}
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Instructor</label>
-          <select
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={selectedInstructorId}
-            onChange={e => setSelectedInstructorId(e.target.value)}
-          >
-            <option value="">— Unassigned —</option>
-            {instructors.map(i => (
-              <option key={i.id} value={i.id}>{i.full_name}</option>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Instructors</p>
+            {!addingInstructor && availableInstructors.length > 0 && (
+              <button onClick={() => setAddingInstructor(true)}
+                className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">
+                + Add Instructor
+              </button>
+            )}
+          </div>
+
+          {/* Assigned list */}
+          {assignedInstructors.length === 0 && !addingInstructor && (
+            <p className="text-xs text-gray-400 italic">No instructors assigned</p>
+          )}
+          <div className="space-y-1.5">
+            {assignedInstructors.map(i => (
+              <div key={i.instructor_id} className="flex items-center justify-between bg-[#E1F5EE] rounded-lg px-3 py-2">
+                <div>
+                  <p className="text-sm font-semibold text-[#064029]">{i.full_name}</p>
+                  <p className="text-xs text-gray-500">{i.email}</p>
+                </div>
+                <button onClick={() => handleRemoveInstructor(i.instructor_id)}
+                  className="text-xs font-semibold text-red-400 hover:text-red-600">
+                  Remove
+                </button>
+              </div>
             ))}
-          </select>
+          </div>
+
+          {/* Add instructor row */}
+          {addingInstructor && (
+            <div className="mt-2 space-y-2">
+              <TypeaheadSelect
+                options={availableInstructors.map(i => ({ value: i.id, label: i.full_name, sublabel: i.email }))}
+                value={newInstructorId}
+                onChange={setNewInstructorId}
+                placeholder="Search instructors…"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => { setAddingInstructor(false); setNewInstructorId('') }}
+                  className="flex-1 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button onClick={handleAddInstructor} disabled={!newInstructorId}
+                  className="flex-1 py-2 text-sm font-semibold text-white bg-[#064029] rounded-lg hover:bg-[#085041] disabled:opacity-40 transition-colors">
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* ── Capacity + Bay ── */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Capacity</label>
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Capacity</p>
             <input type="number" min="1" max="50"
               className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
               value={capacity} onChange={e => setCapacity(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Bay</label>
-            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={bay} onChange={e => setBay(e.target.value)} placeholder="e.g. Bay 3" />
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Bay</p>
+            <select
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              value={bay} onChange={e => setBay(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {BAYS.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
           </div>
         </div>
 
@@ -343,6 +359,7 @@ function RosterPanel({ session, onClose, onUpdate }) {
           {saving ? 'Saving…' : 'Save Session Settings'}
         </button>
 
+        {/* ── Cancel / Restore ── */}
         {!session.is_cancelled ? (
           !showCancelForm ? (
             <button onClick={() => setShowCancelForm(true)}
@@ -368,8 +385,9 @@ function RosterPanel({ session, onClose, onUpdate }) {
           </button>
         )}
 
+        {/* ── Roster ── */}
         <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-3">
             Roster {roster && `(${roster.bookings?.length || 0}/${session.capacity})`}
           </p>
           {loading ? (
@@ -490,9 +508,7 @@ export default function AdminSessions() {
         totalCapacity: s.reduce((a, b) => a + (b.capacity || 0), 0),
         upcoming: s.filter(x => !x.is_cancelled && x.date >= isoDate(new Date())).length,
       })
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }, [weekStart])
 
   useEffect(() => {
@@ -501,10 +517,7 @@ export default function AdminSessions() {
     api.get(`/admin/sessions/range?start=${start}&end=${end}`).then(d => setAllSessions(d.sessions || []))
   }, [calendarMonth])
 
-  useEffect(() => {
-    api.get('/admin/programs').then(d => setPrograms(d.programs || []))
-  }, [])
-
+  useEffect(() => { api.get('/admin/programs').then(d => setPrograms(d.programs || [])) }, [])
   useEffect(() => { fetchSessions() }, [fetchSessions])
 
   function handleCalendarDateSelect(dateStr) {
@@ -520,31 +533,22 @@ export default function AdminSessions() {
     setCalendarMonth(m)
   }
 
-  function handleCreateForDate(dateStr) {
-    setCreatePrefilledDate(dateStr)
-    setShowCreateModal(true)
-  }
+  function handleCreateForDate(dateStr) { setCreatePrefilledDate(dateStr); setShowCreateModal(true) }
 
   async function handleSessionCreated() {
-    setShowCreateModal(false)
-    setCreatePrefilledDate(null)
+    setShowCreateModal(false); setCreatePrefilledDate(null)
     await fetchSessions()
-    // Refresh calendar dots
     const start = isoDate(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1))
     const end = isoDate(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0))
     api.get(`/admin/sessions/range?start=${start}&end=${end}`).then(d => setAllSessions(d.sessions || []))
     showToast('Session created')
   }
 
-  const displayedSessions = selectedDate
-    ? sessions.filter(s => s.date === selectedDate)
-    : sessions
+  const displayedSessions = selectedDate ? sessions.filter(s => s.date === selectedDate) : sessions
 
   return (
     <AdminLayout>
-      {toast && (
-        <div className="fixed top-4 right-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">{toast}</div>
-      )}
+      {toast && <div className="fixed top-4 right-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">{toast}</div>}
 
       {showCreateModal && (
         <CreateSessionModal
@@ -581,18 +585,14 @@ export default function AdminSessions() {
                 )}
               </div>
             </div>
-
             <div className="grid grid-cols-4 gap-3 mb-4">
               <MetricCard label="Sessions" value={metrics.totalThisWeek} sub="this week" />
               <MetricCard label="Booked" value={metrics.totalBooked} sub={`of ${metrics.totalCapacity} spots`} />
               <MetricCard label="Upcoming" value={metrics.upcoming} sub="not cancelled" />
-              <MetricCard
-                label="Fill Rate"
+              <MetricCard label="Fill Rate"
                 value={metrics.totalCapacity > 0 ? `${Math.round((metrics.totalBooked / metrics.totalCapacity) * 100)}%` : '—'}
-                sub="this week"
-              />
+                sub="this week" />
             </div>
-
             <div className="flex items-center gap-3">
               <button onClick={() => setWeekStart(d => addDays(d, -7))}
                 className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">‹</button>
@@ -601,10 +601,8 @@ export default function AdminSessions() {
               </span>
               <button onClick={() => setWeekStart(d => addDays(d, 7))}
                 className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">›</button>
-              <button
-                onClick={() => { setWeekStart(getWeekStart(new Date())); setSelectedDate(null) }}
-                className="px-3 py-1.5 text-xs font-semibold text-[#064029] bg-[#E1F5EE] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors"
-              >
+              <button onClick={() => { setWeekStart(getWeekStart(new Date())); setSelectedDate(null) }}
+                className="px-3 py-1.5 text-xs font-semibold text-[#064029] bg-[#E1F5EE] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors">
                 Today
               </button>
             </div>
@@ -615,25 +613,17 @@ export default function AdminSessions() {
               <div className="text-center py-12 text-sm text-gray-300">Loading…</div>
             ) : displayedSessions.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-sm text-gray-300 italic">
-                  {selectedDate ? 'No sessions on this date' : 'No sessions this week'}
-                </p>
-                <button
-                  onClick={() => { setCreatePrefilledDate(selectedDate || null); setShowCreateModal(true) }}
-                  className="mt-3 text-sm font-semibold text-[#1D9E75] hover:text-[#064029]"
-                >
+                <p className="text-sm text-gray-300 italic">{selectedDate ? 'No sessions on this date' : 'No sessions this week'}</p>
+                <button onClick={() => { setCreatePrefilledDate(selectedDate || null); setShowCreateModal(true) }}
+                  className="mt-3 text-sm font-semibold text-[#1D9E75] hover:text-[#064029]">
                   + Create a session
                 </button>
               </div>
             ) : (
               <div className="space-y-2">
                 {displayedSessions.map(s => (
-                  <SessionCard
-                    key={s.id}
-                    session={s}
-                    isSelected={selectedSession?.id === s.id}
-                    onClick={() => setSelectedSession(selectedSession?.id === s.id ? null : s)}
-                  />
+                  <SessionCard key={s.id} session={s} isSelected={selectedSession?.id === s.id}
+                    onClick={() => setSelectedSession(selectedSession?.id === s.id ? null : s)} />
                 ))}
               </div>
             )}
@@ -643,24 +633,15 @@ export default function AdminSessions() {
         {/* RIGHT: Mini Calendar */}
         <div className="w-72 flex-shrink-0 bg-white border-l border-gray-100 px-5 py-5 overflow-y-auto">
           <MiniCalendar
-            sessions={allSessions}
-            selectedDate={selectedDate}
-            onSelectDate={handleCalendarDateSelect}
-            currentMonth={calendarMonth}
-            onMonthChange={handleMonthChange}
-            onCreateForDate={handleCreateForDate}
+            sessions={allSessions} selectedDate={selectedDate}
+            onSelectDate={handleCalendarDateSelect} currentMonth={calendarMonth}
+            onMonthChange={handleMonthChange} onCreateForDate={handleCreateForDate}
           />
-
           {selectedDate && (
             <div className="mt-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{formatDateShort(selectedDate)}</p>
-                <button
-                  onClick={() => handleCreateForDate(selectedDate)}
-                  className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]"
-                >
-                  + New
-                </button>
+                <button onClick={() => handleCreateForDate(selectedDate)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">+ New</button>
               </div>
               {allSessions.filter(s => s.date === selectedDate).length === 0 ? (
                 <p className="text-xs text-gray-300 italic">No sessions</p>
