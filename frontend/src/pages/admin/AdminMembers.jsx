@@ -1,77 +1,57 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../../components/AdminLayout'
 import { api } from '../../lib/api'
+import TypeaheadSelect from '../../components/TypeaheadSelect'
 
-const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-const BOOKER_TYPES = ['student', 'parent']
-const BOOKING_TYPES = ['group', 'private']
+const ROLES = ['admin', 'instructor', 'parent', 'student']
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
-function formatTime(t) {
-  if (!t) return ''
-  const [h, m] = t.split(':')
-  const hour = parseInt(h)
-  const ampm = hour >= 12 ? 'PM' : 'AM'
-  const h12 = hour % 12 || 12
-  return `${h12}:${m} ${ampm}`
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function RoleBadge({ role }) {
+  const colors = {
+    admin: 'bg-[#064029] text-white',
+    instructor: 'bg-[#1D9E75] text-white',
+    parent: 'bg-[#E1F5EE] text-[#064029]',
+    student: 'bg-gray-100 text-gray-700',
+  }
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-sans capitalize ${colors[role] || 'bg-gray-100 text-gray-700'}`}>
+      {role}
+    </span>
+  )
 }
 
-function formatDays(days) {
-  if (!days) return ''
-  return days.split(',').map(d => d.trim().charAt(0).toUpperCase() + d.trim().slice(1, 3)).join(', ')
+function StatusDot({ status }) {
+  return (
+    <span className={`inline-block w-2 h-2 rounded-full mr-2 ${status === 'active' ? 'bg-[#1D9E75]' : 'bg-gray-300'}`} />
+  )
 }
 
-// ─── Create Program Modal ─────────────────────────────────────────────────────
-function CreateProgramModal({ onClose, onSuccess }) {
+// ─── Add Member Modal ─────────────────────────────────────────────────────────
+function AddMemberModal({ onClose, onSuccess }) {
   const [form, setForm] = useState({
-    name: '',
-    description: '',
-    booking_type: 'group',
-    booker_type: 'student',
-    session_days: [],
-    start_time: '09:00',
-    end_time: '10:00',
-    default_capacity: 10,
-    price_display: '',
-    show_instructor: false,
-    forward_view_weeks: 2,
-    cancellation_hours: 24,
-    max_bookings_per_week: 1,
-    start_date: '',
-    end_date: '',
+    full_name: '', email: '', role: 'student', phone: '',
+    child_first_name: '', child_age: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  function toggleDay(day) {
-    setForm(f => ({
-      ...f,
-      session_days: f.session_days.includes(day)
-        ? f.session_days.filter(d => d !== day)
-        : [...f.session_days, day]
-    }))
-  }
-
-  async function handleCreate() {
-    if (!form.name.trim()) { setError('Program name is required'); return }
-    if (form.session_days.length === 0) { setError('Select at least one session day'); return }
-
+  async function handleSubmit() {
+    if (!form.full_name || !form.email) {
+      setError('Name and email are required')
+      return
+    }
     setLoading(true)
     setError('')
     try {
-      const payload = {
+      await api.post('/admin/members', {
         ...form,
-        session_days: form.session_days.join(','),
-        default_capacity: parseInt(form.default_capacity),
-        forward_view_weeks: parseInt(form.forward_view_weeks),
-        cancellation_hours: parseInt(form.cancellation_hours),
-        max_bookings_per_week: parseInt(form.max_bookings_per_week),
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
-      }
-      await api.post('/admin/programs', payload)
+        child_age: form.child_age ? parseInt(form.child_age) : null,
+      })
       onSuccess()
     } catch (e) {
-      setError(e.message || 'Failed to create program')
+      setError(e.message || 'Failed to create member')
     } finally {
       setLoading(false)
     }
@@ -79,237 +59,140 @@ function CreateProgramModal({ onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
-
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="font-display text-xl text-[#064029] tracking-wide">CREATE PROGRAM</h2>
+          <h2 className="font-display text-xl text-[#064029] tracking-wide">ADD MEMBER</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="px-6 py-5 space-y-4">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>
           )}
 
-          {/* Name */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-              Program Name <span className="text-red-400">*</span>
-            </label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Full Name</label>
             <input
               className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Junior Clinic"
-            />
-            {form.name && (
-              <p className="text-xs text-gray-400 mt-1">
-                Slug: <span className="font-mono">{form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}</span>
-              </p>
-            )}
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Description</label>
-            <textarea
-              rows={2}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none"
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              placeholder="Brief program description…"
+              value={form.full_name}
+              onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+              placeholder="Jane Smith"
             />
           </div>
 
-          {/* Booking type + Booker type */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Session Type</label>
-              <div className="flex gap-2">
-                {BOOKING_TYPES.map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setForm(f => ({ ...f, booking_type: t }))}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg border transition-colors capitalize ${
-                      form.booking_type === t
-                        ? 'bg-[#064029] text-white border-[#064029]'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#1D9E75]'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Who Books</label>
-              <div className="flex gap-2">
-                {BOOKER_TYPES.map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setForm(f => ({ ...f, booker_type: t }))}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg border transition-colors capitalize ${
-                      form.booker_type === t
-                        ? 'bg-[#064029] text-white border-[#064029]'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#1D9E75]'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Session Days */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-              Session Days <span className="text-red-400">*</span>
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {DAYS_OF_WEEK.map(day => (
-                <button
-                  key={day}
-                  onClick={() => toggleDay(day)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors capitalize ${
-                    form.session_days.includes(day)
-                      ? 'bg-[#1D9E75] text-white border-[#1D9E75]'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-[#1D9E75]'
-                  }`}
-                >
-                  {day.slice(0, 3)}
-                </button>
-              ))}
-            </div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</label>
+            <input
+              type="email"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              placeholder="jane@example.com"
+            />
           </div>
 
-          {/* Times */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Time</label>
-              <input
-                type="time"
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Role</label>
+              <select
                 className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                value={form.start_time}
-                onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Time</label>
-              <input
-                type="time"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                value={form.end_time}
-                onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          {/* Program Dates */}
-          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Program Dates</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Start Date</label>
-                <input
-                  type="date"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                  value={form.start_date}
-                  onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">End Date</label>
-                <input
-                  type="date"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                  value={form.end_date}
-                  onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
-                  placeholder="Leave blank for never"
-                />
-                <p className="text-xs text-gray-400 mt-1">Leave blank for no end date</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Capacity + Price */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Default Capacity</label>
-              <input
-                type="number" min="1" max="50"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                value={form.default_capacity}
-                onChange={e => setForm(f => ({ ...f, default_capacity: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Price Display</label>
-              <input
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                value={form.price_display}
-                onChange={e => setForm(f => ({ ...f, price_display: e.target.value }))}
-                placeholder="$169/month"
-              />
-            </div>
-          </div>
-
-          {/* Rules */}
-          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Booking Rules</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Forward View (weeks)</label>
-                <input
-                  type="number" min="1" max="12"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                  value={form.forward_view_weeks}
-                  onChange={e => setForm(f => ({ ...f, forward_view_weeks: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Cancel Window (hrs)</label>
-                <input
-                  type="number" min="0"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                  value={form.cancellation_hours}
-                  onChange={e => setForm(f => ({ ...f, cancellation_hours: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Max/Week</label>
-                <input
-                  type="number" min="1"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                  value={form.max_bookings_per_week}
-                  onChange={e => setForm(f => ({ ...f, max_bookings_per_week: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            {/* Show instructor toggle */}
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div
-                onClick={() => setForm(f => ({ ...f, show_instructor: !f.show_instructor }))}
-                className={`w-10 h-6 rounded-full transition-colors relative ${form.show_instructor ? 'bg-[#1D9E75]' : 'bg-gray-200'}`}
+                value={form.role}
+                onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
               >
-                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${form.show_instructor ? 'left-5' : 'left-1'}`} />
-              </div>
-              <span className="text-sm text-gray-600">Show instructor name to bookers</span>
-            </label>
+                {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone</label>
+              <input
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                value={form.phone}
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="(626) 555-0100"
+              />
+            </div>
           </div>
+
+          {form.role === 'parent' && (
+            <div className="bg-[#E1F5EE] rounded-lg p-4 space-y-3">
+              <p className="text-xs font-semibold text-[#064029] uppercase tracking-wider">Child Info</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">First Name</label>
+                  <input
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                    value={form.child_first_name}
+                    onChange={e => setForm(f => ({ ...f, child_first_name: e.target.value }))}
+                    placeholder="Alex"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Age</label>
+                  <input
+                    type="number"
+                    min="3" max="18"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                    value={form.child_age}
+                    onChange={e => setForm(f => ({ ...f, child_age: e.target.value }))}
+                    placeholder="8"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
+          >
+            {loading ? 'Creating…' : 'Create Member'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Confirm Delete Modal ─────────────────────────────────────────────────────
+function ConfirmDeleteModal({ member, onClose, onConfirm, loading }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-display text-lg text-gray-900 tracking-wide">DELETE ACCOUNT</h3>
+              <p className="text-sm text-gray-500">{member.full_name}</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            This will permanently delete their Clerk account and all associated data from the platform. This action cannot be undone.
+          </p>
+        </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">
             Cancel
           </button>
           <button
-            onClick={handleCreate}
+            onClick={onConfirm}
             disabled={loading}
-            className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
+            className="px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Creating…' : 'Create Program'}
+            {loading ? 'Deleting…' : 'Delete Account'}
           </button>
         </div>
       </div>
@@ -317,318 +200,634 @@ function CreateProgramModal({ onClose, onSuccess }) {
   )
 }
 
-// ─── Program Settings Editor ──────────────────────────────────────────────────
-function ProgramEditor({ program, onSave }) {
-  const [form, setForm] = useState({
-    name: program.name,
-    description: program.description || '',
-    session_days: program.session_days || '',
-    start_time: program.start_time,
-    end_time: program.end_time,
-    default_capacity: program.default_capacity,
-    price_display: program.price_display || '',
-    show_instructor: !!program.show_instructor,
-    forward_view_weeks: program.forward_view_weeks,
-    forward_view_enabled: !!program.forward_view_enabled,
-    cancellation_hours: program.cancellation_hours,
-    max_bookings_per_week: program.max_bookings_per_week,
-    is_active: !!program.is_active,
-    start_date: program.start_date || '',
-    end_date: program.end_date || '',
-  })
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+// ─── Password Reset Toast ─────────────────────────────────────────────────────
+function ResetLinkModal({ link, onClose }) {
+  const [copied, setCopied] = useState(false)
 
-  const selectedDays = form.session_days ? form.session_days.split(',').map(d => d.trim()) : []
-
-  function toggleDay(day) {
-    const current = selectedDays
-    const updated = current.includes(day) ? current.filter(d => d !== day) : [...current, day]
-    setForm(f => ({ ...f, session_days: updated.join(',') }))
-  }
-
-  async function handleSave() {
-    setSaving(true)
-    try {
-      await api.put(`/admin/programs/${program.id}`, {
-        ...form,
-        default_capacity: parseInt(form.default_capacity),
-        forward_view_weeks: parseInt(form.forward_view_weeks),
-        cancellation_hours: parseInt(form.cancellation_hours),
-        max_bookings_per_week: parseInt(form.max_bookings_per_week),
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
-      })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-      onSave()
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setSaving(false)
-    }
+  function copy() {
+    navigator.clipboard.writeText(link)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
-    <div className="border-t border-gray-100 px-6 py-5 space-y-5 bg-gray-50">
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Name</label>
-          <input
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-          />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="font-display text-xl text-[#064029] tracking-wide">PASSWORD RESET LINK</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Price Display</label>
-          <input
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.price_display}
-            onChange={e => setForm(f => ({ ...f, price_display: e.target.value }))}
-            placeholder="e.g. $169/month"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Description</label>
-        <textarea
-          rows={2}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none"
-          value={form.description}
-          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Session Days</label>
-        <div className="flex flex-wrap gap-2">
-          {DAYS_OF_WEEK.map(day => (
-            <button
-              key={day}
-              onClick={() => toggleDay(day)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors capitalize ${
-                selectedDays.includes(day)
-                  ? 'bg-[#1D9E75] text-white border-[#1D9E75]'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-[#1D9E75]'
-              }`}
-            >
-              {day.slice(0, 3)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Start Time</label>
-          <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">End Time</label>
-          <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Capacity</label>
-          <input type="number" min="1" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.default_capacity} onChange={e => setForm(f => ({ ...f, default_capacity: e.target.value }))} />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Max/Week</label>
-          <input type="number" min="1" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.max_bookings_per_week} onChange={e => setForm(f => ({ ...f, max_bookings_per_week: e.target.value }))} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Forward View (weeks)</label>
-          <input type="number" min="1" max="12" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.forward_view_weeks} onChange={e => setForm(f => ({ ...f, forward_view_weeks: e.target.value }))} />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Cancel Window (hrs)</label>
-          <input type="number" min="0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.cancellation_hours} onChange={e => setForm(f => ({ ...f, cancellation_hours: e.target.value }))} />
-        </div>
-      </div>
-
-      {/* Program Dates */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Start Date</label>
-          <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">End Date <span className="text-gray-400">(blank = never)</span></label>
-          <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-4">
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <div onClick={() => setForm(f => ({ ...f, show_instructor: !f.show_instructor }))}
-            className={`w-10 h-6 rounded-full transition-colors relative ${form.show_instructor ? 'bg-[#1D9E75]' : 'bg-gray-200'}`}>
-            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${form.show_instructor ? 'left-5' : 'left-1'}`} />
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-gray-600">
+            Share this link with the user. It expires after one use. Once Resend is wired up (Phase 6), this will be sent automatically via email.
+          </p>
+          <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs text-gray-700 break-all">
+            {link}
           </div>
-          <span className="text-sm text-gray-600">Show instructor name</span>
-        </label>
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <div onClick={() => setForm(f => ({ ...f, forward_view_enabled: !f.forward_view_enabled }))}
-            className={`w-10 h-6 rounded-full transition-colors relative ${form.forward_view_enabled ? 'bg-[#1D9E75]' : 'bg-gray-200'}`}>
-            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${form.forward_view_enabled ? 'left-5' : 'left-1'}`} />
-          </div>
-          <span className="text-sm text-gray-600">Forward view enabled</span>
-        </label>
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <div onClick={() => setForm(f => ({ ...f, is_active: !f.is_active }))}
-            className={`w-10 h-6 rounded-full transition-colors relative ${form.is_active ? 'bg-[#1D9E75]' : 'bg-gray-200'}`}>
-            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${form.is_active ? 'left-5' : 'left-1'}`} />
-          </div>
-          <span className="text-sm text-gray-600">Program active</span>
-        </label>
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
-        >
-          {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Changes'}
-        </button>
+          <button
+            onClick={copy}
+            className="w-full py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
+          >
+            {copied ? '✓ Copied!' : 'Copy Link'}
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
-// ─── Main AdminPrograms Page ──────────────────────────────────────────────────
-export default function AdminPrograms() {
-  const [programs, setPrograms] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState(null)
-  const [showCreate, setShowCreate] = useState(false)
+// ─── Assign Instructor Modal (for a student) ──────────────────────────────────
+function AssignInstructorModal({ student, currentAssignments, allInstructors, onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const assignedIds = new Set(currentAssignments.map(a => a.instructor_record_id))
 
-  async function fetchPrograms() {
+  async function assign(instrId) {
     setLoading(true)
+    setError('')
     try {
-      const data = await api.get('/admin/programs')
-      setPrograms(data.programs || [])
+      await api.post(`/admin/members/${student.id}/assign-instructor`, { instructor_id: instrId })
+      onSuccess()
+    } catch (e) {
+      setError(e.message || 'Failed to assign')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchPrograms() }, [])
+  async function unassign(instrId) {
+    setLoading(true)
+    setError('')
+    try {
+      await api.delete(`/admin/members/${student.id}/assign-instructor/${instrId}`)
+      onSuccess()
+    } catch (e) {
+      setError(e.message || 'Failed to remove')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <AdminLayout>
-      {showCreate && (
-        <CreateProgramModal
-          onClose={() => setShowCreate(false)}
-          onSuccess={() => { setShowCreate(false); fetchPrograms() }}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="font-display text-xl text-[#064029] tracking-wide">ASSIGN INSTRUCTOR</h2>
+            <p className="text-sm text-gray-500">{student.full_name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-3 py-2">{error}</div>}
+          {allInstructors.length === 0 ? (
+            <p className="text-sm text-gray-500 py-4 text-center">No active instructors found.</p>
+          ) : (
+            <>
+              <TypeaheadSelect
+                options={allInstructors.map(i => ({ value: i.id, label: i.full_name, sublabel: i.email }))}
+                value={[...assignedIds][0] || ''}
+                onChange={v => {
+                  const current = [...assignedIds][0]
+                  if (current && current !== v) unassign(current)
+                  if (v && v !== current) assign(v)
+                }}
+                placeholder="Search instructors…"
+              />
+              {[...assignedIds].length > 0 && (
+                <div className="space-y-1">
+                  {allInstructors.filter(i => assignedIds.has(i.id)).map(i => (
+                    <div key={i.id} className="flex items-center justify-between bg-[#E1F5EE] rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium text-[#064029]">{i.full_name}</p>
+                        <p className="text-xs text-gray-500">{i.email}</p>
+                      </div>
+                      <button
+                        onClick={() => unassign(i.id)}
+                        disabled={loading}
+                        className="text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 text-right">
+          <button onClick={onClose} className="px-5 py-2 bg-gray-100 text-sm font-medium rounded-lg hover:bg-gray-200">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Member Detail Panel ───────────────────────────────────────────────────────
+function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
+  const [bookings, setBookings] = useState([])
+  const [assignedInstructors, setAssignedInstructors] = useState([])
+  const [assignedStudents, setAssignedStudents] = useState([])
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ full_name: member.full_name, phone: member.phone || '', status: member.status, role: member.role })
+  const [saving, setSaving] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [resetLink, setResetLink] = useState(null)
+  const [resetting, setResetting] = useState(false)
+  const [showAssignInstructor, setShowAssignInstructor] = useState(false)
+  const [toast, setToast] = useState('')
+  const navigate = useNavigate()
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  useEffect(() => {
+    api.get(`/admin/members/${member.id}/bookings`).then(d => setBookings(d.bookings || []))
+
+    if (member.role === 'student' || member.role === 'parent') {
+      // Fetch assigned instructors for this student
+      // We piggyback on the instructor-students route in reverse — need to query from student side
+      // For now we fetch all and filter — will add a dedicated route if needed
+      fetchAssignedInstructors()
+    }
+
+    if (member.role === 'instructor') {
+      api.get(`/admin/members/${member.id}/instructor-students`).then(d => setAssignedStudents(d.students || []))
+    }
+  }, [member.id])
+
+  async function fetchAssignedInstructors() {
+    try {
+      const data = await api.get(`/admin/members/${member.id}/assigned-instructors`)
+      setAssignedInstructors(data.instructors || [])
+    } catch {}
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await api.put(`/admin/members/${member.id}`, form)
+      onRefresh()
+      setEditing(false)
+      showToast('Saved')
+    } catch (e) {
+      showToast(e.message || 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await api.delete(`/admin/members/${member.id}`)
+      navigate('/admin/members')
+      onRefresh()
+      onClose()
+    } catch (e) {
+      showToast(e.message || 'Delete failed')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function handleResetPassword() {
+    setResetting(true)
+    try {
+      const data = await api.post(`/admin/members/${member.id}/reset-password`, {})
+      setResetLink(data.reset_link)
+    } catch (e) {
+      showToast(e.message || 'Reset failed')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const isPending = member.clerk_id?.startsWith('pending_')
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#064029] text-white text-sm font-semibold px-6 py-3 rounded-xl shadow-2xl flex items-center gap-2">
+          <svg className="w-4 h-4 text-[#1D9E75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+          {toast}
+        </div>
+      )}
+
+      {/* Modals */}
+      {showDelete && (
+        <ConfirmDeleteModal
+          member={member}
+          onClose={() => setShowDelete(false)}
+          onConfirm={handleDelete}
+          loading={deleting}
+        />
+      )}
+      {resetLink && (
+        <ResetLinkModal link={resetLink} onClose={() => setResetLink(null)} />
+      )}
+      {showAssignInstructor && (
+        <AssignInstructorModal
+          student={member}
+          currentAssignments={assignedInstructors}
+          allInstructors={allInstructors}
+          onClose={() => setShowAssignInstructor(false)}
+          onSuccess={() => {
+            fetchAssignedInstructors()
+            setShowAssignInstructor(false)
+            showToast('Instructor assignment updated')
+          }}
         />
       )}
 
-      <div className="max-w-3xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="font-display text-3xl text-[#064029] tracking-wide">PROGRAMS</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage program settings, schedule, and booking rules</p>
+      {/* Header */}
+      <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <StatusDot status={member.status} />
+            <h2 className="font-display text-2xl text-[#064029] tracking-wide">{member.full_name}</h2>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            New Program
-          </button>
+          <p className="text-sm text-gray-500">{member.email}</p>
+          <div className="mt-2">
+            <RoleBadge role={member.role} />
+            {isPending && (
+              <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded font-medium">
+                Invite Pending
+              </span>
+            )}
+          </div>
         </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none mt-1">&times;</button>
+      </div>
 
-        {/* Program Cards */}
-        {loading ? (
-          <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>
-        ) : programs.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-sm">No programs yet.</p>
-            <button onClick={() => setShowCreate(true)} className="mt-3 text-[#1D9E75] text-sm font-semibold hover:underline">
-              Create your first program →
+      {/* Body — scrollable */}
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+        {/* Account Actions */}
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Account Actions</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setEditing(!editing)}
+              className="px-4 py-2 text-sm font-medium bg-[#E1F5EE] text-[#064029] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors"
+            >
+              {editing ? 'Cancel Edit' : 'Edit Profile'}
+            </button>
+            <button
+              onClick={handleResetPassword}
+              disabled={resetting || isPending}
+              title={isPending ? 'User has not completed signup yet' : 'Send password reset'}
+              className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-40 transition-colors"
+            >
+              {resetting ? 'Sending…' : 'Reset Password'}
+            </button>
+            <button
+              onClick={() => setShowDelete(true)}
+              className="px-4 py-2 text-sm font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+            >
+              Delete Account
             </button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {programs.map(p => (
-              <div key={p.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                {/* Card Header */}
+          {isPending && (
+            <p className="text-xs text-amber-600 mt-2">
+              ⚠ Password reset unavailable until user completes their Clerk invitation.
+            </p>
+          )}
+        </div>
+
+        {/* Edit Form */}
+        {editing && (
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Full Name</label>
+                <input
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.full_name}
+                  onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone</label>
+                <input
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.phone}
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Role</label>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.role}
+                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                >
+                  {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Child Info (parent) */}
+        {member.role === 'parent' && member.child_name && (
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Child</p>
+            <div className="bg-[#E1F5EE] rounded-lg px-4 py-3">
+              <p className="text-sm font-semibold text-[#064029]">{member.child_name}</p>
+              {member.child_age && <p className="text-xs text-gray-500">Age {member.child_age}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* Instructor bio */}
+        {member.role === 'instructor' && (
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Bio</p>
+            <p className="text-sm text-gray-600">{member.instructor_bio || <span className="italic text-gray-400">No bio set</span>}</p>
+          </div>
+        )}
+
+        {/* Instructor's assigned students */}
+        {member.role === 'instructor' && (
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Assigned Students</p>
+            {assignedStudents.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No students assigned</p>
+            ) : (
+              <div className="space-y-1">
+                {assignedStudents.map(s => (
+                  <div key={s.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{s.full_name}</p>
+                      <p className="text-xs text-gray-400">{s.email}</p>
+                    </div>
+                    <RoleBadge role={s.role || 'student'} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Assign Instructor (student/parent) */}
+        {(member.role === 'student' || member.role === 'parent') && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned Instructor</p>
+              <button
+                onClick={() => setShowAssignInstructor(true)}
+                className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]"
+              >
+                Manage →
+              </button>
+            </div>
+            {assignedInstructors.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No instructor assigned</p>
+            ) : (
+              <div className="space-y-1">
+                {assignedInstructors.map(i => (
+                  <div key={i.id} className="bg-[#E1F5EE] rounded-lg px-3 py-2">
+                    <p className="text-sm font-medium text-[#064029]">{i.full_name}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Booking History */}
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            Booking History ({bookings.length})
+          </p>
+          {bookings.length === 0 ? (
+            <p className="text-sm text-gray-400 italic">No bookings yet</p>
+          ) : (
+            <div className="space-y-1">
+              {bookings.slice(0, 20).map(b => (
+                <div key={b.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {new Date(b.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </p>
+                    <p className="text-xs text-gray-400">{b.program_name}</p>
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    b.status === 'confirmed'
+                      ? b.checked_in ? 'bg-[#E1F5EE] text-[#064029]' : 'bg-gray-100 text-gray-600'
+                      : 'bg-red-50 text-red-500'
+                  }`}>
+                    {b.checked_in ? 'Checked In' : b.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main AdminMembers Page ───────────────────────────────────────────────────
+export default function AdminMembers() {
+  const { id: selectedId } = useParams()
+  const navigate = useNavigate()
+
+  const [members, setMembers] = useState([])
+  const [allInstructors, setAllInstructors] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [showAddModal, setShowAddModal] = useState(false)
+
+  const selectedMember = members.find(m => m.id === selectedId) || null
+
+  const fetchMembers = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (search) params.set('q', search)
+      if (statusFilter !== 'all') params.set('status', statusFilter)
+      const data = await api.get(`/admin/members?${params}`)
+      setMembers(data.members || [])
+    } finally {
+      setLoading(false)
+    }
+  }, [search, statusFilter])
+
+  useEffect(() => { fetchMembers() }, [fetchMembers])
+
+  useEffect(() => {
+    api.get('/admin/instructors').then(d => setAllInstructors(d.instructors || []))
+  }, [])
+
+  const filtered = members.filter(m => roleFilter === 'all' || m.role === roleFilter)
+
+  return (
+    <AdminLayout>
+      {showAddModal && (
+        <AddMemberModal
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => { setShowAddModal(false); fetchMembers() }}
+        />
+      )}
+
+      <div className="flex h-[calc(100vh-64px)]">
+        {/* Left — Member List */}
+        <div className={`flex flex-col border-r border-gray-100 bg-white transition-all ${selectedMember ? 'w-80 min-w-[280px] hidden md:flex' : 'flex-1'}`}>
+
+          {/* Toolbar */}
+          <div className="px-6 py-4 border-b border-gray-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <h1 className="font-display text-2xl text-[#064029] tracking-wide">MEMBERS</h1>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Member
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Search by name or email…"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+
+            <div className="flex gap-2">
+              {/* Role filter pills */}
+              {['all', ...ROLES].map(r => (
                 <button
-                  className="w-full text-left px-6 py-5 hover:bg-gray-50 transition-colors"
-                  onClick={() => setExpanded(expanded === p.id ? null : p.id)}
+                  key={r}
+                  onClick={() => setRoleFilter(r)}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors capitalize ${
+                    roleFilter === r
+                      ? 'bg-[#064029] text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              {['all', 'active', 'inactive'].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setStatusFilter(s)}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors capitalize ${
+                    statusFilter === s
+                      ? 'bg-[#1D9E75] text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center h-32 text-sm text-gray-400">Loading…</div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-32 text-sm text-gray-400">
+                <p>No members found</p>
+              </div>
+            ) : (
+              filtered.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => navigate(`/admin/members/${m.id}`)}
+                  className={`w-full text-left px-6 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors ${
+                    selectedId === m.id ? 'bg-[#E1F5EE] border-l-4 border-l-[#1D9E75]' : ''
+                  }`}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1">
-                        <h2 className="font-display text-xl text-[#064029] tracking-wide">{p.name.toUpperCase()}</h2>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          p.is_active ? 'bg-[#E1F5EE] text-[#064029]' : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          {p.is_active ? 'Active' : 'Inactive'}
-                        </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <StatusDot status={m.status} />
+                        <p className="text-sm font-semibold text-gray-900 truncate">{m.full_name}</p>
                       </div>
-                      {p.description && (
-                        <p className="text-sm text-gray-500 mb-2">{p.description}</p>
+                      <p className="text-xs text-gray-400 truncate pl-4">{m.email}</p>
+                      {m.role === 'parent' && m.child_name && (
+                        <p className="text-xs text-[#1D9E75] pl-4 mt-0.5">Child: {m.child_name}</p>
                       )}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
-                        <span className="flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          {formatDays(p.session_days)}
-                        </span>
-                        <span>{formatTime(p.start_time)} – {formatTime(p.end_time)}</span>
-                        <span>{p.default_capacity} spots</span>
-                        {p.price_display && <span className="font-medium text-[#1D9E75]">{p.price_display}</span>}
-                      </div>
                     </div>
-                    <svg
-                      className={`w-5 h-5 text-gray-400 transition-transform ml-4 flex-shrink-0 ${expanded === p.id ? 'rotate-180' : ''}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-
-                  {/* Quick stats row */}
-                  <div className="mt-3 flex gap-4 text-xs">
-                    <div className="flex items-center gap-1.5 text-gray-400">
-
-                    </div>
-                    <div className="text-gray-400">
-                      Cancel window: <span className="font-medium text-gray-600">{p.cancellation_hours}h</span>
-                    </div>
-                    <div className="text-gray-400">
-                      Max/week: <span className="font-medium text-gray-600">{p.max_bookings_per_week}</span>
-                    </div>
-                    <div className="text-gray-400 capitalize">
-                      Booker: <span className="font-medium text-gray-600">{p.booker_type}</span>
-                    </div>
+                    <RoleBadge role={m.role} />
                   </div>
                 </button>
+              ))
+            )}
+          </div>
 
-                {/* Expandable Editor */}
-                {expanded === p.id && (
-                  <ProgramEditor program={p} onSave={fetchPrograms} />
-                )}
-              </div>
-            ))}
+          {/* Footer count */}
+          <div className="px-6 py-3 border-t border-gray-100 text-xs text-gray-400">
+            {filtered.length} member{filtered.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+
+        {/* Right — Detail Panel */}
+        {selectedMember ? (
+          <div className="flex-1 bg-white relative overflow-hidden">
+            <MemberDetail
+              member={selectedMember}
+              onClose={() => navigate('/admin/members')}
+              onRefresh={fetchMembers}
+              allInstructors={allInstructors}
+            />
+          </div>
+        ) : (
+          <div className="hidden md:flex flex-1 items-center justify-center text-gray-400">
+            <div className="text-center">
+              <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <p className="text-sm">Select a member to view details</p>
+            </div>
           </div>
         )}
       </div>
