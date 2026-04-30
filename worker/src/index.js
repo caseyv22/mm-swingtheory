@@ -952,7 +952,8 @@ app.post('/admin/programs', requireAdmin, async (c) => {
   const {
     name, description, booking_type, booker_type, session_days,
     start_time, end_time, default_capacity, price_display,
-    show_instructor, forward_view_weeks, cancellation_hours, max_bookings_per_week
+    show_instructor, forward_view_weeks, cancellation_hours, max_bookings_per_week,
+    start_date, end_date
   } = body
 
   if (!name) return c.json({ error: 'Name is required' }, 400)
