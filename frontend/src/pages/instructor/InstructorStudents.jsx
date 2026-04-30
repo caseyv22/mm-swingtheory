@@ -164,7 +164,7 @@ function LessonRow({ lesson, studentId, onEdit, onCancel, onNoteSaved }) {
         )}
       </div>
       {lesson.notes && <p className="text-xs text-gray-400 italic mt-1">Focus: {lesson.notes}</p>}
-      {past && !isCancelled && (
+      {!isCancelled && (
         <div className="mt-2">
           {!editingNote && lesson.coaching_note && (
             <div className="bg-[#E1F5EE] rounded-lg px-4 py-3">
