@@ -465,7 +465,7 @@ function ProgramEditor({ program, onSave }) {
             value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">End Date <span className="text-gray-300">(blank = never)</span></label>
+          <label className="block text-xs text-gray-500 mb-1">End Date <span className="text-gray-400">(blank = never)</span></label>
           <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
             value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
         </div>
