@@ -474,7 +474,7 @@ export default function InstructorSchedule() {
                 <p className="text-sm font-semibold text-gray-700">{formatDate(selectedDate)}</p>
                 <div className="flex gap-2">
                   <button onClick={() => handleAddFromDate(selectedDate)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">+ Add lesson this day</button>
-                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-400">|</span>
                   <button onClick={() => setSelectedDate(null)} className="text-xs font-semibold text-gray-400 hover:text-gray-600">← Show all</button>
                 </div>
               </div>
@@ -483,7 +483,7 @@ export default function InstructorSchedule() {
 
           <div className="flex-1 lg:overflow-y-auto px-4 lg:px-6 py-4">
             {loading ? (
-              <div className="text-center py-16 text-sm text-gray-300">Loading…</div>
+              <div className="text-center py-16 text-sm text-gray-400">Loading…</div>
             ) : filtered.length === 0 ? (
               <div className="text-center py-16">
                 <p className="text-sm text-gray-300 italic">
