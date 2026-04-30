@@ -259,7 +259,7 @@ function StudentDetail({ student, onClose }) {
           </div>
           <div className="flex-1 overflow-y-auto px-6 py-2">
             {loading ? (
-              <div className="text-center py-10 text-sm text-gray-300">Loading…</div>
+              <div className="text-center py-10 text-sm text-gray-400">Loading…</div>
             ) : lessons.length === 0 ? (
               <div className="text-center py-10">
                 <p className="text-sm text-gray-300 italic">No private lessons yet</p>
@@ -336,7 +336,7 @@ export default function InstructorStudents() {
           </div>
         )}
         {loading ? (
-          <div className="text-center py-16 text-sm text-gray-300">Loading students…</div>
+          <div className="text-center py-16 text-sm text-gray-400">Loading students…</div>
         ) : students.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-gray-300 text-sm italic">No students assigned yet</p>
