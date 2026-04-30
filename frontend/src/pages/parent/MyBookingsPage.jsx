@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import TheoryAI from '../../components/TheoryAI'
 import { useAuth } from '@clerk/clerk-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api.js'
@@ -126,6 +127,13 @@ function LessonCard({ lesson }) {
       )}
       {!hasNote && isPast && !isCancelled && (
         <p className="text-xs text-gray-300 italic mt-2">No coaching notes yet</p>
+      )}
+
+      {/* Theory AI Data */}
+      {!isCancelled && (
+        <div className="mt-4 pt-4 border-t border-st-cloud">
+          <TheoryAI lessonId={lesson.id} isInstructor={false} />
+        </div>
       )}
     </div>
   )
