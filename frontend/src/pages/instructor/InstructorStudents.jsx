@@ -251,7 +251,6 @@ function StudentDetail({ student, onClose }) {
                 {student.child_name && <p className="text-sm text-[#1D9E75] font-medium">Child: {student.child_name}</p>}
                 <p className="text-sm text-gray-400">{student.email}</p>
                 <div className="flex items-center gap-2 mt-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{student.role || 'student'}</span>
                   <span className="text-xs text-gray-400">{upcomingCount} upcoming · {pastCount} past</span>
                 </div>
               </div>
@@ -292,7 +291,6 @@ function StudentCard({ student, onClick }) {
           {student.child_name && <p className="text-xs text-[#1D9E75] font-medium mt-0.5">Child: {student.child_name}</p>}
           <p className="text-xs text-gray-400">{student.email}</p>
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{student.role || 'student'}</span>
             {student.upcoming_lessons > 0 && <span className="text-xs text-[#1D9E75] font-medium">{student.upcoming_lessons} upcoming</span>}
           </div>
         </div>
