@@ -113,6 +113,23 @@ function LoginPage() {
           routing="path"
           path="/login"
           fallbackRedirectUrl="/home"
+          appearance={{
+            elements: {
+              rootBox: 'w-full',
+              card: 'bg-white rounded-2xl shadow-2xl border-0 p-8',
+              headerTitle: 'font-display tracking-widest text-[#064029]',
+              headerSubtitle: 'text-gray-500',
+              formButtonPrimary: 'bg-[#064029] hover:bg-[#085041] text-white font-semibold rounded-lg transition-colors',
+              formFieldInput: 'border-gray-200 rounded-lg focus:ring-[#1D9E75] focus:border-[#1D9E75]',
+              formFieldLabel: 'text-gray-700 font-medium',
+              footerActionLink: 'text-[#1D9E75] hover:text-[#064029] font-semibold',
+              identityPreviewEditButton: 'text-[#1D9E75]',
+              footer: 'hidden',
+            },
+            layout: {
+              showOptionalFields: false,
+            }
+          }}
         />
       </div>
     </div>
