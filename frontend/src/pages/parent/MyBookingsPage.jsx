@@ -66,23 +66,27 @@ function LessonNote({ note }) {
 
 function LessonCard({ lesson }) {
   const [expanded, setExpanded] = useState(false)
-  const hasNotes = lesson.notes?.length > 0
+  const hasNote = !!lesson.coaching_note
   const isPast = lesson.date < new Date().toISOString().split('T')[0]
+  const isCancelled = !!lesson.is_cancelled
 
   return (
-    <div className={`bg-white rounded-xl border border-st-cloud p-5 transition-all ${isPast ? 'opacity-80' : ''}`}>
+    <div className={`bg-white rounded-xl border border-st-cloud p-5 transition-all ${isPast ? 'opacity-80' : ''} ${isCancelled ? 'opacity-50' : ''}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#064029] bg-[#E1F5EE] px-2.5 py-0.5 rounded-full">
               Private Lesson
             </span>
-            {!!lesson.checked_in && (
-              <span className="text-[10px] font-bold uppercase tracking-widest text-st-green bg-st-light px-2.5 py-0.5 rounded-full border border-st-green/20">Checked In</span>
+            {isCancelled && (
+              <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 px-2.5 py-0.5 rounded-full">Cancelled</span>
             )}
-            {hasNotes && (
+            {!isCancelled && !isPast && (
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-2.5 py-0.5 rounded-full">Upcoming</span>
+            )}
+            {hasNote && (
               <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] px-2.5 py-0.5 rounded-full border border-[#1D9E75]/30">
-                {lesson.notes.length} Note{lesson.notes.length !== 1 ? 's' : ''}
+                Coach's Note
               </span>
             )}
           </div>
@@ -95,22 +99,30 @@ function LessonCard({ lesson }) {
             Instructor: <span className="font-semibold">{lesson.instructor_name}</span>
           </p>
         </div>
-        {hasNotes && (
+        {hasNote && (
           <button
             onClick={() => setExpanded(e => !e)}
             className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029] transition-colors shrink-0"
           >
-            {expanded ? 'Hide' : 'View Notes'}
+            {expanded ? 'Hide' : 'View Note'}
           </button>
         )}
       </div>
-      {expanded && hasNotes && (
-        <div className="mt-1 space-y-2">
-          {lesson.notes.map(n => <LessonNote key={n.id} note={n} />)}
+      {expanded && hasNote && (
+        <div className="mt-3 bg-[#E1F5EE] rounded-lg px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#064029] mb-1">
+            Coach's Note · {lesson.instructor_name}
+          </p>
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{lesson.coaching_note}</p>
+          {lesson.note_updated_at && (
+            <p className="text-xs text-gray-400 mt-2">
+              {new Date(lesson.note_updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
+          )}
         </div>
       )}
-      {!hasNotes && isPast && (
-        <p className="text-xs text-gray-300 italic mt-2">No coaching notes for this session yet</p>
+      {!hasNote && isPast && !isCancelled && (
+        <p className="text-xs text-gray-300 italic mt-2">No coaching notes yet</p>
       )}
     </div>
   )
@@ -228,7 +240,7 @@ export default function MyBookingsPage() {
               <p className="text-st-graphite text-sm font-medium mt-2">Your private lessons will appear here.</p>
             </div>
           ) : (
-            <div className="space-y-3">{lessons.map(l => <LessonCard key={l.booking_id} lesson={l} />)}</div>
+            <div className="space-y-3">{lessons.map(l => <LessonCard key={l.id} lesson={l} />)}</div>
           )
         )}
       </main>
