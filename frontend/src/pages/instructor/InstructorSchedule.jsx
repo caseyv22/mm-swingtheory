@@ -131,6 +131,104 @@ function AddLessonModal({ students, prefilledDate, onClose, onSaved }) {
   )
 }
 
+
+// ─── Lesson Detail Modal ──────────────────────────────────────────────────────
+function LessonDetailModal({ lesson, onClose, onSaved }) {
+  const [editingNote, setEditingNote] = useState(false)
+  const [noteText, setNoteText] = useState(lesson.coaching_note || '')
+  const [savingNote, setSavingNote] = useState(false)
+  const [noteSaved, setNoteSaved] = useState(false)
+  const isCancelled = !!lesson.is_cancelled
+
+  async function handleSaveNote() {
+    if (!noteText.trim()) return
+    setSavingNote(true)
+    try {
+      await api.post(`/instructor/students/${lesson.student_id}/notes`, {
+        lesson_id: lesson.id,
+        note: noteText.trim(),
+      })
+      setNoteSaved(true)
+      setTimeout(() => setNoteSaved(false), 2000)
+      setEditingNote(false)
+      onSaved()
+    } catch {
+    } finally {
+      setSavingNote(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
+          <div>
+            <p className="text-xs font-semibold text-[#1D9E75] uppercase tracking-wider mb-0.5">Private Lesson</p>
+            <h2 className="font-display text-xl text-[#064029] tracking-wide">{formatDate(lesson.date)}</h2>
+            <p className="text-sm text-gray-400">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay && ` · ${lesson.bay}`}</p>
+            <p className="text-sm font-semibold text-gray-800 mt-1">{lesson.full_name || lesson.student_name}</p>
+            <p className="text-xs text-gray-400">{lesson.student_email}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+
+        <div className="px-6 py-5">
+          {lesson.notes && (
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Session Focus</p>
+              <p className="text-sm text-gray-600 italic">{lesson.notes}</p>
+            </div>
+          )}
+
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coaching Notes</p>
+
+          {!isCancelled && (
+            <>
+              {!editingNote && lesson.coaching_note && (
+                <div className="bg-[#E1F5EE] rounded-lg px-4 py-3">
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{lesson.coaching_note}</p>
+                  {lesson.note_updated_at && (
+                    <p className="text-xs text-gray-400 mt-2">{new Date(lesson.note_updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  )}
+                  <button onClick={() => { setNoteText(lesson.coaching_note); setEditingNote(true) }} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029] mt-2">Edit Note</button>
+                </div>
+              )}
+              {!editingNote && !lesson.coaching_note && (
+                <button onClick={() => setEditingNote(true)} className="text-sm font-semibold text-[#1D9E75] hover:text-[#064029]">+ Add Coaching Note</button>
+              )}
+              {editingNote && (
+                <div className="space-y-2">
+                  <textarea rows={4} autoFocus
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none"
+                    placeholder="Coaching notes for this lesson…"
+                    value={noteText}
+                    onChange={e => setNoteText(e.target.value)}
+                  />
+                  <div className="flex items-center justify-between">
+                    {noteSaved && <span className="text-xs text-[#1D9E75] font-medium">Saved ✓</span>}
+                    <div className="flex gap-2 ml-auto">
+                      <button onClick={() => { setEditingNote(false); setNoteText(lesson.coaching_note || '') }} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">Cancel</button>
+                      <button onClick={handleSaveNote} disabled={savingNote || !noteText.trim()}
+                        className="px-4 py-1.5 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-40 transition-colors">
+                        {savingNote ? 'Saving…' : 'Save Note'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          {isCancelled && <p className="text-sm text-gray-300 italic">This lesson was cancelled.</p>}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+          <button onClick={onClose} className="px-5 py-2 bg-gray-100 text-sm font-medium rounded-lg hover:bg-gray-200">Done</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Lesson Card ──────────────────────────────────────────────────────────────
 function LessonCard({ lesson, onClick }) {
   const past = !isFuture(lesson.date)
@@ -148,7 +246,6 @@ function LessonCard({ lesson, onClick }) {
           <p className="text-xs text-gray-400">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay && ` · ${lesson.bay}`}</p>
           <p className="text-sm font-semibold text-gray-800 mt-1">{lesson.full_name || lesson.student_name}</p>
           <p className="text-xs text-gray-400">{lesson.student_email}</p>
-          <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{lesson.student_role || 'student'}</span>
         </div>
         <div>
           {!!lesson.is_cancelled ? (
@@ -234,6 +331,7 @@ export default function InstructorSchedule() {
   const [prefilledDate, setPrefilledDate] = useState(null)
   const [filter, setFilter] = useState('upcoming')
   const [toast, setToast] = useState('')
+  const [selectedLesson, setSelectedLesson] = useState(null)
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -282,6 +380,14 @@ export default function InstructorSchedule() {
 
       {toast && (
         <div className="fixed top-20 right-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">{toast}</div>
+      )}
+
+      {selectedLesson && (
+        <LessonDetailModal
+          lesson={selectedLesson}
+          onClose={() => setSelectedLesson(null)}
+          onSaved={() => { fetchData(); setSelectedLesson(null) }}
+        />
       )}
 
       {showAddLesson && (
@@ -362,7 +468,7 @@ export default function InstructorSchedule() {
             ) : (
               <div className="space-y-3">
                 {filtered.map(l => (
-                  <LessonCard key={l.id} lesson={l} onClick={() => {}} />
+                  <LessonCard key={l.id} lesson={l} onClick={() => setSelectedLesson(l)} />
                 ))}
               </div>
             )}
