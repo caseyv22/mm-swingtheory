@@ -1215,9 +1215,11 @@ app.get('/instructor/students/:id/lessons', requireInstructor, async (c) => {
   const lessons = await c.env.DB.prepare(`
     SELECT pl.*,
       ln.note as coaching_note, ln.updated_at as note_updated_at,
-      CASE WHEN ln.id IS NOT NULL THEN 1 ELSE 0 END as has_note
+      CASE WHEN ln.id IS NOT NULL THEN 1 ELSE 0 END as has_note,
+      CASE WHEN g.id IS NOT NULL THEN 1 ELSE 0 END as has_gspro
     FROM private_lessons pl
     LEFT JOIN lesson_notes ln ON ln.lesson_id = pl.id AND ln.instructor_id = ?
+    LEFT JOIN gspro_uploads g ON g.lesson_id = pl.id
     WHERE pl.instructor_id = ? AND pl.student_id = ?
     ORDER BY pl.date DESC, pl.start_time ASC
   `).bind(instr.id, instr.id, id).all()
