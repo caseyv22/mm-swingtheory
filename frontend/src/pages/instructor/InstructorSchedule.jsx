@@ -138,7 +138,7 @@ function LessonCard({ lesson, onClick }) {
     <button
       onClick={onClick}
       className={`w-full text-left bg-white rounded-xl border px-4 py-3.5 shadow-sm hover:shadow-md transition-all ${
-        lesson.is_cancelled ? 'opacity-50 border-gray-100' : past ? 'border-gray-100 opacity-75' : 'border-gray-100 hover:border-[#1D9E75]/30'
+        !!lesson.is_cancelled ? 'opacity-50 border-gray-100' : past ? 'border-gray-100 opacity-75' : 'border-gray-100 hover:border-[#1D9E75]/30'
       }`}
     >
       <div className="flex items-start justify-between">
@@ -146,10 +146,12 @@ function LessonCard({ lesson, onClick }) {
           <p className="text-xs font-semibold text-[#1D9E75] uppercase tracking-wider mb-0.5">Private Lesson</p>
           <p className="text-sm font-semibold text-gray-900">{formatDateShort(lesson.date)}</p>
           <p className="text-xs text-gray-400">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay && ` · ${lesson.bay}`}</p>
-          <p className="text-xs text-gray-500 font-medium mt-1">{lesson.student_name}</p>
+          <p className="text-sm font-semibold text-gray-800 mt-1">{lesson.full_name || lesson.student_name}</p>
+          <p className="text-xs text-gray-400">{lesson.student_email}</p>
+          <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{lesson.student_role || 'student'}</span>
         </div>
         <div>
-          {lesson.is_cancelled ? (
+          {!!lesson.is_cancelled ? (
             <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>
           ) : past ? (
             <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>
@@ -158,7 +160,7 @@ function LessonCard({ lesson, onClick }) {
           )}
         </div>
       </div>
-      {lesson.has_note && (
+      {!!lesson.has_note && (
         <p className="text-xs text-[#1D9E75] mt-2">✓ Note added</p>
       )}
     </button>
