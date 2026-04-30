@@ -359,6 +359,7 @@ export default function InstructorSchedule() {
   const [filter, setFilter] = useState('upcoming')
   const [toast, setToast] = useState('')
   const [selectedLesson, setSelectedLesson] = useState(null)
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const [editingLesson, setEditingLesson] = useState(null)
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 2500) }
@@ -428,7 +429,7 @@ export default function InstructorSchedule() {
         />
       )}
 
-      <div className="flex flex-col lg:flex-row lg:h-[calc(100vh-64px)]">
+      <div className="flex flex-col-reverse lg:flex-row lg:h-[calc(100vh-64px)]">
 
         {/* Left — Lesson List */}
         <div className="flex-1 flex flex-col min-w-0 lg:overflow-hidden">
@@ -504,8 +505,47 @@ export default function InstructorSchedule() {
           </div>
         </div>
 
-        {/* Right — Mini Calendar */}
-        <div className="hidden lg:block lg:w-72 flex-shrink-0 bg-white border-t lg:border-t-0 lg:border-l border-gray-100 px-5 py-5 lg:overflow-y-auto">
+        {/* Right — Mini Calendar (desktop sidebar, mobile collapsible) */}
+
+        {/* Mobile collapsible calendar — shown above lesson list on mobile */}
+        <div className="lg:hidden bg-white border-b border-gray-100">
+          <button
+            onClick={() => setCalendarOpen(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-gray-700"
+          >
+            <span className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-[#1D9E75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {selectedDate ? formatDateShort(selectedDate) : 'Calendar'}
+            </span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${calendarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {calendarOpen && (
+            <div className="px-4 pb-4">
+              <MiniCalendar
+                lessons={lessons.filter(l => !l.is_cancelled)}
+                selectedDate={selectedDate}
+                onSelectDate={(d) => { handleCalendarDateSelect(d); setCalendarOpen(false) }}
+                currentMonth={calendarMonth}
+                onMonthChange={handleMonthChange}
+              />
+              {selectedDate && (
+                <button
+                  onClick={() => { handleAddFromDate(selectedDate); setCalendarOpen(false) }}
+                  className="mt-3 w-full py-2.5 text-sm font-semibold text-[#1D9E75] border border-[#1D9E75]/30 rounded-lg hover:bg-[#E1F5EE] transition-colors"
+                >
+                  + Add lesson on {formatDateShort(selectedDate)}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop sidebar calendar */}
+        <div className="hidden lg:block lg:w-72 flex-shrink-0 bg-white border-l border-gray-100 px-5 py-5 overflow-y-auto">
           <MiniCalendar
             lessons={lessons.filter(l => !l.is_cancelled)}
             selectedDate={selectedDate}
@@ -513,7 +553,6 @@ export default function InstructorSchedule() {
             currentMonth={calendarMonth}
             onMonthChange={handleMonthChange}
           />
-
           {selectedDate && (
             <div className="mt-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{formatDateShort(selectedDate)}</p>
@@ -522,7 +561,7 @@ export default function InstructorSchedule() {
               ) : (
                 lessons.filter(l => l.date === selectedDate && !l.is_cancelled).map(l => (
                   <div key={l.id} className="py-1.5 border-b border-gray-50 last:border-0">
-                    <p className="text-xs font-medium text-gray-700">{l.student_name}</p>
+                    <p className="text-xs font-medium text-gray-700">{l.full_name || l.student_name}</p>
                     <p className="text-xs text-gray-400">{formatTime(l.start_time)}</p>
                   </div>
                 ))
