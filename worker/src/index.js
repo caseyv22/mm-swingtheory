@@ -883,6 +883,21 @@ app.get('/admin/members/:id/instructor-students', requireAdmin, async (c) => {
   return c.json({ students: students.results })
 })
 
+// ─── GET /admin/members/:id/assigned-instructors ─────────────────────────────
+// Returns instructors assigned to a student
+app.get('/admin/members/:id/assigned-instructors', requireAdmin, async (c) => {
+  const { id } = c.req.param() // student user_id
+  const instructors = await c.env.DB.prepare(`
+    SELECT i.id as instructor_record_id, u.id, u.full_name, u.email
+    FROM student_instructors si
+    JOIN instructors i ON si.instructor_id = i.id
+    JOIN users u ON i.user_id = u.id
+    WHERE si.student_id = ?
+    ORDER BY u.full_name ASC
+  `).bind(id).all()
+  return c.json({ instructors: instructors.results })
+})
+
 // ─── POST /admin/members/:id/assign-instructor ────────────────────────────────
 // Assigns a student to an instructor
 app.post('/admin/members/:id/assign-instructor', requireAdmin, async (c) => {
