@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import NavBar from '../../components/NavBar'
 import { api } from '../../lib/api'
+import TypeaheadSelect from '../../components/TypeaheadSelect'
 
 function formatDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -90,12 +91,12 @@ function AddLessonModal({ students, prefilledDate, onClose, onSaved }) {
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Student</label>
-            <select className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.student_id} onChange={e => setForm(f => ({ ...f, student_id: e.target.value }))}>
-              <option value="">Select a student…</option>
-              {students.map(s => (
-                <option key={s.id} value={s.id}>{s.child_name || s.full_name}</option>
-              ))}
-            </select>
+            <TypeaheadSelect
+              options={students.map(s => ({ value: s.id, label: s.full_name, sublabel: s.email }))}
+              value={form.student_id}
+              onChange={v => setForm(f => ({ ...f, student_id: v }))}
+              placeholder="Search students…"
+            />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
