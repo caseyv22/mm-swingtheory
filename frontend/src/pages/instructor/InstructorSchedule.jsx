@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import NavBar from '../../components/NavBar'
 import { api } from '../../lib/api'
 import TypeaheadSelect from '../../components/TypeaheadSelect'
+import TheoryAI from '../../components/TheoryAI'
 
 function formatDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -243,6 +244,12 @@ function EditLessonModal({ lesson, onClose, onSaved }) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+          {/* Theory AI Upload */}
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">GSPro Data</p>
+            <TheoryAI lessonId={lesson.id} isInstructor={true} />
           </div>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
