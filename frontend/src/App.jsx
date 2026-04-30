@@ -78,12 +78,10 @@ function RoleRouter() {
 function ProtectedRoute({ children }) {
   const { getToken, isLoaded, isSignedIn } = useAuth()
 
-  useEffect(() => {
-    // Ensure api is always initialized for protected routes (e.g. admin navigating directly)
-    if (isLoaded && isSignedIn) {
-      api.init(getToken)
-    }
-  }, [isLoaded, isSignedIn])
+  // Initialize api synchronously during render — before children mount and fire their fetches
+  if (isLoaded && isSignedIn) {
+    api.init(getToken)
+  }
 
   if (!isLoaded) return (
     <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
