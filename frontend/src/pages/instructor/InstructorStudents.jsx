@@ -59,7 +59,7 @@ function LessonModal({ student, lesson, onClose, onSaved }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="font-display text-xl text-[#064029] tracking-wide">{isEdit ? 'EDIT LESSON' : 'ADD LESSON'}</h2>
-            <p className="text-sm text-gray-400">{student.child_name || student.full_name}</p>
+            <p className="text-sm text-gray-400">{student.full_name}{student.child_name && ` · Child: ${student.child_name}`}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
@@ -247,11 +247,12 @@ function StudentDetail({ student, onClose }) {
           <div className="px-6 py-5 border-b border-gray-100">
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="font-display text-2xl text-[#064029] tracking-wide">{student.child_name || student.full_name}</h2>
-                {student.child_name && <p className="text-sm text-gray-400">Parent: {student.full_name}</p>}
+                <h2 className="font-display text-2xl text-[#064029] tracking-wide">{student.full_name}</h2>
+                {student.child_name && <p className="text-sm text-[#1D9E75] font-medium">Child: {student.child_name}</p>}
                 <p className="text-sm text-gray-400">{student.email}</p>
-                <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-                  <span>{upcomingCount} upcoming</span><span>·</span><span>{pastCount} past</span>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{student.role || 'student'}</span>
+                  <span className="text-xs text-gray-400">{upcomingCount} upcoming · {pastCount} past</span>
                 </div>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
@@ -287,10 +288,13 @@ function StudentCard({ student, onClick }) {
     <button onClick={onClick} className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 hover:shadow-md hover:border-[#1D9E75]/30 transition-all">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-base font-semibold text-gray-900">{student.child_name || student.full_name}</p>
-          {student.child_name && <p className="text-xs text-gray-400 mt-0.5">Parent: {student.full_name}</p>}
+          <p className="text-base font-semibold text-gray-900">{student.full_name}</p>
+          {student.child_name && <p className="text-xs text-[#1D9E75] font-medium mt-0.5">Child: {student.child_name}</p>}
           <p className="text-xs text-gray-400">{student.email}</p>
-          {student.upcoming_lessons > 0 && <p className="text-xs text-[#1D9E75] font-medium mt-1">{student.upcoming_lessons} upcoming lesson{student.upcoming_lessons !== 1 ? 's' : ''}</p>}
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{student.role || 'student'}</span>
+            {student.upcoming_lessons > 0 && <span className="text-xs text-[#1D9E75] font-medium">{student.upcoming_lessons} upcoming</span>}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <span className={`w-2 h-2 rounded-full ${student.status === 'active' ? 'bg-[#1D9E75]' : 'bg-gray-300'}`} />
