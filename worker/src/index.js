@@ -1337,6 +1337,57 @@ app.post('/instructor/students/:id/notes', requireInstructor, async (c) => {
   return c.json({ ok: true, note_id: noteId })
 })
 
+
+// ─── GSPRO / THEORY AI ROUTES ─────────────────────────────────────────────────
+
+// POST /instructor/lessons/:id/gspro — upload CSV for a lesson
+app.post('/instructor/lessons/:id/gspro', requireInstructor, async (c) => {
+  const { id: lessonId } = c.req.param()
+  const clerkId = c.get('clerkId')
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE clerk_id = ?').bind(clerkId).first()
+  const instr = await c.env.DB.prepare('SELECT * FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  const lesson = await c.env.DB.prepare('SELECT * FROM private_lessons WHERE id = ? AND instructor_id = ?').bind(lessonId, instr.id).first()
+  if (!lesson) return c.json({ error: 'Lesson not found or not yours' }, 404)
+
+  const { csv_data } = await c.req.json()
+  if (!csv_data) return c.json({ error: 'csv_data is required' }, 400)
+
+  // Upsert — replace existing upload for this lesson
+  const existing = await c.env.DB.prepare('SELECT id FROM gspro_uploads WHERE lesson_id = ?').bind(lessonId).first()
+  if (existing) {
+    await c.env.DB.prepare('UPDATE gspro_uploads SET csv_data = ?, uploaded_at = datetime('now') WHERE lesson_id = ?')
+      .bind(csv_data, lessonId).run()
+  } else {
+    const uploadId = 'gspro_' + uid()
+    await c.env.DB.prepare('INSERT INTO gspro_uploads (id, lesson_id, student_id, instructor_id, csv_data) VALUES (?, ?, ?, ?, ?)')
+      .bind(uploadId, lessonId, lesson.student_id, instr.id, csv_data).run()
+  }
+
+  return c.json({ ok: true })
+})
+
+// GET /lessons/:id/gspro — fetch GSPro data for a lesson (student, instructor, admin)
+app.get('/lessons/:id/gspro', requireAuth, async (c) => {
+  const { id: lessonId } = c.req.param()
+  const clerkId = c.get('clerkId')
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE clerk_id = ?').bind(clerkId).first()
+  if (!user) return c.json({ error: 'User not found' }, 404)
+
+  const upload = await c.env.DB.prepare('SELECT * FROM gspro_uploads WHERE lesson_id = ?').bind(lessonId).first()
+  if (!upload) return c.json({ upload: null })
+
+  // Access control
+  if (user.role === 'student' && upload.student_id !== user.id) return c.json({ error: 'Forbidden' }, 403)
+  if (user.role === 'instructor') {
+    const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+    if (!instr || upload.instructor_id !== instr.id) return c.json({ error: 'Forbidden' }, 403)
+  }
+
+  return c.json({ upload })
+})
+
 // ─── CRON HANDLERS ────────────────────────────────────────────────────────────
 export default {
   fetch: app.fetch,
@@ -1359,7 +1410,8 @@ async function generateSessionsForProgram(program, env) {
   if (program.end_date && todayStr > program.end_date) return 0
 
   const days = (program.session_days || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
-  const weeksAhead = program.forward_view_weeks || 2
+  // Generate further ahead than the booking window so sessions exist before they're visible
+  const weeksAhead = Math.max(program.forward_view_weeks || 2, 8)
   let count = 0
 
   for (let w = 0; w <= weeksAhead; w++) {
