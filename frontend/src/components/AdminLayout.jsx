@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
 
@@ -14,6 +14,19 @@ export default function AdminLayout({ children }) {
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // Dynamic page title
+  useEffect(() => {
+    const pageMap = {
+      '/admin': 'Sessions',
+      '/admin/members': 'Members',
+      '/admin/programs': 'Programs',
+      '/admin/settings': 'Settings',
+    }
+    const page = Object.entries(pageMap).find(([path]) => location.pathname === path || location.pathname.startsWith(path + '/'))
+    const pageName = page ? page[1] : 'Admin'
+    document.title = `Sync | Swing Theory | ${pageName}`
+  }, [location.pathname])
+
   function isActive(href) {
     if (href === '/admin') return location.pathname === '/admin'
     return location.pathname.startsWith(href)
@@ -24,9 +37,9 @@ export default function AdminLayout({ children }) {
       <div className="px-6 py-6 border-b border-white/10">
         <button onClick={() => { navigate('/admin'); onNavClick?.() }} className="flex items-center gap-3">
           <img src="/STEmblem.svg" alt="ST" width={28} height={16} className="brightness-0 invert" />
-          <div>
+          <div className="flex flex-col">
             <p className="font-display text-lg text-white tracking-widest leading-none">SYNC</p>
-            <p className="text-white/40 text-[10px] font-bold tracking-widest uppercase mt-0.5">Powered by Swing Theory</p>
+            <p className="text-white/40 text-[10px] font-bold tracking-widest uppercase leading-none mt-0.5">Admin</p>
           </div>
         </button>
       </div>
@@ -71,9 +84,9 @@ export default function AdminLayout({ children }) {
         <div className="px-6 py-6 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/STEmblem.svg" alt="ST" width={28} height={16} className="brightness-0 invert" />
-            <div>
+            <div className="flex flex-col">
               <p className="font-display text-lg text-white tracking-widest leading-none">SYNC</p>
-              <p className="text-white/40 text-[10px] font-bold tracking-widest uppercase mt-0.5">Powered by Swing Theory</p>
+              <p className="text-white/40 text-[10px] font-bold tracking-widest uppercase leading-none mt-0.5">Admin</p>
             </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="text-white/60 hover:text-white text-xl">✕</button>
