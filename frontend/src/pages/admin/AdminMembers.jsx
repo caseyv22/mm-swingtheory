@@ -309,7 +309,6 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
           onSuccess={() => { fetchAssignedInstructors(); setShowAssignInstructor(false); showToast('Instructor assignment updated') }} />
       )}
 
-      {/* Header */}
       <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -325,7 +324,6 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none mt-1">&times;</button>
       </div>
 
-      {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
         <div>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Account Actions</p>
@@ -500,31 +498,30 @@ export default function AdminMembers() {
         <AddMemberModal onClose={() => setShowAddModal(false)} onSuccess={() => { setShowAddModal(false); fetchMembers() }} />
       )}
 
-      {/* Page wrapper — gray background with padding */}
-      <div className="bg-[#F9FAFB] p-6 h-[calc(100vh-64px)] flex flex-col">
+      {/* Gray page background */}
+      <div className="bg-[#F9FAFB] p-6 h-[calc(100vh-64px)] flex min-h-0">
 
-        {/* Title + button — outside the card */}
-        <div className="flex items-center justify-between mb-4 flex-shrink-0">
-          <h1 className="font-display text-2xl text-[#064029] tracking-wide">MEMBERS</h1>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Member
-          </button>
-        </div>
-
-        {/* Card — contains the full split panel */}
+        {/* Single card containing everything */}
         <div className="flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex min-h-0">
 
           {/* Left — Member List */}
           <div className={`flex flex-col border-r border-gray-100 transition-all ${selectedMember ? 'w-80 min-w-[280px] hidden md:flex' : 'flex-1'}`}>
 
-            {/* Search + Filters */}
+            {/* Toolbar — title, button, search, filters all inside the card */}
             <div className="px-6 py-4 border-b border-gray-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <h1 className="font-display text-2xl text-[#064029] tracking-wide">MEMBERS</h1>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Member
+                </button>
+              </div>
+
               <input
                 type="text"
                 placeholder="Search by name or email…"
@@ -532,6 +529,7 @@ export default function AdminMembers() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
+
               <div className="flex gap-2 flex-wrap">
                 {['all', ...ROLES].map(r => (
                   <button key={r} onClick={() => setRoleFilter(r)}
@@ -540,6 +538,7 @@ export default function AdminMembers() {
                   </button>
                 ))}
               </div>
+
               <div className="flex gap-2">
                 {['all', 'active', 'inactive'].map(s => (
                   <button key={s} onClick={() => setStatusFilter(s)}
