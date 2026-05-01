@@ -67,29 +67,36 @@ export default function ParentHome() {
   const bookSlug = isParent ? 'mini-mulligans' : 'summer-program'
 
   return (
-    <div className="min-h-screen bg-st-offwhite">
+    <div className="min-h-screen bg-[#F9FAFB]">
       <NavBar role={role} />
 
-      <main className="max-w-4xl mx-auto px-6 py-8 lg:py-12">
-
-        {/* Greeting */}
-        <div className="mb-8">
-          <h1 className="font-display text-4xl lg:text-5xl text-st-phantom tracking-widest mb-2">
+      {/* White header zone */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-2xl mx-auto px-4 py-5">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Welcome back</p>
+          <h1 className="font-display text-2xl text-[#064029] tracking-wide">
             HI {firstName.toUpperCase()}
           </h1>
+        </div>
+      </div>
+
+      <main className="max-w-2xl mx-auto px-4 py-5">
+
+        {/* Next session */}
+        <div className="mb-4">
           {loading ? (
-            <p className="text-st-graphite text-lg font-medium">Loading...</p>
+            <p className="text-gray-500 text-lg font-medium">Loading...</p>
           ) : nextSession ? (
             <div>
-              <p className="text-st-graphite text-lg font-medium">
+              <p className="text-gray-500 text-lg font-medium">
                 {isParent ? `${childName}'s next session:` : 'Your next session:'}
               </p>
-              <p className="text-st-green text-2xl font-bold mt-1">
+              <p className="text-[#064029] text-2xl font-bold mt-1">
                 {formatDate(nextSession.date)} at {formatTime(nextSession.start_time)}
               </p>
             </div>
           ) : (
-            <p className="text-st-graphite text-lg font-medium">
+            <p className="text-gray-500 text-lg font-medium">
               {isParent
                 ? `No upcoming sessions for ${childName}. Book one below!`
                 : 'No upcoming sessions. Book one below!'}
@@ -101,12 +108,12 @@ export default function ParentHome() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           <button
             onClick={() => navigate(`/book/${bookSlug}`)}
-            className="bg-white rounded-2xl border border-st-cloud p-6 text-left hover:border-st-green transition-colors group"
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-left hover:border-st-green transition-colors group"
           >
-            <p className="font-display text-xl text-st-phantom tracking-widest mb-2 group-hover:text-st-green transition-colors">
+            <p className="font-display text-xl text-gray-900 tracking-widest mb-2 group-hover:text-[#064029] transition-colors">
               BOOK A SESSION
             </p>
-            <p className="text-st-graphite text-sm font-medium">
+            <p className="text-gray-500 text-sm font-medium">
               {isParent
                 ? `View calendar and book ${childName} into an upcoming session`
                 : 'View calendar and book an upcoming session'}
@@ -115,12 +122,12 @@ export default function ParentHome() {
 
           <button
             onClick={() => navigate('/my-bookings')}
-            className="bg-white rounded-2xl border border-st-cloud p-6 text-left hover:border-st-green transition-colors group"
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-left hover:border-st-green transition-colors group"
           >
-            <p className="font-display text-xl text-st-phantom tracking-widest mb-2 group-hover:text-st-green transition-colors">
+            <p className="font-display text-xl text-gray-900 tracking-widest mb-2 group-hover:text-[#064029] transition-colors">
               MY BOOKINGS
             </p>
-            <p className="text-st-graphite text-sm font-medium">
+            <p className="text-gray-500 text-sm font-medium">
               View all upcoming and past sessions
             </p>
           </button>
@@ -128,26 +135,26 @@ export default function ParentHome() {
 
         {/* Info cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-st-light rounded-2xl border border-st-green/20 p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-st-green mb-2">Location</p>
-            <p className="text-st-phantom font-semibold text-sm">50 S De Lacey Ave</p>
-            <p className="text-st-graphite text-sm">Old Town Pasadena, CA</p>
+          <div className="bg-[#E1F5EE] rounded-2xl border border-st-green/20 p-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#064029] mb-2">Location</p>
+            <p className="text-gray-900 font-semibold text-sm">50 S De Lacey Ave</p>
+            <p className="text-gray-500 text-sm">Old Town Pasadena, CA</p>
           </div>
 
-          <div className="bg-st-light rounded-2xl border border-st-green/20 p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-st-green mb-2">Session Time</p>
-            <p className="text-st-phantom font-semibold text-sm">
+          <div className="bg-[#E1F5EE] rounded-2xl border border-st-green/20 p-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#064029] mb-2">Session Time</p>
+            <p className="text-gray-900 font-semibold text-sm">
               {isParent ? 'Tuesday & Thursday' : 'Tue, Wed & Friday'}
             </p>
-            <p className="text-st-graphite text-sm">
+            <p className="text-gray-500 text-sm">
               {isParent ? '4:00 – 5:00 PM' : '10:00 AM – 12:00 PM'}
             </p>
           </div>
 
-          <div className="bg-st-light rounded-2xl border border-st-green/20 p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-st-green mb-2">Need Help?</p>
-            <p className="text-st-phantom font-semibold text-sm">Contact us</p>
-            <a href="mailto:info@swingtheory.golf" className="text-st-green text-sm hover:underline">
+          <div className="bg-[#E1F5EE] rounded-2xl border border-st-green/20 p-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#064029] mb-2">Need Help?</p>
+            <p className="text-gray-900 font-semibold text-sm">Contact us</p>
+            <a href="mailto:info@swingtheory.golf" className="text-[#064029] text-sm hover:underline">
               info@swingtheory.golf
             </a>
           </div>
