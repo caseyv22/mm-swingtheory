@@ -35,7 +35,6 @@ export default function ParentHome() {
     setLoading(true)
     try {
       const token = await getToken()
-      api.init(() => token)
 
       const [meData, bookingsData] = await Promise.all([
         api.getMe(token),
