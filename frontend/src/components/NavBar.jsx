@@ -16,7 +16,7 @@ const STUDENT_LINKS = [
 
 const INSTRUCTOR_LINKS = [
   { label: 'Classes', href: '/instructor/sessions' },
-  { label: 'Lessons', href: '/instructor/students' },
+  { label: 'Students', href: '/instructor/students' },
   { label: 'Calendar', href: '/instructor/schedule' },
   { label: 'Account', href: '/account' },
 ]
