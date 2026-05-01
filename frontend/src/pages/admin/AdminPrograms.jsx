@@ -193,7 +193,59 @@ function CreateProgramModal({ onClose, onSuccess }) {
 }
 
 // ─── Program Settings Editor ──────────────────────────────────────────────────
+// ─── Trim Sessions Confirm Modal ─────────────────────────────────────────────
+function TrimConfirmModal({ affectedDates, onConfirm, onCancel, confirming }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-5 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="font-display text-xl text-[#064029] tracking-wide">SESSIONS WITH BOOKINGS</h2>
+              <p className="text-sm text-gray-500">The new end date affects existing bookings</p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-gray-600">
+            The following sessions have confirmed bookings and will be <span className="font-semibold text-red-600">cancelled</span>. Students will receive cancellation emails.
+          </p>
+          <div className="bg-red-50 rounded-xl divide-y divide-red-100 max-h-48 overflow-y-auto">
+            {affectedDates.map(s => (
+              <div key={s.id} className="flex items-center justify-between px-4 py-2.5">
+                <p className="text-sm font-medium text-gray-900">
+                  {new Date(s.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </p>
+                <span className="text-xs font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                  {s.booked_count} booked
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400">Sessions with no bookings will be deleted silently.</p>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">
+            Keep Original Date
+          </button>
+          <button onClick={onConfirm} disabled={confirming}
+            className="px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
+            {confirming ? 'Cancelling…' : 'Cancel Sessions & Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ProgramEditor({ program, onSave, showToast }) {
+  const [trimModal, setTrimModal] = useState(null) // { affectedDates: [] }
+  const [trimConfirming, setTrimConfirming] = useState(false)
   const [form, setForm] = useState({
     name: program.name, description: program.description || '',
     session_days: program.session_days || '', start_time: program.start_time, end_time: program.end_time,
@@ -215,7 +267,7 @@ function ProgramEditor({ program, onSave, showToast }) {
     setForm(f => ({ ...f, session_days: updated.join(',') }))
   }
 
-  async function handleSave() {
+  async function doSave() {
     setSaving(true)
     try {
       await api.put(`/admin/programs/${program.id}`, {
@@ -228,15 +280,58 @@ function ProgramEditor({ program, onSave, showToast }) {
         end_date: form.end_date || null,
       })
       setSaved(true); setTimeout(() => setSaved(false), 2000)
-      // Auto-generate sessions based on updated program settings
       try { await api.post(`/admin/programs/${program.id}/generate-sessions`, {}) } catch (e) { console.error('Session gen failed', e) }
       onSave()
       showToast('Program saved — sessions updated')
     } catch (e) { console.error(e) } finally { setSaving(false) }
   }
 
+  async function handleSave() {
+    // If end_date moved earlier than current program end_date, check for affected sessions
+    const currentEndDate = program.end_date
+    const newEndDate = form.end_date || null
+
+    if (newEndDate && (!currentEndDate || newEndDate < currentEndDate)) {
+      // Check what sessions would be trimmed
+      try {
+        const data = await api.post(`/admin/programs/${program.id}/trim-sessions`, { end_date: newEndDate, confirm: false })
+        if (data.total > 0) {
+          if (data.with_bookings.length > 0) {
+            // Show confirmation modal
+            setTrimModal({ affectedDates: data.with_bookings, withoutCount: data.without_bookings })
+            return
+          } else {
+            // No bookings affected — trim silently then save
+            await api.post(`/admin/programs/${program.id}/trim-sessions`, { end_date: newEndDate, confirm: true })
+          }
+        }
+      } catch (e) { console.error('Trim check failed', e) }
+    }
+
+    await doSave()
+  }
+
+  async function handleTrimConfirm() {
+    setTrimConfirming(true)
+    try {
+      const newEndDate = form.end_date || null
+      await api.post(`/admin/programs/${program.id}/trim-sessions`, { end_date: newEndDate, confirm: true })
+      setTrimModal(null)
+      showToast('Sessions cancelled — emails sent to affected students')
+      await doSave()
+    } catch (e) { console.error(e) } finally { setTrimConfirming(false) }
+  }
+
   return (
     <div className="border-t border-gray-100 px-6 py-5 space-y-5 bg-gray-50 relative">
+      {trimModal && (
+        <TrimConfirmModal
+          affectedDates={trimModal.affectedDates}
+          onConfirm={handleTrimConfirm}
+          onCancel={() => setTrimModal(null)}
+          confirming={trimConfirming}
+        />
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Name</label>
