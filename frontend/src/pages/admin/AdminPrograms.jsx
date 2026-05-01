@@ -560,16 +560,17 @@ export default function AdminPrograms() {
         />
       )}
 
-      <div className="max-w-3xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+      {/* White header zone */}
+      <div className="bg-white border-b border-gray-100 px-6 lg:px-10 py-6">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display text-3xl text-[#064029] tracking-wide">PROGRAMS</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage program settings, schedule, and booking rules</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Admin</p>
+            <h1 className="font-display text-2xl text-[#064029] tracking-wide">PROGRAMS</h1>
+            <p className="text-sm text-gray-400 mt-1">Manage program settings, schedule, and booking rules</p>
           </div>
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-xl hover:bg-[#085041] transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -577,6 +578,8 @@ export default function AdminPrograms() {
             New Program
           </button>
         </div>
+      </div>
+      <div className="max-w-3xl mx-auto px-6 py-6">
 
         {/* Program Cards */}
         {loading ? (
