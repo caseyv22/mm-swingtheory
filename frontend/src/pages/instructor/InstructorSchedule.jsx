@@ -475,11 +475,7 @@ export default function InstructorSchedule() {
             {selectedDate && (
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-gray-700">{formatDate(selectedDate)}</p>
-                <div className="flex gap-2">
-                  <button onClick={() => handleAddFromDate(selectedDate)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">+ Add lesson this day</button>
-                  <span className="text-gray-400">|</span>
-                  <button onClick={() => setSelectedDate(null)} className="text-xs font-semibold text-gray-400 hover:text-gray-600">← Show all</button>
-                </div>
+                <button onClick={() => setSelectedDate(null)} className="text-xs font-semibold text-gray-400 hover:text-gray-600">← Show all</button>
               </div>
             )}
           </div>
@@ -492,12 +488,7 @@ export default function InstructorSchedule() {
                 <p className="text-sm text-gray-300 italic">
                   {selectedDate ? 'No lessons on this day' : `No ${filter} lessons`}
                 </p>
-                <button
-                  onClick={() => setShowAddLesson(true)}
-                  className="mt-3 text-sm font-semibold text-[#1D9E75] hover:text-[#064029]"
-                >
-                  Schedule a lesson →
-                </button>
+
               </div>
             ) : (
               <div className="space-y-3">
@@ -536,14 +527,7 @@ export default function InstructorSchedule() {
                 currentMonth={calendarMonth}
                 onMonthChange={handleMonthChange}
               />
-              {selectedDate && (
-                <button
-                  onClick={() => { handleAddFromDate(selectedDate); setCalendarOpen(false) }}
-                  className="mt-3 w-full py-2.5 text-sm font-semibold text-[#1D9E75] border border-[#1D9E75]/30 rounded-lg hover:bg-[#E1F5EE] transition-colors"
-                >
-                  + Add lesson on {formatDateShort(selectedDate)}
-                </button>
-              )}
+
             </div>
           )}
         </div>
@@ -570,12 +554,7 @@ export default function InstructorSchedule() {
                   </div>
                 ))
               )}
-              <button
-                onClick={() => handleAddFromDate(selectedDate)}
-                className="mt-3 w-full py-2 text-xs font-semibold text-[#1D9E75] border border-[#1D9E75]/30 rounded-lg hover:bg-[#E1F5EE] transition-colors"
-              >
-                + Add lesson on this day
-              </button>
+
             </div>
           )}
         </div>
