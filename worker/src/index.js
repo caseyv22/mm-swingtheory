@@ -198,7 +198,7 @@ app.post('/bookings', requireAuth, async (c) => {
   if (session.booker_type === 'parent' && user.role !== 'parent') {
     return c.json({ error: 'This program can only be booked by a parent' }, 403)
   }
-  if (session.booker_type === 'student' && user.role !== 'student') {
+  if (session.booker_type === 'student' && user.role !== 'student' && user.role !== 'parent') {
     return c.json({ error: 'This program can only be booked by a student' }, 403)
   }
 
