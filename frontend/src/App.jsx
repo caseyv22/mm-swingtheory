@@ -25,6 +25,7 @@ function RoleRouter() {
 
   useEffect(() => {
     if (!isLoaded) return
+    // Register the token getter with api so admin pages can call api.get/post/put/delete
     api.init(getToken)
     loadMe()
   }, [isLoaded])
@@ -69,9 +70,8 @@ function RoleRouter() {
     </div>
   )
 
-  // Each role routes to a distinct destination — never back to /home
   if (role === 'parent' && firstLogin) return <Navigate to="/account?onboarding=true" replace />
-  if (role === 'parent') return <Navigate to="/programs" replace />
+  if (role === 'parent') return <Navigate to="/parent-home" replace />
   if (role === 'student') return <Navigate to="/programs" replace />
   if (role === 'instructor') return <Navigate to="/instructor/sessions" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
@@ -81,6 +81,7 @@ function RoleRouter() {
 function ProtectedRoute({ children, requiredRole }) {
   const { getToken, isLoaded, isSignedIn } = useAuth()
 
+  // Initialize api synchronously during render — before children mount and fire their fetches
   if (isLoaded && isSignedIn) {
     api.init(getToken)
   }
@@ -92,10 +93,12 @@ function ProtectedRoute({ children, requiredRole }) {
   )
   if (!isSignedIn) return <Navigate to="/login" replace />
 
+  // Role check using cached role from sessionStorage (set by RoleRouter)
   if (requiredRole) {
     const cachedRole = sessionStorage.getItem('st_role')
-    if (cachedRole && !requiredRole.includes(cachedRole)) {
-      return <Navigate to="/programs" replace />
+    // If no cached role yet, deny access to role-protected routes
+    if (!cachedRole || !requiredRole.includes(cachedRole)) {
+      return <Navigate to="/home" replace />
     }
   }
 
@@ -107,10 +110,17 @@ function LoginPage() {
     <div className="min-h-screen bg-st-green flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-8">
-          <img src="/STEmblem.svg" alt="Swing Theory" width={48} height={28} className="brightness-0 invert" />
+          <img
+            src="/STEmblem.svg"
+            alt="Swing Theory"
+            width={48}
+            height={28}
+            className="brightness-0 invert"
+          />
           <div>
-            <p className="font-display text-3xl text-white tracking-widest">SWING THEORY</p>
-            <p className="text-white/60 text-[10px] font-bold tracking-widest uppercase mt-0.5">Pasadena</p>
+            <p className="font-display text-3xl text-white tracking-widest">SYNC</p>
+            <p className="text-white/60 text-[10px] font-bold tracking-widest uppercase mt-0.5">Powered by Swing Theory</p>
+            <p className="font-body text-white/60 text-xs font-semibold tracking-widest uppercase">Pasadena</p>
           </div>
         </div>
         <SignIn
@@ -130,7 +140,9 @@ function LoginPage() {
               identityPreviewEditButton: 'text-[#1D9E75]',
               footer: 'hidden',
             },
-            layout: { showOptionalFields: false }
+            layout: {
+              showOptionalFields: false,
+            }
           }}
         />
       </div>
@@ -145,23 +157,37 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/*" element={<LoginPage />} />
 
-        {/* / and /home trigger role detection and redirect */}
-        <Route path="/" element={<ProtectedRoute><RoleRouter /></ProtectedRoute>} />
-        <Route path="/home" element={<ProtectedRoute><RoleRouter /></ProtectedRoute>} />
+        <Route path="/home" element={
+          <ProtectedRoute><RoleRouter /></ProtectedRoute>
+        } />
+        <Route path="/parent-home" element={
+          <ProtectedRoute><ParentHome /></ProtectedRoute>
+        } />
 
-        {/* Parent-home kept as legacy redirect */}
-        <Route path="/parent-home" element={<Navigate to="/programs" replace />} />
+        <Route path="/" element={
+          <ProtectedRoute><RoleRouter /></ProtectedRoute>
+        } />
 
-        {/* Program selector — student sees student programs, parent sees all */}
-        <Route path="/programs" element={<ProtectedRoute><ProgramSelector /></ProtectedRoute>} />
+        <Route path="/account" element={
+          <ProtectedRoute><AccountPage /></ProtectedRoute>
+        } />
 
-        <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
-        <Route path="/child-info" element={<Navigate to="/account?onboarding=true" replace />} />
+        <Route path="/child-info" element={
+          <Navigate to="/account?onboarding=true" replace />
+        } />
 
-        <Route path="/book/:slug" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
-        <Route path="/my-bookings" element={<ProtectedRoute><MyBookingsPage /></ProtectedRoute>} />
+        <Route path="/programs" element={
+          <ProtectedRoute><ProgramSelector /></ProtectedRoute>
+        } />
 
-        {/* Instructor routes */}
+        <Route path="/book/:slug" element={
+          <ProtectedRoute><CalendarPage /></ProtectedRoute>
+        } />
+
+        <Route path="/my-bookings" element={
+          <ProtectedRoute><MyBookingsPage /></ProtectedRoute>
+        } />
+
         <Route path="/instructor" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSessions /></ProtectedRoute>} />
         <Route path="/instructor/sessions" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSessions /></ProtectedRoute>} />
         <Route path="/instructor/students" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorStudents /></ProtectedRoute>} />
@@ -169,13 +195,13 @@ export default function App() {
         <Route path="/instructor/students/:studentId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorStudentProfile /></ProtectedRoute>} />
         <Route path="/instructor/lessons/:lessonId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorLessonDetail /></ProtectedRoute>} />
 
-        {/* Admin routes */}
         <Route path="/admin" element={<ProtectedRoute requiredRole={["admin"]}><AdminSessions /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
         <Route path="/admin/members/:id" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
         <Route path="/admin/programs" element={<ProtectedRoute requiredRole={["admin"]}><AdminPrograms /></ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute requiredRole={["admin"]}><AdminSettings /></ProtectedRoute>} />
 
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
