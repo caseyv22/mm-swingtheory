@@ -335,6 +335,8 @@ function ProgramEditor({ program, onSave }) {
     is_active: !!program.is_active,
     start_date: program.start_date || '',
     end_date: program.end_date || '',
+    booker_type: program.booker_type || 'student',
+    booking_type: program.booking_type || 'group',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -400,6 +402,28 @@ function ProgramEditor({ program, onSave }) {
           value={form.description}
           onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
         />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Who Books</label>
+        <div className="flex gap-2">
+          {['student', 'parent'].map(t => (
+            <button
+              key={t}
+              onClick={() => setForm(f => ({ ...f, booker_type: t }))}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg border transition-colors capitalize ${
+                form.booker_type === t
+                  ? 'bg-[#064029] text-white border-[#064029]'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-[#064029]'
+              }`}
+            >
+              {t === 'student' ? 'Student' : 'Parent'}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-1.5">
+          {form.booker_type === 'parent' ? 'Parent books on behalf of their child (e.g. Mini Mulligans)' : 'Student books for themselves'}
+        </p>
       </div>
 
       <div>
