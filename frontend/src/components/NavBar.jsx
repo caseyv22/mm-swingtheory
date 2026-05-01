@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
 
@@ -15,16 +15,29 @@ const STUDENT_LINKS = [
 ]
 
 const INSTRUCTOR_LINKS = [
-  { label: 'Programs', href: '/instructor/sessions' },
+  { label: 'Classes', href: '/instructor/sessions' },
   { label: 'Students', href: '/instructor/students' },
   { label: 'Calendar', href: '/instructor/schedule' },
   { label: 'Account', href: '/account' },
 ]
 
+const ROLE_LABEL = {
+  parent: 'Parent',
+  student: 'Student',
+  instructor: 'Instructor',
+  admin: 'Admin',
+}
+
 export default function NavBar({ role = 'student' }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
+
+  // Dynamic page title per role
+  useEffect(() => {
+    const roleLabel = ROLE_LABEL[role] || 'Member'
+    document.title = `Sync | Swing Theory | ${roleLabel}`
+  }, [role])
 
   const links = role === 'admin'
     ? []
