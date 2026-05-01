@@ -292,7 +292,6 @@ function RosterPanel({ session, onClose, onUpdate }) {
             )}
           </div>
 
-          {/* Assigned list */}
           {assignedInstructors.length === 0 && !addingInstructor && (
             <p className="text-xs text-gray-400 italic">No instructors assigned</p>
           )}
@@ -311,7 +310,6 @@ function RosterPanel({ session, onClose, onUpdate }) {
             ))}
           </div>
 
-          {/* Add instructor row */}
           {addingInstructor && (
             <div className="mt-2 space-y-2">
               <TypeaheadSelect
@@ -342,31 +340,31 @@ function RosterPanel({ session, onClose, onUpdate }) {
             value={capacity} onChange={e => setCapacity(e.target.value)} />
         </div>
         <div>
-            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Bays</p>
-            <div className="flex flex-wrap gap-1.5">
-              {BAYS.map(b => {
-                const selected = bay.split(',').map(x => x.trim()).filter(Boolean).includes(b)
-                return (
-                  <button
-                    key={b}
-                    type="button"
-                    onClick={() => {
-                      const current = bay.split(',').map(x => x.trim()).filter(Boolean)
-                      const updated = selected ? current.filter(x => x !== b) : [...current, b]
-                      setBay(updated.join(', '))
-                    }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
-                      selected
-                        ? 'bg-[#064029] text-white border-[#064029]'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#1D9E75] hover:text-[#1D9E75]'
-                    }`}
-                  >
-                    {b}
-                  </button>
-                )
-              })}
-            </div>
-            {bay && <p className="text-xs text-gray-400 mt-1.5">{bay}</p>}
+          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Bays</p>
+          <div className="flex flex-wrap gap-1.5">
+            {BAYS.map(b => {
+              const selected = bay.split(',').map(x => x.trim()).filter(Boolean).includes(b)
+              return (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => {
+                    const current = bay.split(',').map(x => x.trim()).filter(Boolean)
+                    const updated = selected ? current.filter(x => x !== b) : [...current, b]
+                    setBay(updated.join(', '))
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                    selected
+                      ? 'bg-[#064029] text-white border-[#064029]'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-[#1D9E75] hover:text-[#1D9E75]'
+                  }`}
+                >
+                  {b}
+                </button>
+              )
+            })}
+          </div>
+          {bay && <p className="text-xs text-gray-400 mt-1.5">{bay}</p>}
         </div>
 
         <button onClick={handleUpdateSession} disabled={saving}
@@ -576,7 +574,28 @@ export default function AdminSessions() {
         />
       )}
 
-      <div className="flex h-[calc(100vh-64px)]">
+      {/* ── White Header Zone ── */}
+      <div className="bg-white border-b border-gray-100 px-6 lg:px-10 py-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Admin</p>
+            <h1 className="font-display text-2xl text-[#064029] tracking-wide">SESSIONS</h1>
+            <p className="text-sm text-gray-400 mt-1">Manage sessions, rosters, and check-ins</p>
+          </div>
+          <button
+            onClick={() => { setCreatePrefilledDate(null); setShowCreateModal(true) }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-xl hover:bg-[#085041] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Session
+          </button>
+        </div>
+      </div>
+
+      {/* ── Three-Panel Body ── */}
+      <div className="flex" style={{ height: 'calc(100vh - 64px - 97px)' }}>
 
         {/* LEFT: Roster Panel */}
         {selectedSession && (
@@ -591,17 +610,9 @@ export default function AdminSessions() {
 
         {/* MIDDLE: Sessions List */}
         <div className="flex flex-col flex-1 min-w-0 border-r border-gray-100 bg-[#F9FAFB] overflow-hidden">
+
+          {/* Metrics + Week Nav */}
           <div className="bg-white border-b border-gray-100 px-6 py-4">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="font-display text-2xl text-[#064029] tracking-wide">SESSIONS</h1>
-              <div className="flex items-center gap-2">
-                {selectedDate && (
-                  <button onClick={() => setSelectedDate(null)} className="text-xs font-medium text-[#1D9E75] hover:text-[#064029]">
-                    ← Show full week
-                  </button>
-                )}
-              </div>
-            </div>
             <div className="grid grid-cols-4 gap-3 mb-4">
               <MetricCard label="Sessions" value={metrics.totalThisWeek} sub="this week" />
               <MetricCard label="Booked" value={metrics.totalBooked} sub={`of ${metrics.totalCapacity} spots`} />
@@ -622,6 +633,11 @@ export default function AdminSessions() {
                 className="px-3 py-1.5 text-xs font-semibold text-[#064029] bg-[#E1F5EE] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors">
                 Today
               </button>
+              {selectedDate && (
+                <button onClick={() => setSelectedDate(null)} className="text-xs font-medium text-[#1D9E75] hover:text-[#064029]">
+                  ← Full week
+                </button>
+              )}
             </div>
           </div>
 
