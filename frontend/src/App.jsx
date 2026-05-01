@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth, SignIn } from '@clerk/clerk-react'
+import { useAuth, useSignIn, useClerk } from '@clerk/clerk-react'
+import React from 'react'
 import { useState, useEffect } from 'react'
 import { api } from './lib/api.js'
 import ProgramSelector from './pages/ProgramSelector.jsx'
@@ -105,53 +106,93 @@ function ProtectedRoute({ children, requiredRole }) {
 }
 
 function LoginPage() {
+  const { signIn, isLoaded, setActive } = useSignIn()
+  const { isSignedIn } = useAuth()
+  const [email, setEmail] = React.useState('')
+  const [password, setPassword] = React.useState('')
+  const [error, setError] = React.useState('')
+  const [loading, setLoading] = React.useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!isLoaded) return
+    setLoading(true)
+    setError('')
+    try {
+      const result = await signIn.create({
+        identifier: email,
+        password: password,
+      })
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId })
+        window.location.href = '/home'
+      } else {
+        setError('Sign in incomplete. Please try again.')
+      }
+    } catch (err) {
+      const msg = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || 'Invalid email or password'
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-st-green flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="flex items-center gap-3 mb-8">
-          <img
-            src="/STEmblem.svg"
-            alt="Swing Theory"
-            width={48}
-            height={28}
-            className="brightness-0 invert"
-          />
-          <div>
-            <p className="font-display text-3xl text-white tracking-widest">SYNC</p>
-            <p className="text-white/60 text-[10px] font-bold tracking-widest uppercase mt-0.5">Powered by Swing Theory</p>
-            <p className="font-body text-white/60 text-xs font-semibold tracking-widest uppercase">Pasadena</p>
-          </div>
+    <div className="min-h-screen bg-[#064029] flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        <div className="flex justify-center mb-8">
+          <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" className="h-12 w-auto" />
         </div>
-        <SignIn
-          routing="path"
-          path="/login"
-          fallbackRedirectUrl="/home"
-          appearance={{
-            elements: {
-              rootBox: 'w-full',
-              card: 'bg-white rounded-2xl shadow-2xl border-0 p-8',
-              headerTitle: 'font-display tracking-widest text-[#064029]',
-              headerSubtitle: 'text-gray-500',
-              formButtonPrimary: 'bg-[#064029] hover:bg-[#085041] text-white font-semibold rounded-lg transition-colors',
-              formFieldInput: 'border-gray-200 rounded-lg focus:ring-[#1D9E75] focus:border-[#1D9E75]',
-              formFieldLabel: 'text-gray-700 font-medium',
-              footerActionLink: 'text-[#1D9E75] hover:text-[#064029] font-semibold',
-              identityPreviewEditButton: 'text-[#1D9E75]',
-              footer: 'hidden',
-            },
-            layout: {
-              showOptionalFields: false,
-            }
-          }}
-        />
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
+          <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">SIGN IN</h1>
+          <p className="text-sm text-gray-400 mb-6">Welcome back to Swing Theory</p>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                autoFocus
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading || !isLoaded}
+              className="w-full bg-[#064029] text-white font-semibold py-3 rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors text-sm"
+            >
+              {loading ? 'Signing in…' : 'Sign In'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   )
-}
-
-// Set base title on load
-if (typeof document !== 'undefined') {
-  document.title = 'Sync | Swing Theory'
 }
 
 export default function App() {
