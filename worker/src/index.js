@@ -136,6 +136,15 @@ app.post('/users/child', requireAuth, async (c) => {
 
 // ─── SESSION ROUTES (public / parent / student) ───────────────────────────────
 
+
+// GET /programs — list active programs for parent/student booking
+app.get('/programs', requireAuth, async (c) => {
+  const programs = await c.env.DB.prepare(
+    'SELECT * FROM programs WHERE is_active = 1 ORDER BY created_at ASC'
+  ).all()
+  return c.json({ programs: programs.results })
+})
+
 // GET /programs/:slug/sessions
 app.get('/programs/:slug/sessions', requireAuth, async (c) => {
   const { slug } = c.req.param()
@@ -474,6 +483,20 @@ app.get('/admin/sessions/range', requireAdmin, async (c) => {
 app.post('/admin/sessions', requireAdmin, async (c) => {
   const body = await c.req.json()
   const { program_id, date, start_time, end_time, capacity, bay, instructor_id, notes } = body
+
+  if (!program_id || !date) return c.json({ error: 'Program and date are required' }, 400)
+
+  // Validate date is within program start/end dates
+  const program = await c.env.DB.prepare('SELECT * FROM programs WHERE id = ?').bind(program_id).first()
+  if (!program) return c.json({ error: 'Program not found' }, 404)
+
+  if (program.start_date && date < program.start_date) {
+    return c.json({ error: `Date is before the program start date (${program.start_date})` }, 400)
+  }
+  if (program.end_date && date > program.end_date) {
+    return c.json({ error: `Date is after the program end date (${program.end_date})` }, 400)
+  }
+
   const id = 'sess_' + uid()
   const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
 
