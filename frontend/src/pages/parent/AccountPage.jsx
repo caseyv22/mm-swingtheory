@@ -78,7 +78,8 @@ export default function AccountPage() {
           <div className="flex items-center gap-3 mb-10">
             <img src="/STEmblem.svg" alt="Swing Theory" width={32} height={18} className="opacity-80" />
             <div>
-              <p className="font-display text-lg text-[#064029] tracking-widest leading-none">SWING THEORY</p>
+              <p className="font-display text-lg text-[#064029] tracking-widest leading-none">SYNC</p>
+              <p className="text-gray-400 text-[9px] font-bold tracking-widest uppercase leading-none mt-0.5">Powered by Swing Theory</p>
               <p className="text-gray-500 text-[10px] font-bold tracking-widest uppercase">Pasadena</p>
             </div>
           </div>
