@@ -792,9 +792,15 @@ export default function AdminMembers() {
                         <StatusDot status={m.status} />
                         <p className="text-sm font-semibold text-gray-900 truncate">{m.full_name}</p>
                       </div>
-                      <p className="text-xs text-gray-400 truncate pl-4">{m.email}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 shrink-0" />{/* spacer matches dot width */}
+                        <p className="text-xs text-gray-400 truncate">{m.email}</p>
+                      </div>
                       {m.role === 'parent' && m.child_name && (
-                        <p className="text-xs text-[#1D9E75] pl-4 mt-0.5">Child: {m.child_name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="w-2 h-2 shrink-0" />
+                          <p className="text-xs text-[#1D9E75]">Child: {m.child_name}</p>
+                        </div>
                       )}
                     </div>
                     <RoleBadge role={m.role} />
