@@ -69,30 +69,30 @@ export default function ProgramSelector() {
   })
 
   if (loading) return (
-    <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
-      <p className="text-st-green font-bold text-lg tracking-wide">Loading...</p>
+    <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
+      <p className="text-[#064029] font-bold text-lg tracking-wide">Loading...</p>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-st-offwhite flex flex-col">
+    <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
       <NavBar role={user?.role} />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-10 py-10">
         <div className="mb-8">
-          <p className="text-xs font-bold uppercase tracking-widest text-st-accent mb-1">Welcome back</p>
-          <h1 className="font-display text-4xl lg:text-5xl text-st-phantom tracking-widest">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Welcome back</p>
+          <h1 className="font-display text-4xl lg:text-5xl text-gray-900 tracking-widest">
             {user?.full_name?.split(' ')[0]?.toUpperCase() || 'PROGRAMS'}
           </h1>
-          <p className="text-st-graphite text-sm font-medium mt-1.5">
+          <p className="text-gray-500 text-sm font-medium mt-1.5">
             Select a program to view and book upcoming sessions.
           </p>
         </div>
 
         {visiblePrograms.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-st-cloud">
-            <p className="font-display text-2xl text-st-green tracking-widest">NO PROGRAMS AVAILABLE</p>
-            <p className="text-st-graphite text-sm mt-2">Check back soon.</p>
+          <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
+            <p className="font-display text-2xl text-[#064029] tracking-widest">NO PROGRAMS AVAILABLE</p>
+            <p className="text-gray-500 text-sm mt-2">Check back soon.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -107,30 +107,30 @@ export default function ProgramSelector() {
                   key={program.id}
                   onClick={() => !isDisabled && navigate(`/book/${program.slug}`)}
                   disabled={isDisabled}
-                  className={`group bg-white rounded-2xl border border-st-cloud text-left overflow-hidden transition-all duration-200
+                  className={`group bg-white rounded-2xl border border-gray-100 text-left overflow-hidden transition-all duration-200
                     ${isDisabled ? 'opacity-60 cursor-default' : 'hover:border-st-green hover:shadow-lg cursor-pointer'}
                   `}
                 >
                   <div className={`h-0.5 bg-st-green transition-transform duration-300 origin-left ${isDisabled ? 'scale-x-0' : 'scale-x-0 group-hover:scale-x-100'}`} />
                   <div className="p-7">
                     <div className="flex items-center justify-between mb-5">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-st-accent bg-st-light px-3 py-1 rounded-full">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-3 py-1 rounded-full">
                         {PROGRAM_TAG[program.slug] || 'Program'}
                       </span>
-                      <span className={`text-st-cloud text-xl font-light transition-colors ${!isDisabled ? 'group-hover:text-st-green' : ''}`}>→</span>
+                      <span className={`text-st-cloud text-xl font-light transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>→</span>
                     </div>
-                    <h2 className={`font-display text-3xl text-st-phantom tracking-widest leading-none mb-3 transition-colors ${!isDisabled ? 'group-hover:text-st-green' : ''}`}>
+                    <h2 className={`font-display text-3xl text-gray-900 tracking-widest leading-none mb-3 transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>
                       {program.name.toUpperCase()}
                     </h2>
-                    <p className="text-st-graphite text-sm font-medium leading-relaxed mb-4">
+                    <p className="text-gray-500 text-sm font-medium leading-relaxed mb-4">
                       {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
                     </p>
 
                     {/* Status message */}
                     {isUpcoming && (
-                      <div className="bg-st-light border border-st-green/20 rounded-lg px-4 py-2.5 mb-4">
-                        <p className="text-xs font-bold uppercase tracking-widest text-st-green mb-0.5">Coming Soon</p>
-                        <p className="text-sm font-semibold text-st-phantom">
+                      <div className="bg-[#E1F5EE] border border-st-green/20 rounded-lg px-4 py-2.5 mb-4">
+                        <p className="text-xs font-bold uppercase tracking-widest text-[#064029] mb-0.5">Coming Soon</p>
+                        <p className="text-sm font-semibold text-gray-900">
                           Sessions begin {formatStartDate(program.start_date)}
                         </p>
                       </div>
@@ -142,12 +142,12 @@ export default function ProgramSelector() {
                       </div>
                     )}
 
-                    <div className="pt-5 border-t border-st-cloud flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-bold text-st-graphite uppercase tracking-widest">
+                    <div className="pt-5 border-t border-gray-100 flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                         {PROGRAM_SCHEDULE[program.slug] || ''}
                       </p>
                       {program.price_display && (
-                        <span className="text-sm font-bold text-st-green shrink-0">{program.price_display}</span>
+                        <span className="text-sm font-bold text-[#064029] shrink-0">{program.price_display}</span>
                       )}
                     </div>
                   </div>
