@@ -5,7 +5,6 @@ import { api } from '../../lib/api'
 import TypeaheadSelect from '../../components/TypeaheadSelect'
 
 const ROLES = ['admin', 'instructor', 'parent', 'student']
-const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
@@ -180,7 +179,7 @@ function ConfirmDeleteModal({ member, onClose, onConfirm, loading }) {
             </div>
           </div>
           <p className="text-sm text-gray-600 leading-relaxed">
-            This will permanently delete their Clerk account and all associated data from the platform. This action cannot be undone.
+            This will permanently delete their Clerk account and all associated data. This action cannot be undone.
           </p>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
@@ -200,7 +199,7 @@ function ConfirmDeleteModal({ member, onClose, onConfirm, loading }) {
   )
 }
 
-// ─── Password Reset Toast ─────────────────────────────────────────────────────
+// ─── Password Reset Modal ─────────────────────────────────────────────────────
 function ResetLinkModal({ link, onClose }) {
   const [copied, setCopied] = useState(false)
 
@@ -236,36 +235,28 @@ function ResetLinkModal({ link, onClose }) {
   )
 }
 
-// ─── Assign Instructor Modal (for a student) ──────────────────────────────────
+// ─── Assign Instructor Modal ──────────────────────────────────────────────────
 function AssignInstructorModal({ student, currentAssignments, allInstructors, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const assignedIds = new Set(currentAssignments.map(a => a.instructor_record_id))
 
   async function assign(instrId) {
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
       await api.post(`/admin/members/${student.id}/assign-instructor`, { instructor_id: instrId })
       onSuccess()
-    } catch (e) {
-      setError(e.message || 'Failed to assign')
-    } finally {
-      setLoading(false)
-    }
+    } catch (e) { setError(e.message || 'Failed to assign') }
+    finally { setLoading(false) }
   }
 
   async function unassign(instrId) {
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
       await api.delete(`/admin/members/${student.id}/assign-instructor/${instrId}`)
       onSuccess()
-    } catch (e) {
-      setError(e.message || 'Failed to remove')
-    } finally {
-      setLoading(false)
-    }
+    } catch (e) { setError(e.message || 'Failed to remove') }
+    finally { setLoading(false) }
   }
 
   return (
@@ -344,21 +335,11 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
   const [toast, setToast] = useState('')
   const navigate = useNavigate()
 
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
-  }
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
   useEffect(() => {
     api.get(`/admin/members/${member.id}/bookings`).then(d => setBookings(d.bookings || []))
-
-    if (member.role === 'student' || member.role === 'parent') {
-      // Fetch assigned instructors for this student
-      // We piggyback on the instructor-students route in reverse — need to query from student side
-      // For now we fetch all and filter — will add a dedicated route if needed
-      fetchAssignedInstructors()
-    }
-
+    if (member.role === 'student' || member.role === 'parent') fetchAssignedInstructors()
     if (member.role === 'instructor') {
       api.get(`/admin/members/${member.id}/instructor-students`).then(d => setAssignedStudents(d.students || []))
     }
@@ -375,28 +356,18 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
     setSaving(true)
     try {
       await api.put(`/admin/members/${member.id}`, form)
-      onRefresh()
-      setEditing(false)
-      showToast('Saved')
-    } catch (e) {
-      showToast(e.message || 'Save failed')
-    } finally {
-      setSaving(false)
-    }
+      onRefresh(); setEditing(false); showToast('Saved')
+    } catch (e) { showToast(e.message || 'Save failed') }
+    finally { setSaving(false) }
   }
 
   async function handleDelete() {
     setDeleting(true)
     try {
       await api.delete(`/admin/members/${member.id}`)
-      navigate('/admin/members')
-      onRefresh()
-      onClose()
-    } catch (e) {
-      showToast(e.message || 'Delete failed')
-    } finally {
-      setDeleting(false)
-    }
+      navigate('/admin/members'); onRefresh(); onClose()
+    } catch (e) { showToast(e.message || 'Delete failed') }
+    finally { setDeleting(false) }
   }
 
   async function handleResetPassword() {
@@ -404,18 +375,14 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
     try {
       const data = await api.post(`/admin/members/${member.id}/reset-password`, {})
       setResetLink(data.reset_link)
-    } catch (e) {
-      showToast(e.message || 'Reset failed')
-    } finally {
-      setResetting(false)
-    }
+    } catch (e) { showToast(e.message || 'Reset failed') }
+    finally { setResetting(false) }
   }
 
   const isPending = member.clerk_id?.startsWith('pending_')
 
   return (
     <div className="flex flex-col h-full">
-      {/* Toast */}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#064029] text-white text-sm font-semibold px-6 py-3 rounded-xl shadow-2xl flex items-center gap-2">
           <svg className="w-4 h-4 text-[#1D9E75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -425,14 +392,8 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
         </div>
       )}
 
-      {/* Modals */}
       {showDelete && (
-        <ConfirmDeleteModal
-          member={member}
-          onClose={() => setShowDelete(false)}
-          onConfirm={handleDelete}
-          loading={deleting}
-        />
+        <ConfirmDeleteModal member={member} onClose={() => setShowDelete(false)} onConfirm={handleDelete} loading={deleting} />
       )}
       {resetLink && (
         <ResetLinkModal link={resetLink} onClose={() => setResetLink(null)} />
@@ -443,11 +404,7 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
           currentAssignments={assignedInstructors}
           allInstructors={allInstructors}
           onClose={() => setShowAssignInstructor(false)}
-          onSuccess={() => {
-            fetchAssignedInstructors()
-            setShowAssignInstructor(false)
-            showToast('Instructor assignment updated')
-          }}
+          onSuccess={() => { fetchAssignedInstructors(); setShowAssignInstructor(false); showToast('Instructor assignment updated') }}
         />
       )}
 
@@ -471,7 +428,7 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none mt-1">&times;</button>
       </div>
 
-      {/* Body — scrollable */}
+      {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
 
         {/* Account Actions */}
@@ -692,7 +649,6 @@ export default function AdminMembers() {
   }, [search, statusFilter])
 
   useEffect(() => { fetchMembers() }, [fetchMembers])
-
   useEffect(() => {
     api.get('/admin/instructors').then(d => setAllInstructors(d.instructors || []))
   }, [])
@@ -708,35 +664,43 @@ export default function AdminMembers() {
         />
       )}
 
-      <div className="flex h-[calc(100vh-64px)]">
+      {/* ── White Header Zone ── */}
+      <div className="bg-white border-b border-gray-100 px-6 lg:px-10 py-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Admin</p>
+            <h1 className="font-display text-2xl text-[#064029] tracking-wide">MEMBERS</h1>
+            <p className="text-sm text-gray-400 mt-1">Manage accounts, roles, and instructor assignments</p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-xl hover:bg-[#085041] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Member
+          </button>
+        </div>
+      </div>
+
+      {/* ── Split Panel Body ── */}
+      <div className="flex" style={{ height: 'calc(100vh - 64px - 97px)' }}>
+
         {/* Left — Member List */}
         <div className={`flex flex-col border-r border-gray-100 bg-white transition-all ${selectedMember ? 'w-80 min-w-[280px] hidden md:flex' : 'flex-1'}`}>
 
-          {/* Toolbar */}
+          {/* Search + Filters */}
           <div className="px-6 py-4 border-b border-gray-100 space-y-3">
-            <div className="flex items-center justify-between">
-              <h1 className="font-display text-2xl text-[#064029] tracking-wide">MEMBERS</h1>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Member
-              </button>
-            </div>
-
             <input
               type="text"
               placeholder="Search by name or email…"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
 
-            <div className="flex gap-2">
-              {/* Role filter pills */}
+            <div className="flex gap-2 flex-wrap">
               {['all', ...ROLES].map(r => (
                 <button
                   key={r}
@@ -793,7 +757,7 @@ export default function AdminMembers() {
                         <p className="text-sm font-semibold text-gray-900 truncate">{m.full_name}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 shrink-0" />{/* spacer matches dot width */}
+                        <span className="w-2 h-2 shrink-0" />
                         <p className="text-xs text-gray-400 truncate">{m.email}</p>
                       </div>
                       {m.role === 'parent' && m.child_name && (
@@ -827,7 +791,7 @@ export default function AdminMembers() {
             />
           </div>
         ) : (
-          <div className="hidden md:flex flex-1 items-center justify-center text-gray-400">
+          <div className="hidden md:flex flex-1 items-center justify-center text-gray-400 bg-[#F9FAFB]">
             <div className="text-center">
               <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
