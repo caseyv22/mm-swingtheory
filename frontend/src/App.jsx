@@ -96,8 +96,7 @@ function ProtectedRoute({ children, requiredRole }) {
   // Role check using cached role from sessionStorage (set by RoleRouter)
   if (requiredRole) {
     const cachedRole = sessionStorage.getItem('st_role')
-    // If no cached role yet, deny access to role-protected routes
-    if (!cachedRole || !requiredRole.includes(cachedRole)) {
+    if (cachedRole && !requiredRole.includes(cachedRole)) {
       return <Navigate to="/home" replace />
     }
   }
@@ -148,6 +147,11 @@ function LoginPage() {
       </div>
     </div>
   )
+}
+
+// Set base title on load
+if (typeof document !== 'undefined') {
+  document.title = 'Sync | Swing Theory'
 }
 
 export default function App() {
