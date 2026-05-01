@@ -17,7 +17,6 @@ import InstructorStudentProfile from './pages/instructor/InstructorStudentProfil
 import InstructorLessonDetail from './pages/instructor/InstructorLessonDetail.jsx'
 import InstructorSchedule from './pages/instructor/InstructorSchedule.jsx'
 
-// RoleRouter is only used at / and /home to redirect on first load
 function RoleRouter() {
   const { getToken, isLoaded } = useAuth()
   const [status, setStatus] = useState('loading')
@@ -70,13 +69,13 @@ function RoleRouter() {
     </div>
   )
 
-  // Redirect to the correct destination — never back to /home
+  // Each role routes to a distinct destination — never back to /home
   if (role === 'parent' && firstLogin) return <Navigate to="/account?onboarding=true" replace />
-  if (role === 'parent') return <Navigate to="/parent-home" replace />
-  if (role === 'student') return <Navigate to="/parent-home" replace />
+  if (role === 'parent') return <Navigate to="/programs" replace />
+  if (role === 'student') return <Navigate to="/programs" replace />
   if (role === 'instructor') return <Navigate to="/instructor/sessions" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
-  return <Navigate to="/parent-home" replace />
+  return <Navigate to="/programs" replace />
 }
 
 function ProtectedRoute({ children, requiredRole }) {
@@ -96,7 +95,7 @@ function ProtectedRoute({ children, requiredRole }) {
   if (requiredRole) {
     const cachedRole = sessionStorage.getItem('st_role')
     if (cachedRole && !requiredRole.includes(cachedRole)) {
-      return <Navigate to="/parent-home" replace />
+      return <Navigate to="/programs" replace />
     }
   }
 
@@ -146,21 +145,21 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/*" element={<LoginPage />} />
 
-        {/* / and /home = role detection redirect only */}
+        {/* / and /home trigger role detection and redirect */}
         <Route path="/" element={<ProtectedRoute><RoleRouter /></ProtectedRoute>} />
         <Route path="/home" element={<ProtectedRoute><RoleRouter /></ProtectedRoute>} />
 
-        {/* Parent/student landing page — direct render, no redirect loop */}
-        <Route path="/parent-home" element={<ProtectedRoute><ParentHome /></ProtectedRoute>} />
+        {/* Parent-home kept as legacy redirect */}
+        <Route path="/parent-home" element={<Navigate to="/programs" replace />} />
+
+        {/* Program selector — student sees student programs, parent sees all */}
+        <Route path="/programs" element={<ProtectedRoute><ProgramSelector /></ProtectedRoute>} />
 
         <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
         <Route path="/child-info" element={<Navigate to="/account?onboarding=true" replace />} />
 
         <Route path="/book/:slug" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
         <Route path="/my-bookings" element={<ProtectedRoute><MyBookingsPage /></ProtectedRoute>} />
-
-        {/* Programs kept for legacy links */}
-        <Route path="/programs" element={<ProtectedRoute><ProgramSelector /></ProtectedRoute>} />
 
         {/* Instructor routes */}
         <Route path="/instructor" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSessions /></ProtectedRoute>} />
