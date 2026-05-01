@@ -497,8 +497,17 @@ app.post('/admin/sessions', requireAdmin, async (c) => {
     return c.json({ error: `Date is after the program end date (${program.end_date})` }, 400)
   }
 
+  // Validate day of week matches program schedule
+  const dayNames2 = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  const sessionDay = dayNames2[new Date(date + 'T12:00:00').getDay()]
+  const programDays = (program.session_days || '').split(',').map(d => d.trim().toLowerCase())
+  if (!programDays.includes(sessionDay)) {
+    const formatted = programDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ')
+    return c.json({ error: `${program.name} only runs on: ${formatted}. ${date} is a ${sessionDay.charAt(0).toUpperCase() + sessionDay.slice(1)}.` }, 400)
+  }
+
   const id = 'sess_' + uid()
-  const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
+  const dayOfWeek = sessionDay
 
   await c.env.DB.prepare(`
     INSERT INTO sessions (id, program_id, instructor_id, bay, date, day_of_week, start_time, end_time, capacity, notes)
@@ -1427,31 +1436,40 @@ export default {
 }
 
 async function generateSessionsForProgram(program, env) {
-  const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = new Date().toISOString().split('T')[0]
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
-  if (program.start_date && todayStr < program.start_date) return 0
+  // Don't generate if program has already ended
   if (program.end_date && todayStr > program.end_date) return 0
 
   const days = (program.session_days || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
-  // Generate further ahead than the booking window so sessions exist before they're visible
   const weeksAhead = Math.max(program.forward_view_weeks || 2, 8)
   let count = 0
+
+  // Start from today or program start_date, whichever is later
+  const startFrom = program.start_date && program.start_date > todayStr ? program.start_date : todayStr
+  const startDate = new Date(startFrom + 'T12:00:00')
 
   for (let w = 0; w <= weeksAhead; w++) {
     for (const dayName of days) {
       const targetDayIndex = dayNames.indexOf(dayName)
       if (targetDayIndex === -1) continue
 
-      const date = new Date(today)
-      const currentDay = date.getDay()
-      let diff = targetDayIndex - currentDay + (w * 7)
-      if (diff < 0) diff += 7
-      date.setDate(today.getDate() + diff)
-      const dateStr = date.toISOString().split('T')[0]
+      // Find the correct date for this day in week w, starting from startDate's week
+      const weekBase = new Date(startDate)
+      // Go to Monday of startDate's week
+      const startDayOfWeek = weekBase.getDay()
+      const mondayOffset = startDayOfWeek === 0 ? -6 : 1 - startDayOfWeek
+      weekBase.setDate(weekBase.getDate() + mondayOffset + (w * 7))
+      // Now advance to the target day (Mon=1, Tue=2... Sun=0 → 7)
+      const adjustedTarget = targetDayIndex === 0 ? 7 : targetDayIndex
+      weekBase.setDate(weekBase.getDate() + adjustedTarget - 1)
 
-      if (program.start_date && dateStr < program.start_date) continue
+      const dateStr = weekBase.toISOString().split('T')[0]
+
+      // Skip if before our start point
+      if (dateStr < startFrom) continue
+      // Skip if after program end date
       if (program.end_date && dateStr > program.end_date) continue
 
       const existing = await env.DB.prepare(
