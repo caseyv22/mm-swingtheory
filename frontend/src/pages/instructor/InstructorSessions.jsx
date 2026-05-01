@@ -250,7 +250,7 @@ export default function InstructorSessions() {
       <div className="bg-white border-b border-gray-100">
         <div className="max-w-2xl mx-auto px-4 py-5">
           <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Instructor</p>
-          <h1 className="font-display text-2xl text-[#064029] tracking-wide">MY CLASSES</h1>
+          <h1 className="font-display text-2xl text-[#064029] tracking-wide">MY PROGRAMS</h1>
           <p className="text-sm text-gray-400 mt-1">{upcomingCount} upcoming · {pastCount} past</p>
         </div>
       </div>
@@ -282,7 +282,7 @@ export default function InstructorSessions() {
           <div className="text-center py-16 text-sm text-gray-400">Loading sessions…</div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-gray-300 text-sm italic">No {filter} sessions</p>
+            <p className="text-gray-300 text-sm italic">No {filter} programs assigned</p>
           </div>
         ) : (
           <div className="space-y-3">
