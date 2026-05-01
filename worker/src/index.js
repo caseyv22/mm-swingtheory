@@ -1089,20 +1089,23 @@ app.post('/admin/programs/:id/trim-sessions', requireAdmin, async (c) => {
         "UPDATE sessions SET is_cancelled = 1, cancel_reason = 'Program end date updated' WHERE id = ?"
       ).bind(session.id).run()
 
-      // Cancel all confirmed bookings
+      // Collect bookings BEFORE cancelling so we can email them
+      const bookedUsersResult = await c.env.DB.prepare(`
+        SELECT b.*, u.email, u.full_name, u.role, ch.first_name as child_name
+        FROM bookings b
+        JOIN users u ON b.user_id = u.id
+        LEFT JOIN children ch ON b.child_id = ch.id
+        WHERE b.session_id = ? AND b.status = 'confirmed'
+      `).bind(session.id).all()
+
+      // Now cancel all confirmed bookings
       await c.env.DB.prepare(
         "UPDATE bookings SET status = 'cancelled', cancelled_at = datetime('now') WHERE session_id = ? AND status = 'confirmed'"
       ).bind(session.id).run()
 
-      // Send cancellation emails to booked users
+      // Send cancellation emails
       try {
-        const bookedUsers = await c.env.DB.prepare(`
-          SELECT b.*, u.email, u.full_name, u.role, ch.first_name as child_name
-          FROM bookings b
-          JOIN users u ON b.user_id = u.id
-          LEFT JOIN children ch ON b.child_id = ch.id
-          WHERE b.session_id = ? AND b.status = 'cancelled' AND b.cancelled_at >= datetime('now', '-5 seconds')
-        `).bind(session.id).all()
+        const bookedUsers = bookedUsersResult
 
         for (const booking of bookedUsers.results) {
           const { subject, html } = sessionCancelledEmail({
@@ -1206,14 +1209,21 @@ app.get('/instructor/sessions', requireInstructor, async (c) => {
   if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
 
   const sessions = await c.env.DB.prepare(`
-    SELECT s.*,
+    SELECT DISTINCT s.*,
       p.name as program_name,
       (SELECT COUNT(*) FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed') as booked_count
     FROM sessions s
     JOIN programs p ON s.program_id = p.id
-    WHERE s.instructor_id = ? AND s.date >= date('now')
+    WHERE s.date >= date('now')
+      AND s.is_cancelled = 0
+      AND (
+        s.instructor_id = ?
+        OR EXISTS (
+          SELECT 1 FROM session_instructors si WHERE si.session_id = s.id AND si.instructor_id = ?
+        )
+      )
     ORDER BY s.date ASC
-  `).bind(instr.id).all()
+  `).bind(instr.id, instr.id).all()
 
   return c.json({ sessions: sessions.results })
 })
