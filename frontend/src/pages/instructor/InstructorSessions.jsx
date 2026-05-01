@@ -236,7 +236,7 @@ export default function InstructorSessions() {
   const pastCount = sessions.filter(s => isPast(s.date)).length
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB]">
+    <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
       <NavBar role="instructor" />
 
       {selectedSession && (
@@ -246,16 +246,16 @@ export default function InstructorSessions() {
         />
       )}
 
-      <div className="max-w-2xl mx-auto px-4 py-8">
-
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="font-display text-3xl text-[#064029] tracking-wide">MY SESSIONS</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {upcomingCount} upcoming · {pastCount} past
-          </p>
+      {/* White header zone */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-2xl mx-auto px-4 py-5">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Instructor</p>
+          <h1 className="font-display text-2xl text-[#064029] tracking-wide">MY CLASSES</h1>
+          <p className="text-sm text-gray-400 mt-1">{upcomingCount} upcoming · {pastCount} past</p>
         </div>
+      </div>
 
+      <div className="max-w-2xl mx-auto px-4 py-5">
         {/* Filter tabs */}
         <div className="flex gap-2 mb-6">
           {[
