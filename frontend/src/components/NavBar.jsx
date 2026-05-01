@@ -48,9 +48,9 @@ export default function NavBar({ role = 'student' }) {
           className="flex items-center gap-3 shrink-0"
         >
           <img src="/STEmblem.svg" alt="Swing Theory" width={30} height={17} className="brightness-0 invert" />
-          <div className="flex items-baseline gap-2">
-            <span className="font-display text-lg text-white tracking-widest leading-none">SWING THEORY</span>
-            <span className="text-white/40 text-[10px] font-bold tracking-widest uppercase hidden sm:inline">Pasadena</span>
+          <div className="flex flex-col">
+            <span className="font-display text-lg text-white tracking-widest leading-none">SYNC</span>
+            <span className="text-white/50 text-[9px] font-bold tracking-widest uppercase leading-none">Powered by Swing Theory</span>
           </div>
         </button>
 
