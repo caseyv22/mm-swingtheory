@@ -193,9 +193,7 @@ function CreateProgramModal({ onClose, onSuccess }) {
 }
 
 // ─── Program Settings Editor ──────────────────────────────────────────────────
-function ProgramEditor({ program, onSave }) {
-  const [toast, setToast] = useState('')
-  function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
+function ProgramEditor({ program, onSave, showToast }) {
   const [form, setForm] = useState({
     name: program.name, description: program.description || '',
     session_days: program.session_days || '', start_time: program.start_time, end_time: program.end_time,
@@ -229,18 +227,16 @@ function ProgramEditor({ program, onSave }) {
         start_date: form.start_date || null,
         end_date: form.end_date || null,
       })
-      setSaved(true); setTimeout(() => setSaved(false), 2000); onSave(); showToast('Program saved successfully')
+      setSaved(true); setTimeout(() => setSaved(false), 2000)
+      // Auto-generate sessions based on updated program settings
+      try { await api.post(`/admin/programs/${program.id}/generate-sessions`, {}) } catch (e) { console.error('Session gen failed', e) }
+      onSave()
+      showToast('Program saved — sessions updated')
     } catch (e) { console.error(e) } finally { setSaving(false) }
   }
 
   return (
     <div className="border-t border-gray-100 px-6 py-5 space-y-5 bg-gray-50 relative">
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#064029] text-white text-sm font-semibold px-6 py-3 rounded-xl shadow-2xl flex items-center gap-2">
-          <svg className="w-4 h-4 text-[#1D9E75]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-          {toast}
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Name</label>
@@ -324,6 +320,8 @@ export default function AdminPrograms() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [toast, setToast] = useState('')
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
   async function fetchPrograms() {
     setLoading(true)
@@ -336,7 +334,13 @@ export default function AdminPrograms() {
   return (
     <AdminLayout>
       {showCreate && (
-        <CreateProgramModal onClose={() => setShowCreate(false)} onSuccess={() => { setShowCreate(false); fetchPrograms() }} />
+        <CreateProgramModal onClose={() => setShowCreate(false)} onSuccess={() => { setShowCreate(false); fetchPrograms(); showToast('Program created successfully') }} />
+      )}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#064029] text-white text-sm font-semibold px-6 py-3 rounded-xl shadow-2xl flex items-center gap-2">
+          <svg className="w-4 h-4 text-[#1D9E75]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+          {toast}
+        </div>
       )}
 
       {/* Gray page background */}
@@ -403,7 +407,7 @@ export default function AdminPrograms() {
                         </svg>
                       </div>
                     </button>
-                    {expanded === p.id && <ProgramEditor program={p} onSave={fetchPrograms} />}
+                    {expanded === p.id && <ProgramEditor program={p} onSave={fetchPrograms} showToast={showToast} />}
                   </div>
                 ))}
               </div>
