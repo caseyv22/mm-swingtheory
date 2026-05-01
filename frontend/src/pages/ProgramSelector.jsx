@@ -78,16 +78,17 @@ export default function ProgramSelector() {
     <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
       <NavBar role={user?.role} />
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-10 py-10">
-        <div className="mb-8">
+      {/* White header zone */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-2xl mx-auto px-4 py-5">
           <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Welcome back</p>
-          <h1 className="font-display text-4xl lg:text-5xl text-gray-900 tracking-widest">
+          <h1 className="font-display text-2xl text-[#064029] tracking-wide">
             {user?.full_name?.split(' ')[0]?.toUpperCase() || 'PROGRAMS'}
           </h1>
-          <p className="text-gray-500 text-sm font-medium mt-1.5">
-            Select a program to view and book upcoming sessions.
-          </p>
+          <p className="text-sm text-gray-400 mt-1">Select a program to view and book upcoming sessions.</p>
         </div>
+      </div>
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-5">
 
         {visiblePrograms.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
@@ -95,7 +96,7 @@ export default function ProgramSelector() {
             <p className="text-gray-500 text-sm mt-2">Check back soon.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="space-y-3">
             {visiblePrograms.map(program => {
               const status = getProgramStatus(program)
               const isUpcoming = status === 'upcoming'
