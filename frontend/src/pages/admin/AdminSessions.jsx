@@ -259,7 +259,6 @@ function RosterPanel({ session, onClose, onUpdate }) {
     <div className="flex flex-col h-full bg-white border-r border-gray-100">
       {toast && <div className="absolute top-4 left-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">{toast}</div>}
 
-      {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100">
         <div className="flex items-start justify-between">
           <div>
@@ -277,21 +276,16 @@ function RosterPanel({ session, onClose, onUpdate }) {
         )}
       </div>
 
-      {/* Body */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-
-        {/* ── Instructors ── */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Instructors</p>
             {!addingInstructor && availableInstructors.length > 0 && (
-              <button onClick={() => setAddingInstructor(true)}
-                className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">
+              <button onClick={() => setAddingInstructor(true)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">
                 + Add Instructor
               </button>
             )}
           </div>
-
           {assignedInstructors.length === 0 && !addingInstructor && (
             <p className="text-xs text-gray-400 italic">No instructors assigned</p>
           )}
@@ -303,13 +297,10 @@ function RosterPanel({ session, onClose, onUpdate }) {
                   <p className="text-xs text-gray-500">{i.email}</p>
                 </div>
                 <button onClick={() => handleRemoveInstructor(i.instructor_id)}
-                  className="text-xs font-semibold text-red-400 hover:text-red-600">
-                  Remove
-                </button>
+                  className="text-xs font-semibold text-red-400 hover:text-red-600">Remove</button>
               </div>
             ))}
           </div>
-
           {addingInstructor && (
             <div className="mt-2 space-y-2">
               <TypeaheadSelect
@@ -320,45 +311,36 @@ function RosterPanel({ session, onClose, onUpdate }) {
               />
               <div className="flex gap-2">
                 <button onClick={() => { setAddingInstructor(false); setNewInstructorId('') }}
-                  className="flex-1 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
-                  Cancel
-                </button>
+                  className="flex-1 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
                 <button onClick={handleAddInstructor} disabled={!newInstructorId}
-                  className="flex-1 py-2 text-sm font-semibold text-white bg-[#064029] rounded-lg hover:bg-[#085041] disabled:opacity-40 transition-colors">
-                  Add
-                </button>
+                  className="flex-1 py-2 text-sm font-semibold text-white bg-[#064029] rounded-lg hover:bg-[#085041] disabled:opacity-40 transition-colors">Add</button>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── Capacity + Bay ── */}
         <div>
           <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Capacity</p>
           <input type="number" min="1" max="50"
             className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
             value={capacity} onChange={e => setCapacity(e.target.value)} />
         </div>
+
         <div>
           <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Bays</p>
           <div className="flex flex-wrap gap-1.5">
             {BAYS.map(b => {
               const selected = bay.split(',').map(x => x.trim()).filter(Boolean).includes(b)
               return (
-                <button
-                  key={b}
-                  type="button"
+                <button key={b} type="button"
                   onClick={() => {
                     const current = bay.split(',').map(x => x.trim()).filter(Boolean)
                     const updated = selected ? current.filter(x => x !== b) : [...current, b]
                     setBay(updated.join(', '))
                   }}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
-                    selected
-                      ? 'bg-[#064029] text-white border-[#064029]'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-[#1D9E75] hover:text-[#1D9E75]'
-                  }`}
-                >
+                    selected ? 'bg-[#064029] text-white border-[#064029]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#1D9E75] hover:text-[#1D9E75]'
+                  }`}>
                   {b}
                 </button>
               )
@@ -372,7 +354,6 @@ function RosterPanel({ session, onClose, onUpdate }) {
           {saving ? 'Saving…' : 'Save Session Settings'}
         </button>
 
-        {/* ── Cancel / Restore ── */}
         {!session.is_cancelled ? (
           !showCancelForm ? (
             <button onClick={() => setShowCancelForm(true)}
@@ -398,7 +379,6 @@ function RosterPanel({ session, onClose, onUpdate }) {
           </button>
         )}
 
-        {/* ── Roster ── */}
         <div>
           <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-3">
             Roster {roster && `(${roster.bookings?.length || 0}/${session.capacity})`}
@@ -574,123 +554,120 @@ export default function AdminSessions() {
         />
       )}
 
-      {/* ── White Header Zone ── */}
-      <div className="bg-white border-b border-gray-100 px-6 lg:px-10 py-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Admin</p>
-            <h1 className="font-display text-2xl text-[#064029] tracking-wide">SESSIONS</h1>
-            <p className="text-sm text-gray-400 mt-1">Manage sessions, rosters, and check-ins</p>
-          </div>
-          <button
-            onClick={() => { setCreatePrefilledDate(null); setShowCreateModal(true) }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-xl hover:bg-[#085041] transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Create Session
-          </button>
-        </div>
-      </div>
+      {/* Gray page background */}
+      <div className="bg-[#F9FAFB] p-6 h-[calc(100vh-64px)] flex min-h-0">
 
-      {/* ── Three-Panel Body ── */}
-      <div className="flex" style={{ height: 'calc(100vh - 64px - 97px)' }}>
+        {/* Single card containing all three panels */}
+        <div className="flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex min-h-0">
 
-        {/* LEFT: Roster Panel */}
-        {selectedSession && (
-          <div className="w-80 lg:w-96 min-w-[300px] flex-shrink-0 overflow-hidden">
-            <RosterPanel
-              session={selectedSession}
-              onClose={() => setSelectedSession(null)}
-              onUpdate={() => { fetchSessions(); setSelectedSession(null) }}
-            />
-          </div>
-        )}
-
-        {/* MIDDLE: Sessions List */}
-        <div className="flex flex-col flex-1 min-w-0 border-r border-gray-100 bg-[#F9FAFB] overflow-hidden">
-
-          {/* Metrics + Week Nav */}
-          <div className="bg-white border-b border-gray-100 px-6 py-4">
-            <div className="grid grid-cols-4 gap-3 mb-4">
-              <MetricCard label="Sessions" value={metrics.totalThisWeek} sub="this week" />
-              <MetricCard label="Booked" value={metrics.totalBooked} sub={`of ${metrics.totalCapacity} spots`} />
-              <MetricCard label="Upcoming" value={metrics.upcoming} sub="not cancelled" />
-              <MetricCard label="Fill Rate"
-                value={metrics.totalCapacity > 0 ? `${Math.round((metrics.totalBooked / metrics.totalCapacity) * 100)}%` : '—'}
-                sub="this week" />
+          {/* LEFT: Roster Panel */}
+          {selectedSession && (
+            <div className="w-80 lg:w-96 min-w-[300px] flex-shrink-0 overflow-hidden relative">
+              <RosterPanel
+                session={selectedSession}
+                onClose={() => setSelectedSession(null)}
+                onUpdate={() => { fetchSessions(); setSelectedSession(null) }}
+              />
             </div>
-            <div className="flex items-center gap-3">
-              <button onClick={() => setWeekStart(d => addDays(d, -7))}
-                className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">‹</button>
-              <span className="text-sm font-semibold text-gray-700 flex-1 text-center">
-                {new Date(isoDate(weekStart) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} — {new Date(isoDate(addDays(weekStart, 6)) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-              </span>
-              <button onClick={() => setWeekStart(d => addDays(d, 7))}
-                className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">›</button>
-              <button onClick={() => { setWeekStart(getWeekStart(new Date())); setSelectedDate(null) }}
-                className="px-3 py-1.5 text-xs font-semibold text-[#064029] bg-[#E1F5EE] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors">
-                Today
-              </button>
-              {selectedDate && (
-                <button onClick={() => setSelectedDate(null)} className="text-xs font-medium text-[#1D9E75] hover:text-[#064029]">
-                  ← Full week
+          )}
+
+          {/* MIDDLE: Sessions List */}
+          <div className="flex flex-col flex-1 min-w-0 border-r border-gray-100 overflow-hidden">
+            {/* Toolbar inside card */}
+            <div className="bg-white border-b border-gray-100 px-6 py-4">
+              <div className="flex items-center justify-between mb-4">
+                <h1 className="font-display text-2xl text-[#064029] tracking-wide">SESSIONS</h1>
+                <div className="flex items-center gap-2">
+                  {selectedDate && (
+                    <button onClick={() => setSelectedDate(null)} className="text-xs font-medium text-[#1D9E75] hover:text-[#064029]">
+                      ← Show full week
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setCreatePrefilledDate(null); setShowCreateModal(true) }}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create Session
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                <MetricCard label="Sessions" value={metrics.totalThisWeek} sub="this week" />
+                <MetricCard label="Booked" value={metrics.totalBooked} sub={`of ${metrics.totalCapacity} spots`} />
+                <MetricCard label="Upcoming" value={metrics.upcoming} sub="not cancelled" />
+                <MetricCard label="Fill Rate"
+                  value={metrics.totalCapacity > 0 ? `${Math.round((metrics.totalBooked / metrics.totalCapacity) * 100)}%` : '—'}
+                  sub="this week" />
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setWeekStart(d => addDays(d, -7))}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">‹</button>
+                <span className="text-sm font-semibold text-gray-700 flex-1 text-center">
+                  {new Date(isoDate(weekStart) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} — {new Date(isoDate(addDays(weekStart, 6)) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </span>
+                <button onClick={() => setWeekStart(d => addDays(d, 7))}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">›</button>
+                <button onClick={() => { setWeekStart(getWeekStart(new Date())); setSelectedDate(null) }}
+                  className="px-3 py-1.5 text-xs font-semibold text-[#064029] bg-[#E1F5EE] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors">
+                  Today
                 </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {loading ? (
+                <div className="text-center py-12 text-sm text-gray-400">Loading…</div>
+              ) : displayedSessions.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-sm text-gray-300 italic">{selectedDate ? 'No sessions on this date' : 'No sessions this week'}</p>
+                  <button onClick={() => { setCreatePrefilledDate(selectedDate || null); setShowCreateModal(true) }}
+                    className="mt-3 text-sm font-semibold text-[#1D9E75] hover:text-[#064029]">
+                    + Create a session
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {displayedSessions.map(s => (
+                    <SessionCard key={s.id} session={s} isSelected={selectedSession?.id === s.id}
+                      onClick={() => setSelectedSession(selectedSession?.id === s.id ? null : s)} />
+                  ))}
+                </div>
               )}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            {loading ? (
-              <div className="text-center py-12 text-sm text-gray-400">Loading…</div>
-            ) : displayedSessions.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-sm text-gray-300 italic">{selectedDate ? 'No sessions on this date' : 'No sessions this week'}</p>
-                <button onClick={() => { setCreatePrefilledDate(selectedDate || null); setShowCreateModal(true) }}
-                  className="mt-3 text-sm font-semibold text-[#1D9E75] hover:text-[#064029]">
-                  + Create a session
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {displayedSessions.map(s => (
-                  <SessionCard key={s.id} session={s} isSelected={selectedSession?.id === s.id}
-                    onClick={() => setSelectedSession(selectedSession?.id === s.id ? null : s)} />
-                ))}
+          {/* RIGHT: Mini Calendar */}
+          <div className="w-72 flex-shrink-0 bg-white border-l border-gray-100 px-5 py-5 overflow-y-auto">
+            <MiniCalendar
+              sessions={allSessions} selectedDate={selectedDate}
+              onSelectDate={handleCalendarDateSelect} currentMonth={calendarMonth}
+              onMonthChange={handleMonthChange} onCreateForDate={handleCreateForDate}
+            />
+            {selectedDate && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{formatDateShort(selectedDate)}</p>
+                  <button onClick={() => handleCreateForDate(selectedDate)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">+ New</button>
+                </div>
+                {allSessions.filter(s => s.date === selectedDate).length === 0 ? (
+                  <p className="text-xs text-gray-300 italic">No sessions</p>
+                ) : (
+                  allSessions.filter(s => s.date === selectedDate).map(s => (
+                    <div key={s.id} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                      <div>
+                        <p className="text-xs font-medium text-gray-700">{s.program_name}</p>
+                        <p className="text-xs text-gray-400">{formatTime(s.start_time)}</p>
+                      </div>
+                      <span className="text-xs text-gray-400">{s.booked_count}/{s.capacity}</span>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>
-        </div>
-
-        {/* RIGHT: Mini Calendar */}
-        <div className="w-72 flex-shrink-0 bg-white border-l border-gray-100 px-5 py-5 overflow-y-auto">
-          <MiniCalendar
-            sessions={allSessions} selectedDate={selectedDate}
-            onSelectDate={handleCalendarDateSelect} currentMonth={calendarMonth}
-            onMonthChange={handleMonthChange} onCreateForDate={handleCreateForDate}
-          />
-          {selectedDate && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{formatDateShort(selectedDate)}</p>
-                <button onClick={() => handleCreateForDate(selectedDate)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">+ New</button>
-              </div>
-              {allSessions.filter(s => s.date === selectedDate).length === 0 ? (
-                <p className="text-xs text-gray-300 italic">No sessions</p>
-              ) : (
-                allSessions.filter(s => s.date === selectedDate).map(s => (
-                  <div key={s.id} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
-                    <div>
-                      <p className="text-xs font-medium text-gray-700">{s.program_name}</p>
-                      <p className="text-xs text-gray-400">{formatTime(s.start_time)}</p>
-                    </div>
-                    <span className="text-xs text-gray-400">{s.booked_count}/{s.capacity}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
         </div>
       </div>
     </AdminLayout>
