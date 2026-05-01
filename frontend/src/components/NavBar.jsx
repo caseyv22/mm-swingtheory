@@ -15,7 +15,7 @@ const STUDENT_LINKS = [
 ]
 
 const INSTRUCTOR_LINKS = [
-  { label: 'Classes', href: '/instructor/sessions' },
+  { label: 'Programs', href: '/instructor/sessions' },
   { label: 'Students', href: '/instructor/students' },
   { label: 'Calendar', href: '/instructor/schedule' },
   { label: 'Account', href: '/account' },
@@ -38,29 +38,20 @@ export default function NavBar({ role = 'student' }) {
     return location.pathname === href || location.pathname.startsWith(href + '/')
   }
 
-  const isAdmin = role === 'admin'
-
   return (
     <header className="bg-st-green border-b border-white/10 shrink-0 relative z-50">
       <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
 
-        {/* Logo — SYNC for admin, Swing Theory for everyone else */}
+        {/* Logo */}
         <button
-          onClick={() => navigate(isAdmin ? '/admin' : '/home')}
+          onClick={() => navigate(role === 'admin' ? '/admin' : '/home')}
           className="flex items-center gap-3 shrink-0"
         >
           <img src="/STEmblem.svg" alt="Swing Theory" width={30} height={17} className="brightness-0 invert" />
-          {isAdmin ? (
-            <div className="flex flex-col">
-              <span className="font-display text-lg text-white tracking-widest leading-none">SYNC</span>
-              <span className="text-white/50 text-[9px] font-bold tracking-widest uppercase leading-none">Powered by Swing Theory</span>
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              <span className="font-display text-lg text-white tracking-widest leading-none">SWING THEORY</span>
-              <span className="text-white/50 text-[9px] font-bold tracking-widest uppercase leading-none">Pasadena</span>
-            </div>
-          )}
+          <div className="flex flex-col">
+            <span className="font-display text-lg text-white tracking-widest leading-none">SYNC</span>
+            <span className="text-white/50 text-[9px] font-bold tracking-widest uppercase leading-none">Powered by Swing Theory</span>
+          </div>
         </button>
 
         {/* Desktop nav links */}
@@ -85,6 +76,8 @@ export default function NavBar({ role = 'student' }) {
           <div className="hidden md:block">
             <UserButton afterSignOutUrl="/login" />
           </div>
+
+          {/* Mobile hamburger */}
           <button
             onClick={() => setMenuOpen(o => !o)}
             className="md:hidden flex flex-col items-center justify-center w-9 h-9 gap-1.5 rounded-lg hover:bg-white/10 transition-colors"
@@ -97,7 +90,7 @@ export default function NavBar({ role = 'student' }) {
         </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile menu dropdown */}
       {menuOpen && (
         <div className="md:hidden absolute top-16 left-0 right-0 bg-st-green border-t border-white/10 shadow-xl z-50">
           <div className="px-4 py-3 space-y-1">
