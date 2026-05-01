@@ -75,13 +75,8 @@ export default function AccountPage() {
     return (
       <div className="min-h-screen bg-[#F9FAFB] flex flex-col items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="flex items-center gap-3 mb-10">
-            <img src="/STEmblem.svg" alt="Swing Theory" width={32} height={18} className="opacity-80" />
-            <div>
-              <p className="font-display text-lg text-[#064029] tracking-widest leading-none">SYNC</p>
-              <p className="text-gray-400 text-[9px] font-bold tracking-widest uppercase leading-none mt-0.5">Powered by Swing Theory</p>
-              <p className="text-gray-500 text-[10px] font-bold tracking-widest uppercase">Pasadena</p>
-            </div>
+          <div className="flex justify-start mb-10">
+            <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" height={32} className="w-auto brightness-0" />
           </div>
           <h1 className="font-display text-4xl text-[#064029] tracking-widest mb-2">
             {role === 'parent' ? 'ONE MORE THING.' : 'WELCOME.'}
