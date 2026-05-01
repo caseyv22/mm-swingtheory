@@ -55,7 +55,7 @@ function RoleRouter() {
     <div className="min-h-screen bg-st-offwhite flex items-center justify-center p-4">
       <div className="text-center">
         <p className="text-st-green font-bold text-lg">Account not found</p>
-        <p className="text-st-graphite text-sm mt-2">Please contact Swing Theory to get access.</p>
+        <p className="text-st-graphite text-sm mt-2">Please contact your admin to get access.</p>
         <p className="text-st-graphite text-sm mt-1">info@swingtheory.golf</p>
       </div>
     </div>
@@ -117,7 +117,8 @@ function LoginPage() {
             className="brightness-0 invert"
           />
           <div>
-            <p className="font-display text-3xl text-white tracking-widest">SWING THEORY</p>
+            <p className="font-display text-3xl text-white tracking-widest">SYNC</p>
+            <p className="text-white/60 text-[10px] font-bold tracking-widest uppercase mt-0.5">Powered by Swing Theory</p>
             <p className="font-body text-white/60 text-xs font-semibold tracking-widest uppercase">Pasadena</p>
           </div>
         </div>
