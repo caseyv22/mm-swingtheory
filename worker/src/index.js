@@ -1041,6 +1041,95 @@ app.post('/admin/programs/:id/generate-sessions', requireAdmin, async (c) => {
   return c.json({ ok: true, sessions_created: count })
 })
 
+// POST /admin/programs/:id/trim-sessions
+// Checks sessions after a new end date, optionally cancels them with emails
+app.post('/admin/programs/:id/trim-sessions', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const { end_date, confirm } = await c.req.json()
+
+  if (!end_date) return c.json({ error: 'end_date required' }, 400)
+
+  const program = await c.env.DB.prepare('SELECT * FROM programs WHERE id = ?').bind(id).first()
+  if (!program) return c.json({ error: 'Program not found' }, 404)
+
+  // Find all sessions after the new end date
+  const sessions = await c.env.DB.prepare(`
+    SELECT s.*,
+      (SELECT COUNT(*) FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed') as booked_count
+    FROM sessions s
+    WHERE s.program_id = ? AND s.date > ? AND s.is_cancelled = 0
+    ORDER BY s.date ASC
+  `).bind(id, end_date).all()
+
+  const affected = sessions.results
+
+  // If not confirming yet, just return what would be affected
+  if (!confirm) {
+    const withBookings = affected.filter(s => s.booked_count > 0)
+    const withoutBookings = affected.filter(s => s.booked_count === 0)
+    return c.json({
+      total: affected.length,
+      with_bookings: withBookings.map(s => ({ id: s.id, date: s.date, booked_count: s.booked_count })),
+      without_bookings: withoutBookings.length,
+    })
+  }
+
+  // Confirmed — cancel sessions with bookings, delete sessions without
+  let cancelledSessions = 0
+  let deletedSessions = 0
+  let emailsSent = 0
+
+  const config = await c.env.DB.prepare('SELECT admin_email FROM config WHERE id = 1').first()
+  const adminEmail = config?.admin_email || 'info@swingtheory.golf'
+
+  for (const session of affected) {
+    if (session.booked_count > 0) {
+      // Mark session as cancelled
+      await c.env.DB.prepare(
+        "UPDATE sessions SET is_cancelled = 1, cancel_reason = 'Program end date updated' WHERE id = ?"
+      ).bind(session.id).run()
+
+      // Cancel all confirmed bookings
+      await c.env.DB.prepare(
+        "UPDATE bookings SET status = 'cancelled', cancelled_at = datetime('now') WHERE session_id = ? AND status = 'confirmed'"
+      ).bind(session.id).run()
+
+      // Send cancellation emails to booked users
+      try {
+        const bookedUsers = await c.env.DB.prepare(`
+          SELECT b.*, u.email, u.full_name, u.role, ch.first_name as child_name
+          FROM bookings b
+          JOIN users u ON b.user_id = u.id
+          LEFT JOIN children ch ON b.child_id = ch.id
+          WHERE b.session_id = ? AND b.status = 'cancelled' AND b.cancelled_at >= datetime('now', '-5 seconds')
+        `).bind(session.id).all()
+
+        for (const booking of bookedUsers.results) {
+          const { subject, html } = sessionCancelledEmail({
+            recipientName: booking.full_name,
+            programName: program.name,
+            date: session.date,
+            startTime: session.start_time,
+            cancelReason: 'The program schedule has been updated.',
+          })
+          await sendEmail(c.env, { to: booking.email, subject, html })
+          emailsSent++
+        }
+      } catch (e) {
+        console.error('Trim cancellation emails failed:', e.message)
+      }
+
+      cancelledSessions++
+    } else {
+      // No bookings — delete cleanly
+      await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(session.id).run()
+      deletedSessions++
+    }
+  }
+
+  return c.json({ ok: true, cancelled_sessions: cancelledSessions, deleted_sessions: deletedSessions, emails_sent: emailsSent })
+})
+
 // PUT /admin/programs/:id
 app.put('/admin/programs/:id', requireAdmin, async (c) => {
   const { id } = c.req.param()
