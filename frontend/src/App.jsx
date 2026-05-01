@@ -17,6 +17,7 @@ import InstructorStudentProfile from './pages/instructor/InstructorStudentProfil
 import InstructorLessonDetail from './pages/instructor/InstructorLessonDetail.jsx'
 import InstructorSchedule from './pages/instructor/InstructorSchedule.jsx'
 
+// RoleRouter is only used at / and /home to redirect on first load
 function RoleRouter() {
   const { getToken, isLoaded } = useAuth()
   const [status, setStatus] = useState('loading')
@@ -69,13 +70,13 @@ function RoleRouter() {
     </div>
   )
 
-  // Route each role to their correct landing page
+  // Redirect to the correct destination — never back to /home
   if (role === 'parent' && firstLogin) return <Navigate to="/account?onboarding=true" replace />
-  if (role === 'parent') return <Navigate to="/home" replace />
-  if (role === 'student') return <Navigate to="/home" replace />
+  if (role === 'parent') return <Navigate to="/parent-home" replace />
+  if (role === 'student') return <Navigate to="/parent-home" replace />
   if (role === 'instructor') return <Navigate to="/instructor/sessions" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
-  return <Navigate to="/home" replace />
+  return <Navigate to="/parent-home" replace />
 }
 
 function ProtectedRoute({ children, requiredRole }) {
@@ -95,7 +96,7 @@ function ProtectedRoute({ children, requiredRole }) {
   if (requiredRole) {
     const cachedRole = sessionStorage.getItem('st_role')
     if (cachedRole && !requiredRole.includes(cachedRole)) {
-      return <Navigate to="/home" replace />
+      return <Navigate to="/parent-home" replace />
     }
   }
 
@@ -130,9 +131,7 @@ function LoginPage() {
               identityPreviewEditButton: 'text-[#1D9E75]',
               footer: 'hidden',
             },
-            layout: {
-              showOptionalFields: false,
-            }
+            layout: { showOptionalFields: false }
           }}
         />
       </div>
@@ -147,38 +146,21 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/*" element={<LoginPage />} />
 
-        {/* /home and / both go through RoleRouter to land correctly per role */}
-        <Route path="/home" element={
-          <ProtectedRoute><RoleRouter /></ProtectedRoute>
-        } />
-        <Route path="/" element={
-          <ProtectedRoute><RoleRouter /></ProtectedRoute>
-        } />
+        {/* / and /home = role detection redirect only */}
+        <Route path="/" element={<ProtectedRoute><RoleRouter /></ProtectedRoute>} />
+        <Route path="/home" element={<ProtectedRoute><RoleRouter /></ProtectedRoute>} />
 
-        {/* Legacy redirect — parent-home now just goes to /home */}
-        <Route path="/parent-home" element={<Navigate to="/home" replace />} />
+        {/* Parent/student landing page — direct render, no redirect loop */}
+        <Route path="/parent-home" element={<ProtectedRoute><ParentHome /></ProtectedRoute>} />
 
-        <Route path="/account" element={
-          <ProtectedRoute><AccountPage /></ProtectedRoute>
-        } />
+        <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
+        <Route path="/child-info" element={<Navigate to="/account?onboarding=true" replace />} />
 
-        <Route path="/child-info" element={
-          <Navigate to="/account?onboarding=true" replace />
-        } />
+        <Route path="/book/:slug" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
+        <Route path="/my-bookings" element={<ProtectedRoute><MyBookingsPage /></ProtectedRoute>} />
 
-        {/* Parent/student booking routes — ParentHome handles both roles */}
-        <Route path="/book/:slug" element={
-          <ProtectedRoute><CalendarPage /></ProtectedRoute>
-        } />
-
-        <Route path="/my-bookings" element={
-          <ProtectedRoute><MyBookingsPage /></ProtectedRoute>
-        } />
-
-        {/* Programs kept for any legacy links */}
-        <Route path="/programs" element={
-          <ProtectedRoute><ProgramSelector /></ProtectedRoute>
-        } />
+        {/* Programs kept for legacy links */}
+        <Route path="/programs" element={<ProtectedRoute><ProgramSelector /></ProtectedRoute>} />
 
         {/* Instructor routes */}
         <Route path="/instructor" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSessions /></ProtectedRoute>} />
