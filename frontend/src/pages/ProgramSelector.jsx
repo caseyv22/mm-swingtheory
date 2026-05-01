@@ -7,7 +7,7 @@ import NavBar from '../components/NavBar.jsx'
 const PROGRAM_DESCRIPTIONS = {
   'mini-mulligans': 'Junior golf sessions for kids ages 5–12. Small groups, instructor-led, Tuesday and Thursday afternoons.',
   'summer-program': 'Intensive multi-day summer sessions. Tuesday, Wednesday & Friday, 10 AM–12 PM.',
-  'theory-ai': 'One-on-one private coaching with a Swing Theory instructor, powered by AI swing analysis.',
+  'theory-ai': 'One-on-one private coaching with your instructor, powered by AI swing analysis.',
 }
 
 const PROGRAM_SCHEDULE = {
@@ -109,16 +109,16 @@ export default function ProgramSelector() {
                   onClick={() => !isDisabled && navigate(`/book/${program.slug}`)}
                   disabled={isDisabled}
                   className={`group bg-white rounded-2xl border border-gray-100 text-left overflow-hidden transition-all duration-200
-                    ${isDisabled ? 'opacity-60 cursor-default' : 'hover:border-st-green hover:shadow-lg cursor-pointer'}
+                    ${isDisabled ? 'opacity-60 cursor-default' : 'hover:border-[#064029] hover:shadow-lg cursor-pointer'}
                   `}
                 >
-                  <div className={`h-0.5 bg-st-green transition-transform duration-300 origin-left ${isDisabled ? 'scale-x-0' : 'scale-x-0 group-hover:scale-x-100'}`} />
+                  <div className={`h-0.5 bg-[#064029] transition-transform duration-300 origin-left ${isDisabled ? 'scale-x-0' : 'scale-x-0 group-hover:scale-x-100'}`} />
                   <div className="p-7">
                     <div className="flex items-center justify-between mb-5">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-3 py-1 rounded-full">
                         {PROGRAM_TAG[program.slug] || 'Program'}
                       </span>
-                      <span className={`text-st-cloud text-xl font-light transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>→</span>
+                      <span className={`text-gray-100 text-xl font-light transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>→</span>
                     </div>
                     <h2 className={`font-display text-3xl text-gray-900 tracking-widest leading-none mb-3 transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>
                       {program.name.toUpperCase()}
@@ -129,7 +129,7 @@ export default function ProgramSelector() {
 
                     {/* Status message */}
                     {isUpcoming && (
-                      <div className="bg-[#E1F5EE] border border-st-green/20 rounded-lg px-4 py-2.5 mb-4">
+                      <div className="bg-[#E1F5EE] border border-[#064029]/20 rounded-lg px-4 py-2.5 mb-4">
                         <p className="text-xs font-bold uppercase tracking-widest text-[#064029] mb-0.5">Coming Soon</p>
                         <p className="text-sm font-semibold text-gray-900">
                           Sessions begin {formatStartDate(program.start_date)}
