@@ -12,6 +12,7 @@ import AdminSessions from './pages/admin/AdminSessions.jsx'
 import AdminMembers from './pages/admin/AdminMembers.jsx'
 import AdminPrograms from './pages/admin/AdminPrograms.jsx'
 import AdminSettings from './pages/admin/AdminSettings.jsx'
+import SwingerTheoryAI from './pages/swinger/SwingerTheoryAI.jsx'
 import InstructorSessions from './pages/instructor/InstructorSessions.jsx'
 import InstructorStudents from './pages/instructor/InstructorStudents.jsx'
 import InstructorStudentProfile from './pages/instructor/InstructorStudentProfile.jsx'
@@ -81,6 +82,7 @@ function RoleRouter() {
   if (role === 'parent') return <Navigate to="/parent-home" replace />
   if (role === 'student') return <Navigate to="/programs" replace />
   if (role === 'instructor') return <Navigate to="/instructor/sessions" replace />
+  if (role === 'swinger') return <Navigate to="/admin" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
   return <Navigate to="/programs" replace />
 }
@@ -404,11 +406,12 @@ export default function App() {
         <Route path="/instructor/students/:studentId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorStudentProfile /></ProtectedRoute>} />
         <Route path="/instructor/lessons/:lessonId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorLessonDetail /></ProtectedRoute>} />
 
-        <Route path="/admin" element={<ProtectedRoute requiredRole={["admin"]}><AdminSessions /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute requiredRole={["admin","swinger"]}><AdminSessions /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
         <Route path="/admin/members/:id" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
         <Route path="/admin/programs" element={<ProtectedRoute requiredRole={["admin"]}><AdminPrograms /></ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute requiredRole={["admin"]}><AdminSettings /></ProtectedRoute>} />
+        <Route path="/theory-ai" element={<ProtectedRoute requiredRole={["swinger","admin"]}><SwingerTheoryAI /></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
