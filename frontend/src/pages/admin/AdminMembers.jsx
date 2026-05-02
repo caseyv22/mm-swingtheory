@@ -562,18 +562,12 @@ export default function AdminMembers() {
                     <div className="flex items-start justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <StatusDot status={m.status} />
+                          <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${m.status === 'active' ? 'bg-[#1D9E75]' : 'bg-gray-300'}`} />
                           <p className="text-sm font-semibold text-gray-900 truncate">{m.full_name}</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 shrink-0 opacity-0" />
-                          <p className="text-xs text-gray-400 truncate">{m.email}</p>
-                        </div>
+                        <p className="text-xs text-gray-400 truncate pl-4">{m.email}</p>
                         {m.role === 'parent' && m.child_name && (
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 shrink-0 opacity-0" />
-                            <p className="text-xs text-[#1D9E75]">Child: {m.child_name}</p>
-                          </div>
+                          <p className="text-xs text-[#1D9E75] mt-0.5 pl-4">Child: {m.child_name}</p>
                         )}
                       </div>
                       <RoleBadge role={m.role} />
