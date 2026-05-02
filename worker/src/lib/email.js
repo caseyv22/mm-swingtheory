@@ -4,7 +4,7 @@
 
 const FROM = 'Swing Theory <info@swingtheory.golf>'
 const LOGO_URL = 'https://swingtheory.golf/wp-content/uploads/2025/03/Wide-Asset-3-copy.png'
-const APP_URL = 'https://mm-1a4.pages.dev'
+const APP_URL = 'https://sync.swingtheory.golf'
 
 // ─── Send via Resend ──────────────────────────────────────────────────────────
 export async function sendEmail(env, { to, subject, html }) {
