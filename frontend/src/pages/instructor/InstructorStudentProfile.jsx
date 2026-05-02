@@ -83,19 +83,23 @@ function AddLessonModal({ studentId, onClose, onSaved }) {
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <select className={SEL} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}>
+              <option value="">Select a date…</option>
+              {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Time</label>
+              <select className={SEL} value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}>
+                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+              </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Time</label>
+              <select className={SEL} value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}>
+                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+              </select>
             </div>
           </div>
           <div>
