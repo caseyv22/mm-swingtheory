@@ -4,6 +4,19 @@ import { useAuth } from '@clerk/clerk-react'
 import { api } from '../lib/api.js'
 import NavBar from '../components/NavBar.jsx'
 
+function formatTime(t) {
+  if (!t) return ''
+  const [h, m] = t.split(':')
+  const hour = parseInt(h)
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`
+}
+
+function formatDays(days) {
+  if (!days) return ''
+  const map = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' }
+  return days.split(',').map(d => map[d.trim().toLowerCase()] || d.trim()).join(' & ')
+}
+
 const PROGRAM_DESCRIPTIONS = {
   'mini-mulligans': 'Junior golf sessions for kids ages 5–12. Small groups, instructor-led, Tuesday and Thursday afternoons.',
   'summer-program': 'Intensive multi-day summer sessions. Tuesday, Wednesday & Friday, 10 AM–12 PM.',
@@ -124,7 +137,7 @@ export default function ProgramSelector() {
                       {program.name.toUpperCase()}
                     </h2>
                     <p className="text-gray-500 text-sm font-medium leading-relaxed mb-4">
-                      {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
+                      {program.description || PROGRAM_DESCRIPTIONS[program.slug] || ''}
                     </p>
 
                     {/* Status message */}
@@ -145,7 +158,7 @@ export default function ProgramSelector() {
 
                     <div className="pt-5 border-t border-gray-100 flex items-center justify-between gap-2">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                        {PROGRAM_SCHEDULE[program.slug] || ''}
+                        {program.session_days && program.start_time ? `${formatDays(program.session_days)} · ${formatTime(program.start_time)} – ${formatTime(program.end_time)}` : PROGRAM_SCHEDULE[program.slug] || ''}
                       </p>
                       {program.price_display && (
                         <span className="text-sm font-bold text-[#064029] shrink-0">{program.price_display}</span>
