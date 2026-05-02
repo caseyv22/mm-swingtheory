@@ -10,16 +10,39 @@ const PROGRAM_DESCRIPTIONS = {
   'theory-ai': 'One-on-one private coaching with your instructor, powered by AI swing analysis.',
 }
 
-const PROGRAM_SCHEDULE = {
-  'mini-mulligans': 'Tue & Thu · 4:00 – 5:00 PM',
-  'summer-program': 'Tue, Wed & Fri · 10:00 AM – 12:00 PM',
-  'theory-ai': 'By appointment',
-}
-
 const PROGRAM_TAG = {
   'mini-mulligans': 'Junior Program',
   'summer-program': 'Summer Intensive',
   'theory-ai': 'Private Coaching',
+}
+
+// ─── Dynamic schedule formatting from session_days + start/end times ─────────
+const DAY_SHORT = {
+  monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed',
+  thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
+}
+const DAY_ORDER = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+function formatTime12(t) {
+  if (!t) return ''
+  const [h, m] = t.split(':')
+  const hour = parseInt(h, 10)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const h12 = hour % 12 || 12
+  return `${h12}:${m} ${ampm}`
+}
+
+function formatProgramSchedule(program) {
+  if (!program?.session_days) return ''
+  const days = program.session_days.split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
+  if (days.length === 0) return ''
+  // Sort by day-of-week order
+  days.sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b))
+  const labels = days.map(d => DAY_SHORT[d] || d).join(' & ')
+  const time = (program.start_time && program.end_time)
+    ? ` · ${formatTime12(program.start_time)} – ${formatTime12(program.end_time)}`
+    : ''
+  return labels + time
 }
 
 function formatStartDate(dateStr) {
@@ -30,7 +53,7 @@ function formatStartDate(dateStr) {
 
 function getProgramStatus(program) {
   const today = new Date().toISOString().split('T')[0]
-  if (program.start_date && today < program.start_date) return 'upcoming'
+  // 'upcoming' (future start_date) is no longer a disabling state — students can pre-book
   if (program.end_date && today > program.end_date) return 'ended'
   return 'active'
 }
@@ -80,7 +103,7 @@ export default function ProgramSelector() {
 
       {/* White header zone */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-3xl mx-auto px-4 py-5">
+        <div className="max-w-4xl mx-auto px-4 lg:px-8 py-5">
           <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Welcome back</p>
           <h1 className="font-display text-2xl text-[#064029] tracking-wide">
             {user?.full_name?.split(' ')[0]?.toUpperCase() || 'PROGRAMS'}
@@ -88,7 +111,7 @@ export default function ProgramSelector() {
           <p className="text-sm text-gray-400 mt-1">Select a program to view and book upcoming sessions.</p>
         </div>
       </div>
-      <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-5">
+      <main className="flex-1 max-w-4xl mx-auto w-full px-4 lg:px-8 py-5">
 
         {visiblePrograms.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
@@ -99,7 +122,6 @@ export default function ProgramSelector() {
           <div className="space-y-3">
             {visiblePrograms.map(program => {
               const status = getProgramStatus(program)
-              const isUpcoming = status === 'upcoming'
               const isEnded = status === 'ended'
               const isDisabled = isEnded
 
@@ -127,15 +149,7 @@ export default function ProgramSelector() {
                       {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
                     </p>
 
-                    {/* Status message */}
-                    {isUpcoming && (
-                      <div className="bg-[#E1F5EE] border border-[#064029]/20 rounded-lg px-4 py-2.5 mb-4">
-                        <p className="text-xs font-bold uppercase tracking-widest text-[#064029] mb-0.5">Coming Soon</p>
-                        <p className="text-sm font-semibold text-gray-900">
-                          Sessions begin {formatStartDate(program.start_date)}
-                        </p>
-                      </div>
-                    )}
+                    {/* Status message — only show if program has ended */}
                     {isEnded && (
                       <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mb-4">
                         <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-0.5">Program Ended</p>
@@ -145,7 +159,7 @@ export default function ProgramSelector() {
 
                     <div className="pt-5 border-t border-gray-100 flex items-center justify-between gap-2">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                        {PROGRAM_SCHEDULE[program.slug] || ''}
+                        {formatProgramSchedule(program)}
                       </p>
                       {program.price_display && (
                         <span className="text-sm font-bold text-[#064029] shrink-0">{program.price_display}</span>
