@@ -690,52 +690,40 @@ app.post('/admin/members', requireAdmin, async (c) => {
   const body = await c.req.json()
   const { full_name, email, role, phone, child_first_name, child_age, clerk_id } = body
 
-  // If clerk_id provided directly (manual link), use it. Otherwise create via Clerk.
+  // If clerk_id provided directly (manual link), use it. Otherwise invite via Clerk.
   let finalClerkId = clerk_id
   let invitationUrl = null
 
   if (!finalClerkId) {
-    // Step 1: Create user in Clerk with a temp password
-    const tempPassword = 'Temp_' + Math.random().toString(36).slice(2, 10) + '!9'
-    const createRes = await fetch('https://api.clerk.com/v1/users', {
+    // Create Clerk invitation — skip their email so only ours sends
+    const clerkRes = await fetch('https://api.clerk.com/v1/invitations', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        email_address: [email],
-        password: tempPassword,
-        first_name: full_name.split(' ')[0],
-        last_name: full_name.split(' ').slice(1).join(' ') || '',
-        skip_password_checks: true,
-        skip_password_requirement: true,
+        email_address: email,
+        redirect_url: 'https://sync.swingtheory.golf/home',
+        skip_invitation_email: true,
       }),
     })
 
-    if (!createRes.ok) {
-      const err = await createRes.json()
-      const msg = err?.errors?.[0]?.long_message || err?.errors?.[0]?.message || 'Failed to create Clerk user'
-      return c.json({ error: msg }, 500)
+    const clerkData = await clerkRes.json()
+    console.log('Clerk invite status:', clerkRes.status)
+    console.log('Clerk invite data:', JSON.stringify(clerkData))
+
+    if (!clerkRes.ok) {
+      const clerkMsg = clerkData?.errors?.[0]?.long_message || clerkData?.errors?.[0]?.message || 'Clerk invitation failed'
+      return c.json({ error: clerkMsg }, 500)
     }
 
-    const clerkUser = await createRes.json()
-    finalClerkId = clerkUser.id
+    // This is the URL user clicks to set their password
+    invitationUrl = clerkData.url || null
+    console.log('invitationUrl:', invitationUrl)
 
-    // Step 2: Generate a password reset link so user can set their own password
-    const resetRes = await fetch(`https://api.clerk.com/v1/users/${finalClerkId}/password_reset_links`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ redirect_url: 'https://sync.swingtheory.golf/home' }),
-    })
-
-    if (resetRes.ok) {
-      const resetData = await resetRes.json()
-      invitationUrl = resetData.url || null
-    }
+    // Store placeholder clerk_id — updated on first login via /users/me sync
+    finalClerkId = 'pending_' + uid()
   }
 
   const userId = 'usr_' + uid()
