@@ -713,7 +713,9 @@ app.post('/admin/members', requireAdmin, async (c) => {
     }
 
     const clerkData = await clerkRes.json()
+    console.log('Clerk invitation response:', JSON.stringify(clerkData))
     invitationUrl = clerkData.url || null
+    console.log('invitationUrl:', invitationUrl)
 
     // Store a placeholder clerk_id — it gets updated on first login via the /users/me sync
     finalClerkId = 'pending_' + uid()
