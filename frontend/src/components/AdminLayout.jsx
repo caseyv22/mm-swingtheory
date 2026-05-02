@@ -44,6 +44,21 @@ export default function AdminLayout({ children }) {
       })
   }, [isLoaded, isSignedIn])
 
+  // Dynamic page title — must be before any early return to keep hook order stable
+  useEffect(() => {
+    const pageMap = {
+      '/admin': 'Sessions',
+      '/admin/members': 'Members',
+      '/admin/programs': 'Programs',
+      '/admin/settings': 'Settings',
+      '/theory-ai': 'Theory AI',
+      '/account': 'Account',
+    }
+    const page = Object.entries(pageMap).find(([path]) => location.pathname === path || location.pathname.startsWith(path + '/'))
+    const pageName = page ? page[1] : 'Sync'
+    document.title = `Sync | Swing Theory | ${pageName}`
+  }, [location.pathname])
+
   // Block render until role is resolved — prevents the wrong sidebar from flashing
   if (!roleLoaded || !role) {
     return (
@@ -61,21 +76,6 @@ export default function AdminLayout({ children }) {
 
   const NAV_ITEMS = role === 'swinger' ? SWINGER_NAV : ADMIN_NAV
   const sidebarLabel = role === 'swinger' ? 'Swinger' : 'Admin'
-
-  // Dynamic page title
-  useEffect(() => {
-    const pageMap = {
-      '/admin': 'Sessions',
-      '/admin/members': 'Members',
-      '/admin/programs': 'Programs',
-      '/admin/settings': 'Settings',
-      '/theory-ai': 'Theory AI',
-      '/account': 'Account',
-    }
-    const page = Object.entries(pageMap).find(([path]) => location.pathname === path || location.pathname.startsWith(path + '/'))
-    const pageName = page ? page[1] : 'Sync'
-    document.title = `Sync | Swing Theory | ${pageName}`
-  }, [location.pathname])
 
   function isActive(href) {
     if (href === '/admin') return location.pathname === '/admin'
