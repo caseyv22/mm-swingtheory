@@ -329,39 +329,68 @@ export function reminderEmail({ recipientName, programName, date, startTime, end
 }
 
 // ─── 7. Welcome (account created) ────────────────────────────────────────────
-export function welcomeEmail({ recipientName, role, email, invitationUrl }) {
-  const subject = 'Welcome to Swing Theory'
-  const loginUrl = invitationUrl || APP_URL
+export function welcomeEmail({ recipientName, role, email, tempPassword }) {
+  const subject = 'Welcome to Swing Theory — Your Login Details'
+  const roleDisplay = role ? role.charAt(0).toUpperCase() + role.slice(1) : ''
 
   const html = baseLayout({
-    preheader: 'Your Swing Theory account is ready. Click to set your password.',
+    preheader: 'Your Swing Theory account is ready. Use the password below to log in.',
     body: `
   <tr>
     <td style="padding:32px 32px 8px">
       <div style="font-size:22px;font-weight:700;color:#064029;margin-bottom:8px">Welcome, ${recipientName}!</div>
       <p style="font-size:14px;color:#555555;line-height:1.6;margin:0">
-        Your Swing Theory account has been created. Click the button below to set your password and access the booking platform.
+        Your Swing Theory account is ready. Use the credentials below to log in. You'll be asked to set your own password right after.
       </p>
     </td>
   </tr>
   <tr>
-    <td style="padding:16px 32px 24px">
+    <td style="padding:16px 32px 8px">
       <div style="background:#f7faf8;border:1px solid #d8e8dc;border-radius:12px;padding:20px 24px">
         <table width="100%" cellpadding="0" cellspacing="0">
           ${infoRow('Email', email || '')}
-          ${infoRow('Role', role.charAt(0).toUpperCase() + role.slice(1))}
+          ${infoRow('Temporary Password', tempPassword || '')}
+          ${infoRow('Role', roleDisplay)}
         </table>
       </div>
     </td>
   </tr>
   <tr>
-    <td style="padding:0 32px 16px">
+    <td style="padding:8px 32px 16px">
       <p style="font-size:13px;color:#888888;line-height:1.6;margin:0">
-        This link expires in 24 hours. If you need a new one, contact your administrator.
+        For your security, you'll be prompted to change this temporary password when you first log in. If you didn't expect this email, please contact us.
       </p>
     </td>
   </tr>
-  ${ctaButton('Set My Password & Log In', loginUrl)}`,
+  ${ctaButton('Log In to Swing Theory', APP_URL + '/login')}`,
+  })
+
+  return { subject, html }
+}
+
+// ─── 8. Password reset (user-triggered "forgot password") ────────────────────
+export function passwordResetEmail({ recipientName, resetUrl }) {
+  const subject = 'Reset Your Swing Theory Password'
+
+  const html = baseLayout({
+    preheader: 'Click the link below to reset your Swing Theory password.',
+    body: `
+  <tr>
+    <td style="padding:32px 32px 8px">
+      <div style="font-size:22px;font-weight:700;color:#064029;margin-bottom:8px">Hi ${recipientName},</div>
+      <p style="font-size:14px;color:#555555;line-height:1.6;margin:0">
+        We received a request to reset your password. Click the button below to choose a new one. This link expires shortly, so use it soon.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:8px 32px 16px">
+      <p style="font-size:13px;color:#888888;line-height:1.6;margin:0">
+        If you didn't request a password reset, you can safely ignore this email — your password won't change.
+      </p>
+    </td>
+  </tr>
+  ${ctaButton('Reset My Password', resetUrl)}`,
   })
 
   return { subject, html }
