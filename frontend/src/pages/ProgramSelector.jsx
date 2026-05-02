@@ -118,7 +118,7 @@ export default function ProgramSelector() {
 
       {/* White header zone */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-4xl mx-auto px-4 lg:px-8 py-5">
+        <div className="max-w-2xl mx-auto px-4 py-5">
           <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Welcome back</p>
           <h1 className="font-display text-2xl text-[#064029] tracking-wide">
             {user?.full_name?.split(' ')[0]?.toUpperCase() || 'PROGRAMS'}
@@ -126,7 +126,7 @@ export default function ProgramSelector() {
           <p className="text-sm text-gray-400 mt-1">Select a program to view and book upcoming sessions.</p>
         </div>
       </div>
-      <main className="flex-1 max-w-4xl mx-auto w-full px-4 lg:px-8 py-5">
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-5">
 
         {visiblePrograms.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
@@ -145,7 +145,7 @@ export default function ProgramSelector() {
                   key={program.id}
                   onClick={() => !isDisabled && navigate(`/book/${program.slug}`)}
                   disabled={isDisabled}
-                  className={`group bg-white rounded-2xl border border-gray-100 text-left overflow-hidden transition-all duration-200
+                  className={`group w-full bg-white rounded-2xl border border-gray-100 text-left overflow-hidden transition-all duration-200
                     ${isDisabled ? 'opacity-60 cursor-default' : 'hover:border-[#064029] hover:shadow-lg cursor-pointer'}
                   `}
                 >
@@ -160,7 +160,7 @@ export default function ProgramSelector() {
                     </div>
 
                     {/* Two-column body: title/description on left, meta on right */}
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:gap-8">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:gap-8">
                       <div className="flex-1 min-w-0">
                         <h2 className={`font-display text-3xl text-gray-900 tracking-widest leading-none mb-3 transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>
                           {program.name.toUpperCase()}
@@ -171,7 +171,7 @@ export default function ProgramSelector() {
                       </div>
 
                       {/* Right meta column — desktop only */}
-                      <div className="hidden sm:flex flex-col items-end gap-3 text-right shrink-0 min-w-[140px]">
+                      <div className="hidden lg:flex flex-col items-end gap-3 text-right shrink-0 min-w-[140px]">
                         {program.price_display && (
                           <div>
                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Price</p>
@@ -206,7 +206,7 @@ export default function ProgramSelector() {
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                         {formatProgramSchedule(program)}
                       </p>
-                      <div className="sm:hidden flex items-center gap-3 shrink-0">
+                      <div className="lg:hidden flex items-center gap-3 shrink-0">
                         {program.price_display && (
                           <span className="text-sm font-bold text-[#064029]">{program.price_display}</span>
                         )}
