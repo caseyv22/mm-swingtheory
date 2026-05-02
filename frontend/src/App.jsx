@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth, useSignIn, useClerk } from '@clerk/clerk-react'
+import { useAuth, useSignIn, useClerk, useUser } from '@clerk/clerk-react'
 import React from 'react'
 import { useState, useEffect } from 'react'
 import { api } from './lib/api.js'
@@ -18,15 +18,17 @@ import InstructorStudentProfile from './pages/instructor/InstructorStudentProfil
 import InstructorLessonDetail from './pages/instructor/InstructorLessonDetail.jsx'
 import InstructorSchedule from './pages/instructor/InstructorSchedule.jsx'
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.workers.dev'
+
 function RoleRouter() {
   const { getToken, isLoaded } = useAuth()
   const [status, setStatus] = useState('loading')
   const [role, setRole] = useState(null)
   const [firstLogin, setFirstLogin] = useState(false)
+  const [mustChangePassword, setMustChangePassword] = useState(false)
 
   useEffect(() => {
     if (!isLoaded) return
-    // Register the token getter with api so admin pages can call api.get/post/put/delete
     api.init(getToken)
     loadMe()
   }, [isLoaded])
@@ -38,6 +40,7 @@ function RoleRouter() {
       if (!data.user) { setStatus('no-user'); return }
       setRole(data.user.role)
       setFirstLogin(data.first_login)
+      setMustChangePassword(data.user.must_change_password === 1)
       setStatus('ready')
       sessionStorage.setItem('st_role', data.user.role)
     } catch (err) {
@@ -71,6 +74,9 @@ function RoleRouter() {
     </div>
   )
 
+  // Force password change if temp password still in use
+  if (mustChangePassword) return <Navigate to="/account?change-password=true" replace />
+
   if (role === 'parent' && firstLogin) return <Navigate to="/account?onboarding=true" replace />
   if (role === 'parent') return <Navigate to="/parent-home" replace />
   if (role === 'student') return <Navigate to="/programs" replace />
@@ -82,7 +88,6 @@ function RoleRouter() {
 function ProtectedRoute({ children, requiredRole }) {
   const { getToken, isLoaded, isSignedIn } = useAuth()
 
-  // Initialize api synchronously during render — before children mount and fire their fetches
   if (isLoaded && isSignedIn) {
     api.init(getToken)
   }
@@ -94,7 +99,6 @@ function ProtectedRoute({ children, requiredRole }) {
   )
   if (!isSignedIn) return <Navigate to="/login" replace />
 
-  // Role check using cached role from sessionStorage (set by RoleRouter)
   if (requiredRole) {
     const cachedRole = sessionStorage.getItem('st_role')
     if (cachedRole && !requiredRole.includes(cachedRole)) {
@@ -105,24 +109,35 @@ function ProtectedRoute({ children, requiredRole }) {
   return children
 }
 
+// ─── LOGIN PAGE ──────────────────────────────────────────────────────────────
 function LoginPage() {
   const { signIn, isLoaded, setActive } = useSignIn()
-  const { isSignedIn } = useAuth()
-  const [email, setEmail] = React.useState('')
-  const [password, setPassword] = React.useState('')
-  const [error, setError] = React.useState('')
-  const [loading, setLoading] = React.useState(false)
+  const { isSignedIn, isLoaded: authLoaded } = useAuth()
+  const { user: clerkUser } = useUser()
+  const clerk = useClerk()
 
-  async function handleSubmit(e) {
+  const [mode, setMode] = useState('signin') // 'signin' | 'forgot' | 'session'
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // If user already has an active Clerk session, show "Continue as X"
+  useEffect(() => {
+    if (authLoaded && isSignedIn && clerkUser) {
+      setMode('session')
+    }
+  }, [authLoaded, isSignedIn, clerkUser])
+
+  async function handleSignIn(e) {
     e.preventDefault()
     if (!isLoaded) return
     setLoading(true)
     setError('')
+    setInfo('')
     try {
-      const result = await signIn.create({
-        identifier: email,
-        password: password,
-      })
+      const result = await signIn.create({ identifier: email, password })
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId })
         window.location.href = '/home'
@@ -139,6 +154,144 @@ function LoginPage() {
     }
   }
 
+  async function handleForgotPassword(e) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setInfo('')
+    try {
+      const res = await fetch(`${API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      // Always show generic success message — don't reveal if email exists
+      setInfo("If an account exists for that email, we've sent a password reset link.")
+    } catch (err) {
+      setError('Could not send reset email. Please try again later.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleContinueAsCurrent() {
+    window.location.href = '/home'
+  }
+
+  async function handleSignOutAndShowLogin() {
+    setLoading(true)
+    try {
+      await clerk.signOut()
+      sessionStorage.clear()
+      setMode('signin')
+      setEmail('')
+      setPassword('')
+      setError('')
+      setInfo('')
+    } catch (err) {
+      console.error('Sign out error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ─── Active session view ───────────────────────────────────────────────────
+  if (mode === 'session' && clerkUser) {
+    return (
+      <div className="min-h-screen bg-[#064029] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="flex justify-center mb-8">
+            <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" className="h-12 w-auto" />
+          </div>
+          <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
+            <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">WELCOME BACK</h1>
+            <p className="text-sm text-gray-400 mb-6">You're already signed in</p>
+
+            <div className="bg-[#F9FAFB] border border-gray-100 rounded-xl px-4 py-4 mb-5">
+              <p className="font-semibold text-gray-900 text-sm">{clerkUser.fullName || clerkUser.firstName}</p>
+              <p className="text-gray-500 text-xs mt-0.5">{clerkUser.primaryEmailAddress?.emailAddress}</p>
+            </div>
+
+            <button
+              onClick={handleContinueAsCurrent}
+              className="w-full bg-[#064029] text-white font-semibold py-3 rounded-lg hover:bg-[#085041] transition-colors text-sm mb-2"
+            >
+              Continue as {clerkUser.firstName}
+            </button>
+            <button
+              onClick={handleSignOutAndShowLogin}
+              disabled={loading}
+              className="w-full text-gray-500 text-sm font-medium py-2 hover:text-gray-700 disabled:opacity-50"
+            >
+              {loading ? 'Signing out…' : 'Sign in as a different user'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Forgot password view ──────────────────────────────────────────────────
+  if (mode === 'forgot') {
+    return (
+      <div className="min-h-screen bg-[#064029] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="flex justify-center mb-8">
+            <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" className="h-12 w-auto" />
+          </div>
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">RESET PASSWORD</h1>
+            <p className="text-sm text-gray-400 mb-6">Enter your email to get a reset link</p>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
+                {error}
+              </div>
+            )}
+            {info && (
+              <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
+                {info}
+              </div>
+            )}
+
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  autoFocus
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#064029] text-white font-semibold py-3 rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors text-sm"
+              >
+                {loading ? 'Sending…' : 'Send Reset Link'}
+              </button>
+            </form>
+
+            <button
+              type="button"
+              onClick={() => { setMode('signin'); setError(''); setInfo('') }}
+              className="w-full mt-3 text-gray-500 text-sm font-medium py-2 hover:text-gray-700"
+            >
+              ← Back to sign in
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Default sign-in view ──────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#064029] flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
@@ -155,7 +308,7 @@ function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSignIn} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                 Email Address
@@ -171,9 +324,18 @@ function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { setMode('forgot'); setError(''); setInfo('') }}
+                  className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]"
+                >
+                  Forgot?
+                </button>
+              </div>
               <input
                 type="password"
                 value={password}
