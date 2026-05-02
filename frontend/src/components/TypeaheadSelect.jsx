@@ -62,7 +62,7 @@ export default function TypeaheadSelect({ options = [], value, onChange, placeho
       {/* Trigger / Input */}
       <div
         onClick={handleInputClick}
-        className={`flex items-center w-full border rounded-lg px-3 py-2.5 text-sm bg-white transition-all cursor-text
+        className={`flex items-center w-full border rounded-lg px-3 py-2.5 text-base bg-white transition-all cursor-text
           ${open ? 'border-[#1D9E75] ring-2 ring-[#1D9E75]/20' : 'border-gray-200'}
           ${disabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:border-gray-300'}
         `}
@@ -74,7 +74,7 @@ export default function TypeaheadSelect({ options = [], value, onChange, placeho
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder={placeholder}
-            className="flex-1 outline-none bg-transparent text-gray-900 placeholder-gray-400 font-sans text-sm"
+            className="flex-1 outline-none bg-transparent text-gray-900 placeholder-gray-400 font-sans text-base"
             onClick={e => e.stopPropagation()}
           />
         ) : (
