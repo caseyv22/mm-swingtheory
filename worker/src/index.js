@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { createClerkClient } from '@clerk/backend'
 import { verifyAuth } from './lib/auth.js'
 import {
   sendEmail,
@@ -10,6 +11,7 @@ import {
   sessionCancelledEmail,
   reminderEmail,
   welcomeEmail,
+  passwordResetEmail,
 } from './lib/email.js'
 
 const app = new Hono()
@@ -132,6 +134,146 @@ app.post('/users/child', requireAuth, async (c) => {
     ).bind(id, user.id, first_name, age).run()
     return c.json({ ok: true, created: true })
   }
+})
+
+// PUT /users/me/password — user changes their own password (clears must_change_password flag)
+app.put('/users/me/password', requireAuth, async (c) => {
+  const clerkId = c.get('clerkId')
+  const { new_password } = await c.req.json()
+
+  if (!new_password || new_password.length < 8) {
+    return c.json({ error: 'Password must be at least 8 characters' }, 400)
+  }
+
+  // Update password in Clerk
+  const clerkRes = await fetch(`https://api.clerk.com/v1/users/${clerkId}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password: new_password, skip_password_checks: false }),
+  })
+
+  if (!clerkRes.ok) {
+    const err = await clerkRes.json()
+    const msg = err?.errors?.[0]?.long_message || err?.errors?.[0]?.message || 'Failed to update password'
+    return c.json({ error: msg }, 400)
+  }
+
+  // Clear the must_change_password flag in D1
+  await c.env.DB.prepare(
+    'UPDATE users SET must_change_password = 0 WHERE clerk_id = ?'
+  ).bind(clerkId).run()
+
+  return c.json({ ok: true })
+})
+
+// POST /auth/forgot-password — public, triggers Clerk password reset email
+app.post('/auth/forgot-password', async (c) => {
+  const { email } = await c.req.json()
+  if (!email) return c.json({ error: 'Email is required' }, 400)
+
+  // Look up user in Clerk by email
+  const lookupRes = await fetch(
+    `https://api.clerk.com/v1/users?email_address=${encodeURIComponent(email)}`,
+    { headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` } }
+  )
+  if (!lookupRes.ok) {
+    // Don't reveal whether the email exists — return success either way
+    return c.json({ ok: true })
+  }
+  const users = await lookupRes.json()
+  if (!Array.isArray(users) || users.length === 0) {
+    return c.json({ ok: true })
+  }
+
+  const clerkUserId = users[0].id
+
+  // Generate password reset link
+  const resetRes = await fetch(
+    `https://api.clerk.com/v1/users/${clerkUserId}/password_reset_links`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    }
+  )
+
+  if (!resetRes.ok) {
+    console.error('Reset link generation failed')
+    return c.json({ ok: true })
+  }
+
+  const resetData = await resetRes.json()
+  const resetUrl = resetData.url
+
+  // Look up user in D1 for full name
+  const dbUser = await c.env.DB.prepare(
+    'SELECT full_name FROM users WHERE clerk_id = ?'
+  ).bind(clerkUserId).first()
+
+  // Send password reset email via our own template
+  try {
+    const { subject, html } = passwordResetEmail({
+      recipientName: dbUser?.full_name || 'there',
+      resetUrl,
+    })
+    await sendEmail(c.env, { to: email, subject, html })
+  } catch (e) {
+    console.error('Password reset email failed:', e.message)
+  }
+
+  return c.json({ ok: true })
+})
+
+// POST /admin/members/:id/resend-temp-password — admin regenerates temp password and resends welcome email
+app.post('/admin/members/:id/resend-temp-password', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first()
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  if (!user.clerk_id) return c.json({ error: 'No Clerk account linked' }, 400)
+
+  const tempPassword = 'swing-' + Math.floor(1000 + Math.random() * 9000)
+
+  // Update password in Clerk
+  const updateRes = await fetch(`https://api.clerk.com/v1/users/${user.clerk_id}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password: tempPassword, skip_password_checks: true }),
+  })
+
+  if (!updateRes.ok) {
+    const err = await updateRes.json()
+    const msg = err?.errors?.[0]?.long_message || err?.errors?.[0]?.message || 'Failed to update password'
+    return c.json({ error: msg }, 500)
+  }
+
+  // Set must_change_password = 1 again
+  await c.env.DB.prepare(
+    'UPDATE users SET must_change_password = 1 WHERE id = ?'
+  ).bind(id).run()
+
+  // Send the welcome email with new temp password
+  try {
+    const { subject, html } = welcomeEmail({
+      recipientName: user.full_name,
+      role: user.role,
+      email: user.email,
+      tempPassword,
+    })
+    await sendEmail(c.env, { to: user.email, subject, html })
+  } catch (e) {
+    console.error('Resend welcome email failed:', e.message)
+  }
+
+  return c.json({ ok: true, temp_password: tempPassword })
 })
 
 // ─── SESSION ROUTES (public / parent / student) ───────────────────────────────
@@ -685,44 +827,64 @@ app.get('/admin/members', requireAdmin, async (c) => {
   return c.json({ members: result.results })
 })
 
-// POST /admin/members — create user in D1 + send Clerk invitation
+// POST /admin/members — create Clerk user with temp password + send credentials email
 app.post('/admin/members', requireAdmin, async (c) => {
   const body = await c.req.json()
-  const { full_name, email, role, phone, child_first_name, child_age, clerk_id } = body
+  const { full_name, email, role, phone, child_first_name, child_age } = body
 
-  // If clerk_id provided directly (manual link), use it. Otherwise invite via Clerk.
-  let finalClerkId = clerk_id
-
-  let invitationUrl = null
-
-  if (!finalClerkId) {
-    // Send Clerk invitation
-    const clerkRes = await fetch('https://api.clerk.com/v1/invitations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email_address: email, redirect_url: 'https://sync.swingtheory.golf/home', skip_invitation_email: true }),
-    })
-
-    if (!clerkRes.ok) {
-      const err = await clerkRes.json()
-      const clerkMsg = err?.errors?.[0]?.long_message || err?.errors?.[0]?.message || 'Clerk invitation failed'
-      return c.json({ error: clerkMsg }, 500)
-    }
-
-    const clerkData = await clerkRes.json()
-    invitationUrl = clerkData.url || null
-
-    // Store a placeholder clerk_id — it gets updated on first login via the /users/me sync
-    finalClerkId = 'pending_' + uid()
+  if (!full_name || !email || !role) {
+    return c.json({ error: 'full_name, email, and role are required' }, 400)
   }
 
+  // Generate a memorable temp password: e.g., "swing-7429"
+  const tempPassword = 'swing-' + Math.floor(1000 + Math.random() * 9000)
+
+  // Step 1: Create Clerk user with the temp password
+  const nameParts = full_name.trim().split(/\s+/)
+  const firstName = nameParts[0]
+  const lastName = nameParts.slice(1).join(' ') || firstName
+
+  const createRes = await fetch('https://api.clerk.com/v1/users', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email_address: [email],
+      password: tempPassword,
+      first_name: firstName,
+      last_name: lastName,
+      skip_password_checks: true,
+    }),
+  })
+
+  const createData = await createRes.json()
+  console.log('Clerk create user status:', createRes.status)
+
+  if (!createRes.ok) {
+    const msg = createData?.errors?.[0]?.long_message || createData?.errors?.[0]?.message || 'Failed to create Clerk user'
+    console.error('Clerk create user error:', JSON.stringify(createData))
+    return c.json({ error: msg }, 500)
+  }
+
+  const finalClerkId = createData.id
+
+  // Step 2: Create user record in D1 with must_change_password = 1
   const userId = 'usr_' + uid()
-  await c.env.DB.prepare(
-    'INSERT INTO users (id, clerk_id, email, full_name, phone, role) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(userId, finalClerkId, email, full_name, phone || null, role).run()
+  try {
+    await c.env.DB.prepare(
+      'INSERT INTO users (id, clerk_id, email, full_name, phone, role, must_change_password) VALUES (?, ?, ?, ?, ?, ?, 1)'
+    ).bind(userId, finalClerkId, email, full_name, phone || null, role).run()
+  } catch (e) {
+    // Roll back the Clerk user since D1 insert failed
+    await fetch(`https://api.clerk.com/v1/users/${finalClerkId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` },
+    }).catch(() => {})
+    console.error('D1 insert error:', e.message)
+    return c.json({ error: 'Could not create user record: ' + e.message }, 500)
+  }
 
   // Create child record if parent
   if (role === 'parent' && child_first_name) {
@@ -740,15 +902,20 @@ app.post('/admin/members', requireAdmin, async (c) => {
     ).bind(instrId, userId).run()
   }
 
-  // Send welcome email with invitation link — skip Clerk's default invitation email
+  // Step 3: Send welcome email with email + temp password
   try {
-    const { subject: ws, html: wh } = welcomeEmail({ recipientName: full_name, role, email, invitationUrl })
+    const { subject: ws, html: wh } = welcomeEmail({
+      recipientName: full_name,
+      role,
+      email,
+      tempPassword,
+    })
     await sendEmail(c.env, { to: email, subject: ws, html: wh })
   } catch (e) {
     console.error('Welcome email failed:', e.message)
   }
 
-  return c.json({ ok: true, user_id: userId })
+  return c.json({ ok: true, user_id: userId, temp_password: tempPassword })
 })
 
 // PUT /admin/members/:id
