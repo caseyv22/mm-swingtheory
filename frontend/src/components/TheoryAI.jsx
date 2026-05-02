@@ -110,7 +110,7 @@ function DispersionChart({ carries, offlines }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function TheoryAI({ lessonId, isInstructor = false }) {
+export default function TheoryAI({ lessonId, isInstructor = false, mode = 'instructor', canEdit = false }) {
   const [upload, setUpload] = useState(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -124,8 +124,13 @@ export default function TheoryAI({ lessonId, isInstructor = false }) {
   async function loadData() {
     setLoading(true)
     try {
-      const data = await api.get(`/lessons/${lessonId}/gspro`)
-      setUpload(data.upload || null)
+      if (mode === 'swinger') {
+        const data = await api.get(`/swinger/practice/${lessonId}`)
+        setUpload(data.gspro || null)
+      } else {
+        const data = await api.get(`/lessons/${lessonId}/gspro`)
+        setUpload(data.upload || null)
+      }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
@@ -135,7 +140,10 @@ export default function TheoryAI({ lessonId, isInstructor = false }) {
     setUploading(true); setError('')
     try {
       const text = await file.text()
-      await api.post(`/instructor/lessons/${lessonId}/gspro`, { csv_data: text })
+      const uploadPath = mode === 'swinger'
+        ? `/swinger/practice/${lessonId}/gspro`
+        : `/instructor/lessons/${lessonId}/gspro`
+      await api.post(uploadPath, { csv_data: text })
       await loadData()
     } catch (e) { setError(e.message || 'Upload failed') }
     finally { setUploading(false) }
@@ -145,7 +153,7 @@ export default function TheoryAI({ lessonId, isInstructor = false }) {
 
   // ── No data ──
   if (!upload) {
-    if (!isInstructor) return (
+    if (!isInstructor && !canEdit) return (
       <div className="text-center py-6">
         <p className="text-xs text-gray-400 italic">No GSPro data for this lesson yet.</p>
       </div>
@@ -195,7 +203,7 @@ export default function TheoryAI({ lessonId, isInstructor = false }) {
           <p className="text-xs text-gray-400">{totalShots} shots · {clubs.length} clubs</p>
         </div>
         <div className="flex items-center gap-2">
-          {isInstructor && (
+          {(isInstructor || canEdit) && (
             <button onClick={() => fileRef.current?.click()}
               className="text-xs font-semibold text-[#1D9E75] border border-[#1D9E75]/30 px-2.5 py-1 rounded-lg hover:bg-[#E1F5EE] transition-colors">
               Replace CSV
