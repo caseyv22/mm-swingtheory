@@ -1,7 +1,6 @@
-const JWKS_URL = 'https://logical-roughy-21.clerk.accounts.dev/.well-known/jwks.json';
-
-async function getJWKS() {
-  const res = await fetch(JWKS_URL);
+async function getJWKS(env) {
+  const jwksUrl = env?.CLERK_JWKS_URL || 'https://logical-roughy-21.clerk.accounts.dev/.well-known/jwks.json';
+  const res = await fetch(jwksUrl);
   const { keys } = await res.json();
   return keys;
 }
@@ -23,7 +22,7 @@ function base64UrlDecode(str) {
   return Uint8Array.from(binary, c => c.charCodeAt(0));
 }
 
-async function verifyJWT(token) {
+async function verifyJWT(token, env) {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('Invalid JWT');
 
@@ -36,7 +35,7 @@ async function verifyJWT(token) {
     throw new Error('Token expired');
   }
 
-  const keys = await getJWKS();
+  const keys = await getJWKS(env);
   const jwk = keys.find(k => k.kid === header.kid) || keys[0];
   if (!jwk) throw new Error('No matching key found');
 
@@ -62,7 +61,7 @@ export async function verifyAuth(request, env) {
   const token = authHeader.replace('Bearer ', '');
 
   try {
-    const payload = await verifyJWT(token);
+    const payload = await verifyJWT(token, env);
     return payload;
   } catch (e) {
     console.error('Auth error:', e.message);
