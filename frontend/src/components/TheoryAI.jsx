@@ -202,13 +202,13 @@ export default function TheoryAI({ lessonId, isInstructor = false }) {
             </button>
           )}
           {/* On Course Toggle */}
-          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
-            <span className="text-[10px] font-bold text-gray-500">SIM</span>
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+            <span className={`text-xs font-bold tracking-wide transition-colors ${!onCourse ? 'text-[#064029]' : 'text-gray-400'}`}>SIM</span>
             <button onClick={() => setOnCourse(o => !o)}
-              className={`relative w-8 h-4 rounded-full transition-colors ${onCourse ? 'bg-[#064029]' : 'bg-gray-300'}`}>
-              <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${onCourse ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${onCourse ? 'bg-[#064029]' : 'bg-gray-300'}`}>
+              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${onCourse ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
-            <span className="text-[10px] font-bold text-gray-500">COURSE</span>
+            <span className={`text-xs font-bold tracking-wide transition-colors ${onCourse ? 'text-[#064029]' : 'text-gray-400'}`}>COURSE</span>
           </div>
         </div>
         <input ref={fileRef} type="file" accept=".csv" className="hidden"
