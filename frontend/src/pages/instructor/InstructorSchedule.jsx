@@ -47,6 +47,37 @@ function addDays(date, n) {
 }
 
 // ─── Add Lesson Modal (from schedule) ────────────────────────────────────────
+// ─── Date/time select helpers ─────────────────────────────────────────────────
+function generateDates(daysAhead = 90) {
+  const dates = []
+  const today = new Date()
+  for (let i = 0; i <= daysAhead; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
+    const val = d.toISOString().split('T')[0]
+    const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    dates.push({ val, label })
+  }
+  return dates
+}
+
+function generateTimes() {
+  const times = []
+  for (let h = 6; h < 22; h++) {
+    for (const m of [0, 30]) {
+      const val = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      const hour12 = h % 12 || 12
+      const ampm = h < 12 ? 'AM' : 'PM'
+      times.push({ val, label: `${hour12}:${String(m).padStart(2, '0')} ${ampm}` })
+    }
+  }
+  return times
+}
+
+const DATE_OPTIONS = generateDates(90)
+const TIME_OPTIONS = generateTimes()
+const SEL = 'w-full border border-gray-200 rounded-lg px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]'
+
 function AddLessonModal({ students, prefilledDate, onClose, onSaved }) {
   const [form, setForm] = useState({
     student_id: '',
@@ -102,25 +133,32 @@ function AddLessonModal({ students, prefilledDate, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <select className={SEL} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}>
+              <option value="">Select a date…</option>
+              {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+              <select className={SEL} value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}>
+                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+              <select className={SEL} value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}>
+                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+              </select>
             </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Bay (optional)</label>
-            <input className={`w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]`} value={form.bay} onChange={e => setForm(f => ({ ...f, bay: e.target.value }))} placeholder="e.g. Bay 3" />
+            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.bay} onChange={e => setForm(f => ({ ...f, bay: e.target.value }))} placeholder="e.g. Bay 3" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Notes (optional)</label>
-            <textarea rows={2} className={`w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none`} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Focus areas…" />
+            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Focus areas…" />
           </div>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
@@ -200,16 +238,23 @@ function EditLessonModal({ lesson, onClose, onSaved }) {
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <select className={SEL} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}>
+              <option value="">Select a date…</option>
+              {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+              <select className={SEL} value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}>
+                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+              <select className={SEL} value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}>
+                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+              </select>
             </div>
           </div>
           <div>
