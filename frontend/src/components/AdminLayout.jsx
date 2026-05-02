@@ -1,18 +1,42 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { UserButton } from '@clerk/clerk-react'
+import { UserButton, useAuth } from '@clerk/clerk-react'
+import { api } from '../lib/api'
 
-const NAV_ITEMS = [
+const ADMIN_NAV = [
   { label: 'Sessions', href: '/admin' },
   { label: 'Members', href: '/admin/members' },
   { label: 'Programs', href: '/admin/programs' },
   { label: 'Settings', href: '/admin/settings' },
 ]
 
+const SWINGER_NAV = [
+  { label: 'Sessions', href: '/admin' },
+  { label: 'Theory AI', href: '/theory-ai' },
+  { label: 'Account', href: '/account' },
+]
+
 export default function AdminLayout({ children }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { getToken, isLoaded, isSignedIn } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [role, setRole] = useState(() => sessionStorage.getItem('st_role') || 'admin')
+
+  // Sync role from API in case sessionStorage is stale
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    api.init(getToken)
+    api.getMe().then(data => {
+      if (data?.user?.role) {
+        setRole(data.user.role)
+        sessionStorage.setItem('st_role', data.user.role)
+      }
+    }).catch(() => {})
+  }, [isLoaded, isSignedIn])
+
+  const NAV_ITEMS = role === 'swinger' ? SWINGER_NAV : ADMIN_NAV
+  const sidebarLabel = role === 'swinger' ? 'Swinger' : 'Admin'
 
   // Dynamic page title
   useEffect(() => {
@@ -21,9 +45,11 @@ export default function AdminLayout({ children }) {
       '/admin/members': 'Members',
       '/admin/programs': 'Programs',
       '/admin/settings': 'Settings',
+      '/theory-ai': 'Theory AI',
+      '/account': 'Account',
     }
     const page = Object.entries(pageMap).find(([path]) => location.pathname === path || location.pathname.startsWith(path + '/'))
-    const pageName = page ? page[1] : 'Admin'
+    const pageName = page ? page[1] : 'Sync'
     document.title = `Sync | Swing Theory | ${pageName}`
   }, [location.pathname])
 
@@ -39,7 +65,7 @@ export default function AdminLayout({ children }) {
           <img src="/STEmblem.svg" alt="ST" width={28} height={16} className="brightness-0 invert" />
           <div className="flex flex-col">
             <p className="font-display text-lg text-white tracking-widest leading-none">SYNC</p>
-            <p className="text-white/40 text-[10px] font-bold tracking-widest uppercase leading-none mt-0.5">Admin</p>
+            <p className="text-white/40 text-[10px] font-bold tracking-widest uppercase leading-none mt-0.5">{sidebarLabel}</p>
           </div>
         </button>
       </div>
@@ -60,7 +86,7 @@ export default function AdminLayout({ children }) {
       </nav>
       <div className="px-5 py-5 border-t border-white/10 flex items-center gap-3">
         <UserButton afterSignOutUrl="/login" />
-        <span className="text-white/50 text-xs font-semibold">Admin</span>
+        <span className="text-white/50 text-xs font-semibold">{sidebarLabel}</span>
       </div>
     </>
   )
@@ -86,7 +112,7 @@ export default function AdminLayout({ children }) {
             <img src="/STEmblem.svg" alt="ST" width={28} height={16} className="brightness-0 invert" />
             <div className="flex flex-col">
               <p className="font-display text-lg text-white tracking-widest leading-none">SYNC</p>
-              <p className="text-white/40 text-[10px] font-bold tracking-widest uppercase leading-none mt-0.5">Admin</p>
+              <p className="text-white/40 text-[10px] font-bold tracking-widest uppercase leading-none mt-0.5">{sidebarLabel}</p>
             </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="text-white/60 hover:text-white text-xl">✕</button>
@@ -108,7 +134,7 @@ export default function AdminLayout({ children }) {
         </nav>
         <div className="px-5 py-5 border-t border-white/10 flex items-center gap-3">
           <UserButton afterSignOutUrl="/login" />
-          <span className="text-white/50 text-xs font-semibold">Admin</span>
+          <span className="text-white/50 text-xs font-semibold">{sidebarLabel}</span>
         </div>
       </aside>
 
