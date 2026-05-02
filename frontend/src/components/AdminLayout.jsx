@@ -21,19 +21,43 @@ export default function AdminLayout({ children }) {
   const location = useLocation()
   const { getToken, isLoaded, isSignedIn } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [role, setRole] = useState(() => sessionStorage.getItem('st_role') || 'admin')
+  // role starts null; we resolve it from API before rendering nav
+  const [role, setRole] = useState(() => sessionStorage.getItem('st_role'))
+  const [roleLoaded, setRoleLoaded] = useState(false)
 
-  // Sync role from API in case sessionStorage is stale
+  // Always re-fetch role from API on mount — sessionStorage can be stale or wrong
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
     api.init(getToken)
-    api.getMe().then(data => {
-      if (data?.user?.role) {
-        setRole(data.user.role)
-        sessionStorage.setItem('st_role', data.user.role)
-      }
-    }).catch(() => {})
+    api.getMe()
+      .then(data => {
+        const fetchedRole = data?.user?.role || null
+        if (fetchedRole) {
+          setRole(fetchedRole)
+          sessionStorage.setItem('st_role', fetchedRole)
+        }
+        setRoleLoaded(true)
+      })
+      .catch(() => {
+        // On error, keep cached role (if any) but mark loaded to avoid blocking forever
+        setRoleLoaded(true)
+      })
   }, [isLoaded, isSignedIn])
+
+  // Block render until role is resolved — prevents the wrong sidebar from flashing
+  if (!roleLoaded || !role) {
+    return (
+      <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
+        <p className="text-[#064029] font-bold tracking-wide text-sm">Loading…</p>
+      </div>
+    )
+  }
+
+  // If role doesn't have access to admin layout, send them to /home
+  if (role !== 'admin' && role !== 'swinger') {
+    if (typeof window !== 'undefined') window.location.href = '/home'
+    return null
+  }
 
   const NAV_ITEMS = role === 'swinger' ? SWINGER_NAV : ADMIN_NAV
   const sidebarLabel = role === 'swinger' ? 'Swinger' : 'Admin'
