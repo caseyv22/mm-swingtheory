@@ -4,12 +4,13 @@ import AdminLayout from '../../components/AdminLayout'
 import { api } from '../../lib/api'
 import TypeaheadSelect from '../../components/TypeaheadSelect'
 
-const ROLES = ['admin', 'instructor', 'parent', 'student']
+const ROLES = ['admin', 'instructor', 'parent', 'student', 'swinger']
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
   const colors = {
     admin: 'bg-[#064029] text-white',
+    swinger: 'bg-[#085041] text-white',
     instructor: 'bg-[#1D9E75] text-white',
     parent: 'bg-[#E1F5EE] text-[#064029]',
     student: 'bg-gray-100 text-gray-700',
