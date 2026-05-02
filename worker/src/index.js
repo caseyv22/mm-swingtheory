@@ -703,7 +703,7 @@ app.post('/admin/members', requireAdmin, async (c) => {
         'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email_address: email, redirect_url: `${env.FRONTEND_URL || 'https://mm-1a4.pages.dev'}/home` }),
+      body: JSON.stringify({ email_address: email, redirect_url: 'https://sync.swingtheory.golf/home' }),
     })
 
     if (!clerkRes.ok) {
