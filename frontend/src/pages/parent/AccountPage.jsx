@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAuth, useUser, UserButton } from '@clerk/clerk-react'
+import { useAuth, useUser, UserButton, useClerk } from '@clerk/clerk-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import NavBar from '../../components/NavBar.jsx'
 
@@ -8,9 +8,11 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://mm-api.swingtheoryla.wo
 export default function AccountPage() {
   const { getToken } = useAuth()
   const { user: clerkUser } = useUser()
+  const clerk = useClerk()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isOnboarding = searchParams.get('onboarding') === 'true'
+  const isChangePassword = searchParams.get('change-password') === 'true'
 
   const [userData, setUserData] = useState(null)
   const [role, setRole] = useState(null)
@@ -22,6 +24,14 @@ export default function AccountPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState(null)
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [passwordChanged, setPasswordChanged] = useState(false)
+  const [passwordError, setPasswordError] = useState(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -37,7 +47,7 @@ export default function AccountPage() {
       setRole(data.user?.role)
       setPhone(data.user?.phone || '')
       if (data.user?.role === 'parent') {
-        const child = data.children?.[0]
+        const child = data.children?.[0] || data.child
         if (child) { setChildName(child.first_name || ''); setChildAge(child.age?.toString() || '') }
       }
       if (data.user?.role === 'instructor') setBio(data.instructor?.bio || '')
@@ -64,11 +74,104 @@ export default function AccountPage() {
     finally { setSaving(false) }
   }
 
+  async function handleChangePassword(e) {
+    e.preventDefault()
+    setPasswordError(null)
+    setPasswordChanged(false)
+
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.')
+      return
+    }
+
+    setChangingPassword(true)
+    try {
+      // Use Clerk's client SDK so we don't need to verify current password server-side
+      // For first-login forced change, currentPassword is the temp password they used to sign in
+      if (isChangePassword && userData?.must_change_password === 1) {
+        // First time — they signed in with temp password; just update via backend
+        const token = await getToken()
+        const res = await fetch(`${API_URL}/users/me/password`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ new_password: newPassword }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Could not update password')
+        }
+        setPasswordChanged(true)
+        setNewPassword('')
+        setConfirmPassword('')
+        setCurrentPassword('')
+        // Short pause so user sees the success message, then redirect home
+        setTimeout(() => { window.location.href = '/home' }, 1500)
+      } else {
+        // Voluntary password change — use Clerk's client SDK with current-password verification
+        await clerkUser.updatePassword({
+          currentPassword,
+          newPassword,
+        })
+        setPasswordChanged(true)
+        setNewPassword('')
+        setConfirmPassword('')
+        setCurrentPassword('')
+        setTimeout(() => setPasswordChanged(false), 3000)
+      }
+    } catch (err) {
+      const msg = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || err.message || 'Could not update password'
+      setPasswordError(msg)
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
   if (loading) return (
     <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
       <p className="text-[#064029] font-bold tracking-wide">Loading...</p>
     </div>
   )
+
+  // ── Forced password change layout (first login with temp password) ──
+  if (isChangePassword && userData?.must_change_password === 1) {
+    return (
+      <div className="min-h-screen bg-[#F9FAFB] flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">
+          <div className="flex justify-start mb-10">
+            <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" height={32} className="w-auto brightness-0" />
+          </div>
+          <h1 className="font-display text-4xl text-[#064029] tracking-widest mb-2">SET YOUR PASSWORD.</h1>
+          <p className="text-gray-500 text-sm font-medium mb-8">
+            For security, please choose a new password before continuing.
+          </p>
+
+          {passwordError && <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-xl mb-5">{passwordError}</div>}
+          {passwordChanged && <div className="bg-green-50 text-green-700 text-sm font-semibold px-4 py-3 rounded-xl mb-5">Password updated! Redirecting…</div>}
+
+          <form onSubmit={handleChangePassword} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">New Password</label>
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 8 characters" autoFocus required minLength={8}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Confirm New Password</label>
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Re-enter password" required minLength={8}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+            </div>
+            <button type="submit" disabled={changingPassword}
+              className="w-full bg-[#064029] text-white font-bold py-4 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 text-sm tracking-wide">
+              {changingPassword ? 'Updating…' : 'Update Password & Continue'}
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
 
   // ── Onboarding layout ──
   if (isOnboarding) {
@@ -134,6 +237,7 @@ export default function AccountPage() {
             {role === 'parent' && 'Update your child info and contact details.'}
             {role === 'student' && 'Update your contact details.'}
             {role === 'instructor' && 'Update your profile and contact details.'}
+            {role === 'admin' && 'Manage your account.'}
           </p>
         </div>
       </div>
@@ -195,6 +299,36 @@ export default function AccountPage() {
           className="w-full bg-[#064029] text-white font-bold py-4 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 text-sm tracking-wide">
           {saving ? 'Saving...' : saved ? 'Saved ✓' : 'Save Changes'}
         </button>
+
+        {/* Change Password card */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Security</p>
+
+          {passwordError && <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-xl">{passwordError}</div>}
+          {passwordChanged && <div className="bg-green-50 text-green-700 text-sm font-semibold px-4 py-3 rounded-xl">Password updated ✓</div>}
+
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Current Password</label>
+              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" required
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">New Password</label>
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 8 characters" required minLength={8}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Confirm New Password</label>
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Re-enter new password" required minLength={8}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+            </div>
+            <button type="submit" disabled={changingPassword}
+              className="w-full bg-[#064029] text-white font-bold py-4 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 text-sm tracking-wide">
+              {changingPassword ? 'Updating…' : 'Change Password'}
+            </button>
+          </form>
+        </div>
       </main>
     </div>
   )
