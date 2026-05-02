@@ -11,15 +11,17 @@ function formatDate(dateStr) {
 
 function formatDateShort(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+    year: 'numeric',
     weekday: 'short', month: 'short', day: 'numeric'
   })
 }
 
 function formatTime(t) {
   if (!t) return ''
-  const [h, m] = t.split(':')
-  const hour = parseInt(h)
-  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`
+  const parts = t.split(':')
+  const hour = parseInt(parts[0])
+  const min = parts[1] ? String(parts[1]).padStart(2, '0') : '00'
+  return `${hour % 12 || 12}:${min} ${hour >= 12 ? 'PM' : 'AM'}`
 }
 
 function isFuture(dateStr) {
@@ -39,7 +41,6 @@ function generateDates(daysAhead = 90) {
   }
   return dates
 }
-
 function generateTimes() {
   const times = []
   for (let h = 6; h < 22; h++) {
@@ -52,7 +53,6 @@ function generateTimes() {
   }
   return times
 }
-
 const DATE_OPTIONS = generateDates(90)
 const TIME_OPTIONS = generateTimes()
 const SEL = 'w-full border border-gray-200 rounded-lg px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]'
@@ -87,20 +87,20 @@ function AddLessonModal({ studentId, onClose, onSaved }) {
               <option value="">Select a date…</option>
               {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
             </select>
-          </div>
+            </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Time</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start</label>
               <select className={SEL} value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}>
                 {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
               </select>
-            </div>
+              </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Time</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End</label>
               <select className={SEL} value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}>
                 {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
               </select>
-            </div>
+              </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Bay (optional)</label>
