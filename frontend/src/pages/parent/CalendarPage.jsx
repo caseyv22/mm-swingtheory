@@ -259,7 +259,8 @@ export default function CalendarPage() {
   const selectedDateSessions = selectedDate ? sessions.filter(s => s.date === selectedDate) : []
   const nextAvailable = sessions.find(s => !s.is_cancelled && s.spots_remaining > 0)
   const today = new Date().toISOString().split("T")[0]
-  const isUpcoming = program?.start_date && today < program.start_date
+  // Forward booking allowed: even if program.start_date is in the future,
+  // students can book any session that's been generated for the forward_view window.
 
   if (loading) return (
     <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
@@ -295,13 +296,6 @@ export default function CalendarPage() {
           <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
             <p className="font-display text-2xl text-[#064029] tracking-widest">BOOKING PAUSED</p>
             <p className="text-gray-500 text-sm mt-2">Check back soon.</p>
-          </div>
-        ) : isUpcoming ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
-            <p className="font-display text-2xl text-[#064029] tracking-widest">COMING SOON</p>
-            <p className="text-gray-500 text-sm mt-2">
-              Sessions begin {new Date(program.start_date + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-            </p>
           </div>
         ) : sessions.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
