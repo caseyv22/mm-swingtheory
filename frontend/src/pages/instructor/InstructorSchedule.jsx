@@ -102,25 +102,25 @@ function AddLessonModal({ students, prefilledDate, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
             </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Bay (optional)</label>
-            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.bay} onChange={e => setForm(f => ({ ...f, bay: e.target.value }))} placeholder="e.g. Bay 3" />
+            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.bay} onChange={e => setForm(f => ({ ...f, bay: e.target.value }))} placeholder="e.g. Bay 3" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Notes (optional)</label>
-            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Focus areas…" />
+            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Focus areas…" />
           </div>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
@@ -200,25 +200,25 @@ function EditLessonModal({ lesson, onClose, onSaved }) {
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
             </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Bay (optional)</label>
-            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.bay} onChange={e => setForm(f => ({ ...f, bay: e.target.value }))} placeholder="e.g. Bay 3" />
+            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.bay} onChange={e => setForm(f => ({ ...f, bay: e.target.value }))} placeholder="e.g. Bay 3" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Session Focus (optional)</label>
-            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Focus areas for this lesson…" />
+            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Focus areas for this lesson…" />
           </div>
 
           {/* Coaching Notes */}
@@ -235,7 +235,7 @@ function EditLessonModal({ lesson, onClose, onSaved }) {
             )}
             {editingNote && (
               <div className="space-y-2">
-                <textarea rows={4} autoFocus className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none" placeholder="Coaching notes…" value={noteText} onChange={e => setNoteText(e.target.value)} />
+                <textarea rows={4} autoFocus className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none" placeholder="Coaching notes…" value={noteText} onChange={e => setNoteText(e.target.value)} />
                 <div className="flex items-center justify-between">
                   {noteSaved && <span className="text-xs text-[#1D9E75] font-medium">Saved ✓</span>}
                   <div className="flex gap-2 ml-auto">
@@ -475,7 +475,11 @@ export default function InstructorSchedule() {
             {selectedDate && (
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-gray-700">{formatDate(selectedDate)}</p>
-                <button onClick={() => setSelectedDate(null)} className="text-xs font-semibold text-gray-400 hover:text-gray-600">← Show all</button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleAddFromDate(selectedDate)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">+ Add lesson this day</button>
+                  <span className="text-gray-400">|</span>
+                  <button onClick={() => setSelectedDate(null)} className="text-xs font-semibold text-gray-400 hover:text-gray-600">← Show all</button>
+                </div>
               </div>
             )}
           </div>
@@ -488,7 +492,12 @@ export default function InstructorSchedule() {
                 <p className="text-sm text-gray-300 italic">
                   {selectedDate ? 'No lessons on this day' : `No ${filter} lessons`}
                 </p>
-
+                <button
+                  onClick={() => setShowAddLesson(true)}
+                  className="mt-3 text-sm font-semibold text-[#1D9E75] hover:text-[#064029]"
+                >
+                  Schedule a lesson →
+                </button>
               </div>
             ) : (
               <div className="space-y-3">
@@ -527,7 +536,14 @@ export default function InstructorSchedule() {
                 currentMonth={calendarMonth}
                 onMonthChange={handleMonthChange}
               />
-
+              {selectedDate && (
+                <button
+                  onClick={() => { handleAddFromDate(selectedDate); setCalendarOpen(false) }}
+                  className="mt-3 w-full py-2.5 text-sm font-semibold text-[#1D9E75] border border-[#1D9E75]/30 rounded-lg hover:bg-[#E1F5EE] transition-colors"
+                >
+                  + Add lesson on {formatDateShort(selectedDate)}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -554,7 +570,12 @@ export default function InstructorSchedule() {
                   </div>
                 ))
               )}
-
+              <button
+                onClick={() => handleAddFromDate(selectedDate)}
+                className="mt-3 w-full py-2 text-xs font-semibold text-[#1D9E75] border border-[#1D9E75]/30 rounded-lg hover:bg-[#E1F5EE] transition-colors"
+              >
+                + Add lesson on this day
+              </button>
             </div>
           )}
         </div>
