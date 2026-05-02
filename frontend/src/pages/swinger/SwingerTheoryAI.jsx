@@ -3,6 +3,22 @@ import AdminLayout from '../../components/AdminLayout'
 import TheoryAI from '../../components/TheoryAI'
 import { api } from '../../lib/api'
 
+// ─── Date select helpers ──────────────────────────────────────────────────────
+function generateDates(daysAhead = 90) {
+  const dates = []
+  const today = new Date()
+  for (let i = 0; i <= daysAhead; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
+    const val = d.toISOString().split('T')[0]
+    const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    dates.push({ val, label })
+  }
+  return dates
+}
+const DATE_OPTIONS = generateDates(90)
+const SEL = 'w-full border border-gray-200 rounded-lg px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]'
+
 function formatDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
@@ -51,9 +67,10 @@ function AddPracticeModal({ onClose, onSaved }) {
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input type="date" autoFocus
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={date} onChange={e => setDate(e.target.value)} />
+            <select autoFocus className={SEL} value={date} onChange={e => setDate(e.target.value)}>
+              <option value="">Select a date…</option>
+              {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Notes (optional)</label>
@@ -112,9 +129,9 @@ function EditPracticeModal({ session, onClose, onSaved, onDelete }) {
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input type="date"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={date} onChange={e => setDate(e.target.value)} />
+            <select className={SEL} value={date} onChange={e => setDate(e.target.value)}>
+              {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Notes</label>
