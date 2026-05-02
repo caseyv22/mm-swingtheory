@@ -75,9 +75,33 @@ function uid() {
 // GET /users/me
 app.get('/users/me', requireAuth, async (c) => {
   const clerkId = c.get('clerkId')
-  const user = await c.env.DB.prepare(
+  let user = await c.env.DB.prepare(
     'SELECT * FROM users WHERE clerk_id = ?'
   ).bind(clerkId).first()
+
+  // First login sync — user was created with pending_xxx clerk_id
+  // Match by email and update to real clerk_id
+  if (!user) {
+    try {
+      const clerk = createClerkClient({ secretKey: c.env.CLERK_SECRET_KEY })
+      const clerkUser = await clerk.users.getUser(clerkId)
+      const email = clerkUser.emailAddresses?.[0]?.emailAddress
+      if (email) {
+        const pendingUser = await c.env.DB.prepare(
+          'SELECT * FROM users WHERE email = ? AND clerk_id LIKE ?'
+        ).bind(email, 'pending_%').first()
+        if (pendingUser) {
+          await c.env.DB.prepare(
+            'UPDATE users SET clerk_id = ? WHERE id = ?'
+          ).bind(clerkId, pendingUser.id).run()
+          user = { ...pendingUser, clerk_id: clerkId }
+        }
+      }
+    } catch (e) {
+      console.error('First login sync error:', e.message)
+    }
+  }
+
   if (!user) return c.json({ error: 'User not found' }, 404)
 
   let child = null
@@ -692,37 +716,30 @@ app.post('/admin/members', requireAdmin, async (c) => {
 
   // If clerk_id provided directly (manual link), use it. Otherwise invite via Clerk.
   let finalClerkId = clerk_id
+
   let invitationUrl = null
 
   if (!finalClerkId) {
-    // Create Clerk invitation — skip their email so only ours sends
+    // Send Clerk invitation
     const clerkRes = await fetch('https://api.clerk.com/v1/invitations', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        email_address: email,
-        redirect_url: 'https://sync.swingtheory.golf/home',
-        skip_invitation_email: true,
-      }),
+      body: JSON.stringify({ email_address: email, redirect_url: `${env.FRONTEND_URL || 'https://mm-1a4.pages.dev'}/home` }),
     })
 
-    const clerkData = await clerkRes.json()
-    console.log('Clerk invite status:', clerkRes.status)
-    console.log('Clerk invite data:', JSON.stringify(clerkData))
-
     if (!clerkRes.ok) {
-      const clerkMsg = clerkData?.errors?.[0]?.long_message || clerkData?.errors?.[0]?.message || 'Clerk invitation failed'
+      const err = await clerkRes.json()
+      const clerkMsg = err?.errors?.[0]?.long_message || err?.errors?.[0]?.message || 'Clerk invitation failed'
       return c.json({ error: clerkMsg }, 500)
     }
 
-    // This is the URL user clicks to set their password
+    const clerkData = await clerkRes.json()
     invitationUrl = clerkData.url || null
-    console.log('invitationUrl:', invitationUrl)
 
-    // Store placeholder clerk_id — updated on first login via /users/me sync
+    // Store a placeholder clerk_id — it gets updated on first login via the /users/me sync
     finalClerkId = 'pending_' + uid()
   }
 
