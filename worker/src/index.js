@@ -387,7 +387,7 @@ app.post('/bookings', requireAuth, async (c) => {
   // Weekly limit check
   const weekStart = new Date(session.date)
   const day = weekStart.getDay()
-  weekStart.setDate(weekStart.getDate() - (day === 0 ? 6 : day - 1))
+  weekStart.setDate(weekStart.getDate() - day)
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekStart.getDate() + 6)
 
@@ -607,7 +607,7 @@ app.get('/admin/sessions', requireAdminOrSwinger, async (c) => {
   const week = c.req.query('week') || new Date().toISOString().split('T')[0]
   const weekStart = new Date(week)
   const day = weekStart.getDay()
-  weekStart.setDate(weekStart.getDate() - (day === 0 ? 6 : day - 1))
+  weekStart.setDate(weekStart.getDate() - day)
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekStart.getDate() + 6)
 
