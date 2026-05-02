@@ -7,7 +7,7 @@ import NavBar from '../../components/NavBar.jsx'
 
 function formatDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric'
+    weekday: 'short', month: 'long', day: 'numeric', year: 'numeric'
   })
 }
 function formatTime(timeStr) {
@@ -53,49 +53,64 @@ function LessonCard({ lesson }) {
   const isCancelled = !!lesson.is_cancelled
 
   return (
-    <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-5 ${isPast ? 'opacity-80' : ''} ${isCancelled ? 'opacity-50' : ''}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#064029] bg-[#E1F5EE] px-2.5 py-0.5 rounded-full">
-              Private Lesson
-            </span>
-            {isCancelled && <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 px-2.5 py-0.5 rounded-full">Cancelled</span>}
-            {!isCancelled && !isPast && <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-2.5 py-0.5 rounded-full">Upcoming</span>}
-            {hasNote && <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] px-2.5 py-0.5 rounded-full border border-[#1D9E75]/30">Coach's Note</span>}
-          </div>
-          <p className="font-bold text-gray-900 text-base">{formatDate(lesson.date)}</p>
-          <p className="text-sm text-gray-500 font-medium mt-0.5">
-            {formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}
-            {lesson.bay && <span className="ml-1.5">· {lesson.bay}</span>}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">Instructor: <span className="font-semibold">{lesson.instructor_name}</span></p>
-          {lesson.notes && <p className="text-xs text-gray-400 mt-1 italic">Focus: {lesson.notes}</p>}
-        </div>
-        {hasNote && (
-          <button onClick={() => setExpanded(e => !e)}
-            className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029] transition-colors shrink-0">
-            {expanded ? 'Hide' : 'View Note'}
-          </button>
-        )}
-      </div>
-      {expanded && hasNote && (
-        <div className="mt-3 bg-[#E1F5EE] rounded-xl px-4 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#064029] mb-1">Coach's Note · {lesson.instructor_name}</p>
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{lesson.coaching_note}</p>
-          {lesson.note_updated_at && (
-            <p className="text-xs text-gray-400 mt-2">
-              {new Date(lesson.note_updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+    <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all ${isPast ? 'opacity-80' : ''} ${isCancelled ? 'opacity-50' : ''}`}>
+      {/* Clickable header row */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full text-left px-5 py-4 hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#064029] bg-[#E1F5EE] px-2.5 py-0.5 rounded-full">
+                Private Lesson
+              </span>
+              {isCancelled && <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 px-2.5 py-0.5 rounded-full">Cancelled</span>}
+              {!isCancelled && !isPast && <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-2.5 py-0.5 rounded-full">Upcoming</span>}
+              {hasNote && <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] px-2.5 py-0.5 rounded-full border border-[#1D9E75]/30">Note</span>}
+            </div>
+            <p className="font-bold text-gray-900 text-base">{formatDate(lesson.date)}</p>
+            <p className="text-sm text-gray-500 font-medium mt-0.5">
+              {formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}
+              {lesson.bay && <span className="ml-1.5">· {lesson.bay}</span>}
             </p>
-          )}
+            <p className="text-xs text-gray-400 mt-0.5">with {lesson.instructor_name}</p>
+          </div>
+          {/* Chevron */}
+          <svg
+            className={`w-5 h-5 text-gray-400 flex-shrink-0 mt-1 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
-      )}
-      {!hasNote && isPast && !isCancelled && (
-        <p className="text-xs text-gray-300 italic mt-2">No coaching notes yet</p>
-      )}
-      {!isCancelled && (
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <TheoryAI lessonId={lesson.id} isInstructor={false} />
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-4">
+          {lesson.notes && (
+            <p className="text-xs text-gray-500 italic">Focus: {lesson.notes}</p>
+          )}
+          {hasNote && (
+            <div className="bg-[#E1F5EE] rounded-xl px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#064029] mb-1">Coach's Note · {lesson.instructor_name}</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{lesson.coaching_note}</p>
+              {lesson.note_updated_at && (
+                <p className="text-xs text-gray-400 mt-2">
+                  {new Date(lesson.note_updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              )}
+            </div>
+          )}
+          {!hasNote && isPast && !isCancelled && (
+            <p className="text-xs text-gray-300 italic">No coaching notes yet</p>
+          )}
+          {!isCancelled && (
+            <div className="pt-2 border-t border-gray-100">
+              <TheoryAI lessonId={lesson.id} isInstructor={false} />
+            </div>
+          )}
         </div>
       )}
     </div>
