@@ -23,9 +23,10 @@ function formatTime(t) {
   return `${hour % 12 || 12}:${m} ${ampm}`
 }
 function getWeekStart(date) {
+  // Sunday-anchored: Sun=0 → 0 days back, Mon=1 → 1 day back, ... Sat=6 → 6 days back
   const d = new Date(date)
   const day = d.getDay()
-  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
+  d.setDate(d.getDate() - day)
   return d
 }
 function addDays(date, n) {
@@ -422,7 +423,7 @@ function MiniCalendar({ sessions, selectedDate, onSelectDate, currentMonth, onMo
   const month = currentMonth.getMonth()
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
-  const startPad = (firstDay.getDay() + 6) % 7
+  const startPad = firstDay.getDay()
 
   const sessionsByDate = {}
   sessions.forEach(s => {
@@ -446,7 +447,7 @@ function MiniCalendar({ sessions, selectedDate, onSelectDate, currentMonth, onMo
         <button onClick={() => onMonthChange(1)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">›</button>
       </div>
       <div className="grid grid-cols-7 mb-1">
-        {['M','T','W','T','F','S','S'].map((d, i) => (
+        {['S','M','T','W','T','F','S'].map((d, i) => (
           <div key={i} className="text-center text-xs font-semibold text-gray-300 py-1">{d}</div>
         ))}
       </div>
