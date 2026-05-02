@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { createClerkClient } from '@clerk/backend'
 import { verifyAuth } from './lib/auth.js'
 import {
   sendEmail,
@@ -88,8 +89,8 @@ app.get('/users/me', requireAuth, async (c) => {
       const email = clerkUser.emailAddresses?.[0]?.emailAddress
       if (email) {
         const pendingUser = await c.env.DB.prepare(
-          'SELECT * FROM users WHERE email = ? AND clerk_id LIKE ?'
-        ).bind(email, 'pending_%').first()
+          "SELECT * FROM users WHERE email = ? AND clerk_id LIKE 'pending_%'"
+        ).bind(email).first()
         if (pendingUser) {
           await c.env.DB.prepare(
             'UPDATE users SET clerk_id = ? WHERE id = ?'
@@ -720,26 +721,31 @@ app.post('/admin/members', requireAdmin, async (c) => {
   let invitationUrl = null
 
   if (!finalClerkId) {
-    // Send Clerk invitation
+    // Create Clerk invitation — skip their email so only ours sends
     const clerkRes = await fetch('https://api.clerk.com/v1/invitations', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email_address: email, redirect_url: `${env.FRONTEND_URL || 'https://mm-1a4.pages.dev'}/home` }),
+      body: JSON.stringify({
+        email_address: email,
+        redirect_url: 'https://sync.swingtheory.golf/home',
+        skip_invitation_email: true,
+      }),
     })
 
+    const clerkData = await clerkRes.json()
+
     if (!clerkRes.ok) {
-      const err = await clerkRes.json()
-      const clerkMsg = err?.errors?.[0]?.long_message || err?.errors?.[0]?.message || 'Clerk invitation failed'
+      const clerkMsg = clerkData?.errors?.[0]?.long_message || clerkData?.errors?.[0]?.message || 'Clerk invitation failed'
       return c.json({ error: clerkMsg }, 500)
     }
 
-    const clerkData = await clerkRes.json()
+    // Clerk returns the invitation URL — user clicks to set their password
     invitationUrl = clerkData.url || null
 
-    // Store a placeholder clerk_id — it gets updated on first login via the /users/me sync
+    // Store placeholder clerk_id — updated on first login via /users/me sync
     finalClerkId = 'pending_' + uid()
   }
 
