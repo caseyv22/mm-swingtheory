@@ -71,7 +71,7 @@ export default function NavBar({ role = 'student' }) {
               </div>
             </>
           ) : (
-            <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" height={28} className="w-auto" />
+            <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" className="h-8 w-auto max-w-[180px]" />
           )}
         </button>
 
