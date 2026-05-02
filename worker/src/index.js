@@ -67,6 +67,36 @@ async function requireInstructor(c, next) {
   await next()
 }
 
+// Allow admins AND swingers — used on session-management endpoints
+async function requireAdminOrSwinger(c, next) {
+  const payload = await verifyAuth(c.req.raw, c.env)
+  if (!payload) return c.json({ error: 'Unauthorized' }, 401)
+  const user = await c.env.DB.prepare(
+    'SELECT * FROM users WHERE clerk_id = ?'
+  ).bind(payload.sub).first()
+  if (!user || (user.role !== 'admin' && user.role !== 'swinger')) {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+  c.set('clerkId', payload.sub)
+  c.set('user', user)
+  await next()
+}
+
+// Allow only swingers — for personal practice log endpoints
+async function requireSwinger(c, next) {
+  const payload = await verifyAuth(c.req.raw, c.env)
+  if (!payload) return c.json({ error: 'Unauthorized' }, 401)
+  const user = await c.env.DB.prepare(
+    'SELECT * FROM users WHERE clerk_id = ?'
+  ).bind(payload.sub).first()
+  if (!user || user.role !== 'swinger') {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+  c.set('clerkId', payload.sub)
+  c.set('user', user)
+  await next()
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function uid() {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 20)
@@ -573,7 +603,7 @@ app.get('/student/lessons', requireAuth, async (c) => {
 // ─── ADMIN ROUTES ─────────────────────────────────────────────────────────────
 
 // GET /admin/sessions?week=YYYY-MM-DD
-app.get('/admin/sessions', requireAdmin, async (c) => {
+app.get('/admin/sessions', requireAdminOrSwinger, async (c) => {
   const week = c.req.query('week') || new Date().toISOString().split('T')[0]
   const weekStart = new Date(week)
   const day = weekStart.getDay()
@@ -598,7 +628,7 @@ app.get('/admin/sessions', requireAdmin, async (c) => {
 })
 
 // GET /admin/sessions/range?start=&end=
-app.get('/admin/sessions/range', requireAdmin, async (c) => {
+app.get('/admin/sessions/range', requireAdminOrSwinger, async (c) => {
   const { start, end } = c.req.query()
   const sessions = await c.env.DB.prepare(`
     SELECT s.*,
@@ -613,7 +643,7 @@ app.get('/admin/sessions/range', requireAdmin, async (c) => {
 })
 
 // POST /admin/sessions
-app.post('/admin/sessions', requireAdmin, async (c) => {
+app.post('/admin/sessions', requireAdminOrSwinger, async (c) => {
   const body = await c.req.json()
   const { program_id, date, start_time, end_time, capacity, bay, instructor_id, notes } = body
   const id = 'sess_' + uid()
@@ -628,7 +658,7 @@ app.post('/admin/sessions', requireAdmin, async (c) => {
 })
 
 // PUT /admin/sessions/:id
-app.put('/admin/sessions/:id', requireAdmin, async (c) => {
+app.put('/admin/sessions/:id', requireAdminOrSwinger, async (c) => {
   const { id } = c.req.param()
   const body = await c.req.json()
   const { capacity, is_cancelled, cancel_reason, instructor_id, bay, notes } = body
@@ -685,7 +715,7 @@ app.put('/admin/sessions/:id', requireAdmin, async (c) => {
 })
 
 // GET /admin/sessions/:id/roster
-app.get('/admin/sessions/:id/roster', requireAdmin, async (c) => {
+app.get('/admin/sessions/:id/roster', requireAdminOrSwinger, async (c) => {
   const { id } = c.req.param()
   const session = await c.env.DB.prepare(`
     SELECT s.*, p.name as program_name, u.full_name as instructor_name
@@ -730,7 +760,7 @@ app.get('/admin/sessions/:id/roster', requireAdmin, async (c) => {
 })
 
 // POST /admin/sessions/:id/instructors
-app.post('/admin/sessions/:id/instructors', requireAdmin, async (c) => {
+app.post('/admin/sessions/:id/instructors', requireAdminOrSwinger, async (c) => {
   const { id } = c.req.param()
   const { instructor_id } = await c.req.json()
   if (!instructor_id) return c.json({ error: 'instructor_id required' }, 400)
@@ -747,7 +777,7 @@ app.post('/admin/sessions/:id/instructors', requireAdmin, async (c) => {
 })
 
 // DELETE /admin/sessions/:id/instructors/:instructor_id
-app.delete('/admin/sessions/:id/instructors/:instructor_id', requireAdmin, async (c) => {
+app.delete('/admin/sessions/:id/instructors/:instructor_id', requireAdminOrSwinger, async (c) => {
   const { id, instructor_id } = c.req.param()
   await c.env.DB.prepare(
     'DELETE FROM session_instructors WHERE session_id = ? AND instructor_id = ?'
@@ -756,7 +786,7 @@ app.delete('/admin/sessions/:id/instructors/:instructor_id', requireAdmin, async
 })
 
 // POST /admin/bookings — manual booking bypasses all rules
-app.post('/admin/bookings', requireAdmin, async (c) => {
+app.post('/admin/bookings', requireAdminOrSwinger, async (c) => {
   const { session_id, user_id } = await c.req.json()
 
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user_id).first()
@@ -782,7 +812,7 @@ app.post('/admin/bookings', requireAdmin, async (c) => {
 })
 
 // POST /admin/bookings/:id/checkin
-app.post('/admin/bookings/:id/checkin', requireAdmin, async (c) => {
+app.post('/admin/bookings/:id/checkin', requireAdminOrSwinger, async (c) => {
   const { id } = c.req.param()
   const booking = await c.env.DB.prepare('SELECT * FROM bookings WHERE id = ?').bind(id).first()
   if (!booking) return c.json({ error: 'Booking not found' }, 404)
@@ -796,7 +826,7 @@ app.post('/admin/bookings/:id/checkin', requireAdmin, async (c) => {
 })
 
 // GET /admin/members
-app.get('/admin/members', requireAdmin, async (c) => {
+app.get('/admin/members', requireAdminOrSwinger, async (c) => {
   const q = c.req.query('q') || ''
   const status = c.req.query('status') || 'all'
 
@@ -1232,7 +1262,7 @@ app.put('/admin/config', requireAdmin, async (c) => {
 })
 
 // GET /admin/instructors — list all instructors for dropdowns
-app.get('/admin/instructors', requireAdmin, async (c) => {
+app.get('/admin/instructors', requireAdminOrSwinger, async (c) => {
   const instructors = await c.env.DB.prepare(`
     SELECT i.id, i.bio, u.id as user_id, u.full_name, u.email, u.status
     FROM instructors i
@@ -1555,6 +1585,139 @@ app.get('/lessons/:id/gspro', requireAuth, async (c) => {
   }
 
   return c.json({ upload })
+})
+
+// ─── SWINGER THEORY AI ROUTES ─────────────────────────────────────────────────
+
+// GET /swinger/practice — list all practice sessions for the logged-in swinger
+app.get('/swinger/practice', requireSwinger, async (c) => {
+  const user = c.get('user')
+  const sessions = await c.env.DB.prepare(`
+    SELECT ps.*,
+      CASE WHEN g.id IS NOT NULL THEN 1 ELSE 0 END as has_gspro
+    FROM practice_sessions ps
+    LEFT JOIN practice_gspro g ON g.practice_session_id = ps.id
+    WHERE ps.user_id = ?
+    ORDER BY ps.date DESC, ps.created_at DESC
+  `).bind(user.id).all()
+  return c.json({ sessions: sessions.results })
+})
+
+// POST /swinger/practice — create a new practice session
+app.post('/swinger/practice', requireSwinger, async (c) => {
+  const user = c.get('user')
+  const { date, notes } = await c.req.json()
+  if (!date) return c.json({ error: 'Date is required' }, 400)
+
+  const id = 'ps_' + uid()
+  await c.env.DB.prepare(
+    'INSERT INTO practice_sessions (id, user_id, date, notes) VALUES (?, ?, ?, ?)'
+  ).bind(id, user.id, date, notes?.trim() || null).run()
+
+  return c.json({ ok: true, session_id: id })
+})
+
+// GET /swinger/practice/:id — get a single practice session with its GSPro data
+app.get('/swinger/practice/:id', requireSwinger, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+  const session = await c.env.DB.prepare(
+    'SELECT * FROM practice_sessions WHERE id = ? AND user_id = ?'
+  ).bind(id, user.id).first()
+  if (!session) return c.json({ error: 'Practice session not found' }, 404)
+
+  const gspro = await c.env.DB.prepare(
+    'SELECT * FROM practice_gspro WHERE practice_session_id = ?'
+  ).bind(id).first()
+
+  return c.json({ session, gspro: gspro || null })
+})
+
+// PUT /swinger/practice/:id — update date or notes
+app.put('/swinger/practice/:id', requireSwinger, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+  const body = await c.req.json()
+
+  const existing = await c.env.DB.prepare(
+    'SELECT * FROM practice_sessions WHERE id = ? AND user_id = ?'
+  ).bind(id, user.id).first()
+  if (!existing) return c.json({ error: 'Practice session not found' }, 404)
+
+  await c.env.DB.prepare(`
+    UPDATE practice_sessions
+    SET date = ?, notes = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    body.date ?? existing.date,
+    'notes' in body ? (body.notes?.trim() || null) : existing.notes,
+    id
+  ).run()
+
+  return c.json({ ok: true })
+})
+
+// DELETE /swinger/practice/:id — delete a practice session and its GSPro data
+app.delete('/swinger/practice/:id', requireSwinger, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM practice_sessions WHERE id = ? AND user_id = ?'
+  ).bind(id, user.id).first()
+  if (!existing) return c.json({ error: 'Practice session not found' }, 404)
+
+  await c.env.DB.prepare('DELETE FROM practice_gspro WHERE practice_session_id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM practice_sessions WHERE id = ?').bind(id).run()
+
+  return c.json({ ok: true })
+})
+
+// POST /swinger/practice/:id/gspro — upload (or replace) GSPro CSV for a practice session
+app.post('/swinger/practice/:id/gspro', requireSwinger, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+  const { csv_data } = await c.req.json()
+  if (!csv_data) return c.json({ error: 'csv_data is required' }, 400)
+
+  const session = await c.env.DB.prepare(
+    'SELECT id FROM practice_sessions WHERE id = ? AND user_id = ?'
+  ).bind(id, user.id).first()
+  if (!session) return c.json({ error: 'Practice session not found' }, 404)
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM practice_gspro WHERE practice_session_id = ?'
+  ).bind(id).first()
+
+  if (existing) {
+    await c.env.DB.prepare(
+      "UPDATE practice_gspro SET csv_data = ?, uploaded_at = datetime('now') WHERE practice_session_id = ?"
+    ).bind(csv_data, id).run()
+  } else {
+    const uploadId = 'pg_' + uid()
+    await c.env.DB.prepare(
+      'INSERT INTO practice_gspro (id, practice_session_id, user_id, csv_data) VALUES (?, ?, ?, ?)'
+    ).bind(uploadId, id, user.id, csv_data).run()
+  }
+
+  return c.json({ ok: true })
+})
+
+// DELETE /swinger/practice/:id/gspro — remove GSPro data from a practice session
+app.delete('/swinger/practice/:id/gspro', requireSwinger, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+
+  const session = await c.env.DB.prepare(
+    'SELECT id FROM practice_sessions WHERE id = ? AND user_id = ?'
+  ).bind(id, user.id).first()
+  if (!session) return c.json({ error: 'Practice session not found' }, 404)
+
+  await c.env.DB.prepare(
+    'DELETE FROM practice_gspro WHERE practice_session_id = ?'
+  ).bind(id).run()
+
+  return c.json({ ok: true })
 })
 
 // ─── CRON HANDLERS ────────────────────────────────────────────────────────────
