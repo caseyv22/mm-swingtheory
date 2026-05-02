@@ -100,43 +100,6 @@ function MonthCalendar({ sessions, selectedDate, onSelectDate }) {
   )
 }
 
-// ─── Cancel Confirm Modal ─────────────────────────────────────────────────────
-function CancelConfirmModal({ session, onConfirm, onClose, loading }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-display text-xl text-[#064029] tracking-wide">CANCEL BOOKING</h3>
-              <p className="text-sm text-gray-500">
-                {new Date(session.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </p>
-            </div>
-          </div>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            Are you sure you want to cancel this booking? This action cannot be undone.
-          </p>
-        </div>
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">
-            Keep Booking
-          </button>
-          <button onClick={onConfirm} disabled={loading}
-            className="px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Cancelling…' : 'Yes, Cancel'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function SessionRow({ session, onBook, onCancel, cancellationHours, showInstructor }) {
   const today = new Date()
   const sessionStart = new Date(`${session.date}T${session.start_time}:00`)
@@ -183,7 +146,7 @@ function ConfirmModal({ session, program, onConfirm, onClose, loading, user, chi
     ["Program", program?.name],
     ["Date", formatDate(session.date)],
     ["Time", `${formatTime(session.start_time)} – ${formatTime(session.end_time)}`],
-    ["Location", "50 S De Lacey Ave, Pasadena CA"],
+    ["Location", "50 S De Lacey Ave. Suite #200. Pasadena CA 91105"],
     child ? ["Golfer", child.first_name] : user ? ["Student", user.full_name] : null,
   ].filter(Boolean)
 
@@ -226,8 +189,6 @@ export default function CalendarPage() {
   const [successMessage, setSuccessMessage] = useState(null)
   const [user, setUser] = useState(null)
   const [child, setChild] = useState(null)
-  const [cancelModal, setCancelModal] = useState(null)
-  const [cancelLoading, setCancelLoading] = useState(false)
 
   useEffect(() => { loadData() }, [slug])
 
@@ -279,28 +240,19 @@ export default function CalendarPage() {
   }
 
   async function handleCancel(session) {
-    setCancelModal(session)
-  }
-
-  async function handleConfirmCancel() {
-    const session = cancelModal
-    setCancelLoading(true)
+    if (!confirm(`Cancel your booking for ${formatDate(session.date)}?`)) return
     try {
       const token = await getToken()
       const data = await api.getMyBookings(token)
-      const booking = data.upcoming?.find(b => b.session_id === session.id && b.status === 'confirmed')
+      const booking = data.upcoming?.find(b => b.session_id === session.id && b.status === "confirmed")
       if (booking) {
         await api.cancelBooking(await getToken(), booking.id)
-        setCancelModal(null)
-        setSuccessMessage('Booking cancelled.')
+        setSuccessMessage("Booking cancelled.")
         setTimeout(() => setSuccessMessage(null), 3000)
         await loadData()
       }
     } catch (err) {
       setError(err.message)
-      setCancelModal(null)
-    } finally {
-      setCancelLoading(false)
     }
   }
 
@@ -327,7 +279,7 @@ export default function CalendarPage() {
             {program?.name?.toUpperCase() || slug?.toUpperCase()}
           </h1>
           {program?.price_display && (
-            <p className="text-gray-500 text-sm font-medium mt-1.5">{program.price_display} · 50 S De Lacey Ave, Pasadena</p>
+            <p className="text-gray-500 text-sm font-medium mt-1.5">{program.price_display} · 50 S De Lacey Ave. Suite #200. Pasadena CA 91105</p>
           )}
         </div>
 
@@ -397,7 +349,7 @@ export default function CalendarPage() {
                 )}
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">Location</p>
-                  <p className="font-semibold text-gray-900">50 S De Lacey Ave</p>
+                  <p className="font-semibold text-gray-900">50 S De Lacey Ave. Suite #200</p>
                   <p className="text-gray-500 text-xs mt-0.5">Pasadena, CA 91105</p>
                 </div>
               </div>
@@ -408,9 +360,6 @@ export default function CalendarPage() {
 
       {selectedSession && (
         <ConfirmModal session={selectedSession} program={program} onConfirm={handleConfirmBook} onClose={() => setSelectedSession(null)} loading={bookingLoading} user={user} child={child} />
-      )}
-      {cancelModal && (
-        <CancelConfirmModal session={cancelModal} onConfirm={handleConfirmCancel} onClose={() => setCancelModal(null)} loading={cancelLoading} />
       )}
     </div>
   )
