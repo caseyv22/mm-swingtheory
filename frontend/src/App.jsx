@@ -106,7 +106,7 @@ function ProtectedRoute({ children, requiredRole }) {
       return
     }
     // Always fetch from API to get authoritative role — ignore sessionStorage for gating
-    api.getMe()
+    api.get('/users/me')
       .then(data => {
         const role = data?.user?.role || null
         setResolvedRole(role)
