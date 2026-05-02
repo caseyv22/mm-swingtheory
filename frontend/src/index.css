@@ -7,4 +7,9 @@
     @apply bg-st-offwhite text-st-phantom antialiased;
     font-family: 'Manrope', sans-serif;
   }
+
+  /* Prevent iOS Safari auto-zoom on input focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
