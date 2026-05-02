@@ -89,10 +89,27 @@ function RoleRouter() {
 
 function ProtectedRoute({ children, requiredRole }) {
   const { getToken, isLoaded, isSignedIn } = useAuth()
+  const [resolvedRole, setResolvedRole] = useState(() => sessionStorage.getItem('st_role'))
+  const [roleResolving, setRoleResolving] = useState(!sessionStorage.getItem('st_role'))
 
   if (isLoaded && isSignedIn) {
     api.init(getToken)
   }
+
+  // Fetch role from API if we don't have it cached yet (fresh PWA, new device, etc.)
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    if (resolvedRole) return // already have it
+    api.getMe()
+      .then(data => {
+        if (data?.user?.role) {
+          setResolvedRole(data.user.role)
+          sessionStorage.setItem('st_role', data.user.role)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRoleResolving(false))
+  }, [isLoaded, isSignedIn, resolvedRole])
 
   if (!isLoaded) return (
     <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
@@ -101,11 +118,15 @@ function ProtectedRoute({ children, requiredRole }) {
   )
   if (!isSignedIn) return <Navigate to="/login" replace />
 
-  if (requiredRole) {
-    const cachedRole = sessionStorage.getItem('st_role')
-    if (cachedRole && !requiredRole.includes(cachedRole)) {
-      return <Navigate to="/home" replace />
-    }
+  // Wait for role to resolve before applying role-based redirects
+  if (requiredRole && roleResolving) return (
+    <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
+      <p className="text-st-green font-bold text-lg">Loading...</p>
+    </div>
+  )
+
+  if (requiredRole && resolvedRole && !requiredRole.includes(resolvedRole)) {
+    return <Navigate to="/home" replace />
   }
 
   return children
@@ -126,9 +147,14 @@ function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   // If user already has an active Clerk session, show "Continue as X"
+  // If they're NOT signed in, clear stale sessionStorage to prevent role bleed-through
   useEffect(() => {
-    if (authLoaded && isSignedIn && clerkUser) {
+    if (!authLoaded) return
+    if (isSignedIn && clerkUser) {
       setMode('session')
+    } else {
+      // Clear any cached role from a previous user — important for PWA / shared devices
+      sessionStorage.clear()
     }
   }, [authLoaded, isSignedIn, clerkUser])
 
