@@ -89,27 +89,32 @@ function RoleRouter() {
 
 function ProtectedRoute({ children, requiredRole }) {
   const { getToken, isLoaded, isSignedIn } = useAuth()
-  const [resolvedRole, setResolvedRole] = useState(() => sessionStorage.getItem('st_role'))
-  const [roleResolving, setRoleResolving] = useState(!sessionStorage.getItem('st_role'))
+  // NEVER use sessionStorage as the gating source of truth — roles can change server-side
+  // Always fetch from API when requiredRole is specified
+  const [resolvedRole, setResolvedRole] = useState(null)
+  const [roleResolving, setRoleResolving] = useState(true)
 
   if (isLoaded && isSignedIn) {
     api.init(getToken)
   }
 
-  // Fetch role from API if we don't have it cached yet (fresh PWA, new device, etc.)
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
-    if (resolvedRole) return // already have it
+    if (!requiredRole) {
+      // No role restriction — skip fetch
+      setRoleResolving(false)
+      return
+    }
+    // Always fetch from API to get authoritative role — ignore sessionStorage for gating
     api.getMe()
       .then(data => {
-        if (data?.user?.role) {
-          setResolvedRole(data.user.role)
-          sessionStorage.setItem('st_role', data.user.role)
-        }
+        const role = data?.user?.role || null
+        setResolvedRole(role)
+        if (role) sessionStorage.setItem('st_role', role)
       })
-      .catch(() => {})
+      .catch(() => setResolvedRole(null))
       .finally(() => setRoleResolving(false))
-  }, [isLoaded, isSignedIn, resolvedRole])
+  }, [isLoaded, isSignedIn])
 
   if (!isLoaded) return (
     <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
@@ -118,17 +123,19 @@ function ProtectedRoute({ children, requiredRole }) {
   )
   if (!isSignedIn) return <Navigate to="/login" replace />
 
-  // Wait for role to resolve before applying role-based redirects
+  // Wait for authoritative role before deciding access
   if (requiredRole && roleResolving) return (
     <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
       <p className="text-st-green font-bold text-lg">Loading...</p>
     </div>
   )
 
+  // Role resolved — enforce access
   if (requiredRole && resolvedRole && !requiredRole.includes(resolvedRole)) {
     return <Navigate to="/home" replace />
   }
 
+  // Role resolved but returned null (API error) — let them through, AdminLayout will handle it
   return children
 }
 
