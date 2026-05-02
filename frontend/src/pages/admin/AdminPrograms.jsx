@@ -6,6 +6,35 @@ const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 's
 const BOOKER_TYPES = ['student', 'parent']
 const BOOKING_TYPES = ['group', 'private']
 
+// ─── Date / time select options ──────────────────────────────────────────────
+function generateDates(daysAhead = 365) {
+  const dates = []
+  const today = new Date()
+  for (let i = 0; i <= daysAhead; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
+    const val = d.toISOString().split('T')[0]
+    const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    dates.push({ val, label })
+  }
+  return dates
+}
+function generateTimes() {
+  const times = []
+  for (let h = 6; h < 22; h++) {
+    for (const m of [0, 30]) {
+      const val = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      const hour12 = h % 12 || 12
+      const ampm = h < 12 ? 'AM' : 'PM'
+      times.push({ val, label: `${hour12}:${String(m).padStart(2, '0')} ${ampm}` })
+    }
+  }
+  return times
+}
+const DATE_OPTIONS = generateDates(365)
+const TIME_OPTIONS = generateTimes()
+const SEL = 'w-full border border-gray-200 rounded-lg px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]'
+
 function formatTime(t) {
   if (!t) return ''
   const [h, m] = t.split(':')
@@ -115,13 +144,17 @@ function CreateProgramModal({ onClose, onSuccess }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+              <select className={SEL} value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}>
+                <option value="">Select…</option>
+                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Time</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+              <select className={SEL} value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}>
+                <option value="">Select…</option>
+                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+              </select>
             </div>
           </div>
           <div className="bg-gray-50 rounded-xl p-4 space-y-3">
@@ -129,13 +162,17 @@ function CreateProgramModal({ onClose, onSuccess }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Start Date</label>
-                <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                  value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+                <select className={SEL} value={form.start_date || ''} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}>
+                  <option value="">Select…</option>
+                  {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                </select>
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">End Date</label>
-                <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                  value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+                <select className={SEL} value={form.end_date || ''} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}>
+                  <option value="">No end date</option>
+                  {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                </select>
                 <p className="text-xs text-gray-400 mt-1">Leave blank for no end date</p>
               </div>
             </div>
@@ -375,8 +412,8 @@ function ProgramEditor({ program, onSave, showToast }) {
         </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div><label className="block text-xs text-gray-500 mb-1">Start Time</label><input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} /></div>
-        <div><label className="block text-xs text-gray-500 mb-1">End Time</label><input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} /></div>
+        <div><label className="block text-xs text-gray-500 mb-1">Start Time</label><select className={SEL} value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}><option value="">Select…</option>{TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}</select></div>
+        <div><label className="block text-xs text-gray-500 mb-1">End Time</label><select className={SEL} value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}><option value="">Select…</option>{TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}</select></div>
         <div><label className="block text-xs text-gray-500 mb-1">Capacity</label><input type="number" min="1" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.default_capacity} onChange={e => setForm(f => ({ ...f, default_capacity: e.target.value }))} /></div>
         <div><label className="block text-xs text-gray-500 mb-1">Max/Week</label><input type="number" min="1" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.max_bookings_per_week} onChange={e => setForm(f => ({ ...f, max_bookings_per_week: e.target.value }))} /></div>
       </div>
@@ -385,8 +422,8 @@ function ProgramEditor({ program, onSave, showToast }) {
         <div><label className="block text-xs text-gray-500 mb-1">Cancel Window (hrs)</label><input type="number" min="0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.cancellation_hours} onChange={e => setForm(f => ({ ...f, cancellation_hours: e.target.value }))} /></div>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div><label className="block text-xs text-gray-500 mb-1">Start Date</label><input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
-        <div><label className="block text-xs text-gray-500 mb-1">End Date <span className="text-gray-400">(blank = never)</span></label><input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} /></div>
+        <div><label className="block text-xs text-gray-500 mb-1">Start Date</label><select className={SEL} value={form.start_date || ''} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}><option value="">Select…</option>{DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}</select></div>
+        <div><label className="block text-xs text-gray-500 mb-1">End Date <span className="text-gray-400">(blank = never)</span></label><select className={SEL} value={form.end_date || ''} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}><option value="">No end date</option>{DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}</select></div>
       </div>
       <div className="flex flex-wrap gap-4">
         {[['show_instructor','Show instructor name'],['forward_view_enabled','Forward view enabled'],['is_active','Program active']].map(([key, label]) => (
