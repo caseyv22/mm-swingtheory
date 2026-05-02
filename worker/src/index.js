@@ -1738,12 +1738,25 @@ async function generateSessionsForProgram(program, env) {
   const todayStr = today.toISOString().split('T')[0]
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
-  if (program.start_date && todayStr < program.start_date) return 0
+  // Only bail out if program has fully ended (today is past end_date).
+  // Programs with future start_dates SHOULD still generate sessions for those future dates.
   if (program.end_date && todayStr > program.end_date) return 0
 
   const days = (program.session_days || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
-  // Generate further ahead than the booking window so sessions exist before they're visible
-  const weeksAhead = Math.max(program.forward_view_weeks || 2, 8)
+  if (days.length === 0) return 0
+
+  // Generate further ahead than the booking window so sessions exist before they're visible.
+  // For programs with a future start_date, also extend weeksAhead so we cover the full window.
+  let weeksAhead = Math.max(program.forward_view_weeks || 2, 8)
+  if (program.start_date && program.start_date > todayStr) {
+    const startMs = new Date(program.start_date + 'T00:00:00').getTime()
+    const todayMs = new Date(todayStr + 'T00:00:00').getTime()
+    const daysUntilStart = Math.ceil((startMs - todayMs) / (1000 * 60 * 60 * 24))
+    const weeksUntilStart = Math.ceil(daysUntilStart / 7)
+    // Cover the days until start, plus 8 weeks of running sessions, plus the booking window
+    weeksAhead = Math.max(weeksAhead, weeksUntilStart + 8)
+  }
+
   let count = 0
 
   for (let w = 0; w <= weeksAhead; w++) {
