@@ -22,7 +22,7 @@ app.onError((err, c) => {
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 app.use('*', cors({
-  origin: ['https://mm-1a4.pages.dev', 'https://mm.swingtheory.golf'],
+  origin: ['https://mm-1a4.pages.dev', 'https://mm.swingtheory.golf', 'https://sync-swingtheory-prod.pages.dev', 'https://sync.swingtheory.golf'],
   allowHeaders: ['Content-Type', 'Authorization', 'x-subdomain'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
@@ -136,15 +136,6 @@ app.post('/users/child', requireAuth, async (c) => {
 
 // ─── SESSION ROUTES (public / parent / student) ───────────────────────────────
 
-
-// GET /programs — list active programs for parent/student booking
-app.get('/programs', requireAuth, async (c) => {
-  const programs = await c.env.DB.prepare(
-    'SELECT * FROM programs WHERE is_active = 1 ORDER BY created_at ASC'
-  ).all()
-  return c.json({ programs: programs.results })
-})
-
 // GET /programs/:slug/sessions
 app.get('/programs/:slug/sessions', requireAuth, async (c) => {
   const { slug } = c.req.param()
@@ -207,7 +198,7 @@ app.post('/bookings', requireAuth, async (c) => {
   if (session.booker_type === 'parent' && user.role !== 'parent') {
     return c.json({ error: 'This program can only be booked by a parent' }, 403)
   }
-  if (session.booker_type === 'student' && user.role !== 'student' && user.role !== 'parent') {
+  if (session.booker_type === 'student' && user.role !== 'student') {
     return c.json({ error: 'This program can only be booked by a student' }, 403)
   }
 
@@ -483,31 +474,8 @@ app.get('/admin/sessions/range', requireAdmin, async (c) => {
 app.post('/admin/sessions', requireAdmin, async (c) => {
   const body = await c.req.json()
   const { program_id, date, start_time, end_time, capacity, bay, instructor_id, notes } = body
-
-  if (!program_id || !date) return c.json({ error: 'Program and date are required' }, 400)
-
-  // Validate date is within program start/end dates
-  const program = await c.env.DB.prepare('SELECT * FROM programs WHERE id = ?').bind(program_id).first()
-  if (!program) return c.json({ error: 'Program not found' }, 404)
-
-  if (program.start_date && date < program.start_date) {
-    return c.json({ error: `Date is before the program start date (${program.start_date})` }, 400)
-  }
-  if (program.end_date && date > program.end_date) {
-    return c.json({ error: `Date is after the program end date (${program.end_date})` }, 400)
-  }
-
-  // Validate day of week matches program schedule
-  const dayNames2 = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-  const sessionDay = dayNames2[new Date(date + 'T12:00:00').getDay()]
-  const programDays = (program.session_days || '').split(',').map(d => d.trim().toLowerCase())
-  if (!programDays.includes(sessionDay)) {
-    const formatted = programDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ')
-    return c.json({ error: `${program.name} only runs on: ${formatted}. ${date} is a ${sessionDay.charAt(0).toUpperCase() + sessionDay.slice(1)}.` }, 400)
-  }
-
   const id = 'sess_' + uid()
-  const dayOfWeek = sessionDay
+  const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
 
   await c.env.DB.prepare(`
     INSERT INTO sessions (id, program_id, instructor_id, bay, date, day_of_week, start_time, end_time, capacity, notes)
@@ -735,7 +703,7 @@ app.post('/admin/members', requireAdmin, async (c) => {
         'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email_address: email, redirect_url: 'https://mm-1a4.pages.dev/home' }),
+      body: JSON.stringify({ email_address: email, redirect_url: `${env.FRONTEND_URL || 'https://mm-1a4.pages.dev'}/home` }),
     })
 
     if (!clerkRes.ok) {
@@ -1041,98 +1009,6 @@ app.post('/admin/programs/:id/generate-sessions', requireAdmin, async (c) => {
   return c.json({ ok: true, sessions_created: count })
 })
 
-// POST /admin/programs/:id/trim-sessions
-// Checks sessions after a new end date, optionally cancels them with emails
-app.post('/admin/programs/:id/trim-sessions', requireAdmin, async (c) => {
-  const { id } = c.req.param()
-  const { end_date, confirm } = await c.req.json()
-
-  if (!end_date) return c.json({ error: 'end_date required' }, 400)
-
-  const program = await c.env.DB.prepare('SELECT * FROM programs WHERE id = ?').bind(id).first()
-  if (!program) return c.json({ error: 'Program not found' }, 404)
-
-  // Find all sessions after the new end date
-  const sessions = await c.env.DB.prepare(`
-    SELECT s.*,
-      (SELECT COUNT(*) FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed') as booked_count
-    FROM sessions s
-    WHERE s.program_id = ? AND s.date > ? AND s.is_cancelled = 0
-    ORDER BY s.date ASC
-  `).bind(id, end_date).all()
-
-  const affected = sessions.results
-
-  // If not confirming yet, just return what would be affected
-  if (!confirm) {
-    const withBookings = affected.filter(s => s.booked_count > 0)
-    const withoutBookings = affected.filter(s => s.booked_count === 0)
-    return c.json({
-      total: affected.length,
-      with_bookings: withBookings.map(s => ({ id: s.id, date: s.date, booked_count: s.booked_count })),
-      without_bookings: withoutBookings.length,
-    })
-  }
-
-  // Confirmed — cancel sessions with bookings, delete sessions without
-  let cancelledSessions = 0
-  let deletedSessions = 0
-  let emailsSent = 0
-
-  const config = await c.env.DB.prepare('SELECT admin_email FROM config WHERE id = 1').first()
-  const adminEmail = config?.admin_email || 'info@swingtheory.golf'
-
-  for (const session of affected) {
-    if (session.booked_count > 0) {
-      // Mark session as cancelled
-      await c.env.DB.prepare(
-        "UPDATE sessions SET is_cancelled = 1, cancel_reason = 'Program end date updated' WHERE id = ?"
-      ).bind(session.id).run()
-
-      // Collect bookings BEFORE cancelling so we can email them
-      const bookedUsersResult = await c.env.DB.prepare(`
-        SELECT b.*, u.email, u.full_name, u.role, ch.first_name as child_name
-        FROM bookings b
-        JOIN users u ON b.user_id = u.id
-        LEFT JOIN children ch ON b.child_id = ch.id
-        WHERE b.session_id = ? AND b.status = 'confirmed'
-      `).bind(session.id).all()
-
-      // Now cancel all confirmed bookings
-      await c.env.DB.prepare(
-        "UPDATE bookings SET status = 'cancelled', cancelled_at = datetime('now') WHERE session_id = ? AND status = 'confirmed'"
-      ).bind(session.id).run()
-
-      // Send cancellation emails
-      try {
-        const bookedUsers = bookedUsersResult
-
-        for (const booking of bookedUsers.results) {
-          const { subject, html } = sessionCancelledEmail({
-            recipientName: booking.full_name,
-            programName: program.name,
-            date: session.date,
-            startTime: session.start_time,
-            cancelReason: 'The program schedule has been updated.',
-          })
-          await sendEmail(c.env, { to: booking.email, subject, html })
-          emailsSent++
-        }
-      } catch (e) {
-        console.error('Trim cancellation emails failed:', e.message)
-      }
-
-      cancelledSessions++
-    } else {
-      // No bookings — delete cleanly
-      await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(session.id).run()
-      deletedSessions++
-    }
-  }
-
-  return c.json({ ok: true, cancelled_sessions: cancelledSessions, deleted_sessions: deletedSessions, emails_sent: emailsSent })
-})
-
 // PUT /admin/programs/:id
 app.put('/admin/programs/:id', requireAdmin, async (c) => {
   const { id } = c.req.param()
@@ -1209,21 +1085,14 @@ app.get('/instructor/sessions', requireInstructor, async (c) => {
   if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
 
   const sessions = await c.env.DB.prepare(`
-    SELECT DISTINCT s.*,
+    SELECT s.*,
       p.name as program_name,
       (SELECT COUNT(*) FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed') as booked_count
     FROM sessions s
     JOIN programs p ON s.program_id = p.id
-    WHERE s.date >= date('now')
-      AND s.is_cancelled = 0
-      AND (
-        s.instructor_id = ?
-        OR EXISTS (
-          SELECT 1 FROM session_instructors si WHERE si.session_id = s.id AND si.instructor_id = ?
-        )
-      )
+    WHERE s.instructor_id = ? AND s.date >= date('now')
     ORDER BY s.date ASC
-  `).bind(instr.id, instr.id).all()
+  `).bind(instr.id).all()
 
   return c.json({ sessions: sessions.results })
 })
@@ -1535,40 +1404,31 @@ export default {
 }
 
 async function generateSessionsForProgram(program, env) {
-  const todayStr = new Date().toISOString().split('T')[0]
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
-  // Don't generate if program has already ended
+  if (program.start_date && todayStr < program.start_date) return 0
   if (program.end_date && todayStr > program.end_date) return 0
 
   const days = (program.session_days || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
+  // Generate further ahead than the booking window so sessions exist before they're visible
   const weeksAhead = Math.max(program.forward_view_weeks || 2, 8)
   let count = 0
-
-  // Start from today or program start_date, whichever is later
-  const startFrom = program.start_date && program.start_date > todayStr ? program.start_date : todayStr
-  const startDate = new Date(startFrom + 'T12:00:00')
 
   for (let w = 0; w <= weeksAhead; w++) {
     for (const dayName of days) {
       const targetDayIndex = dayNames.indexOf(dayName)
       if (targetDayIndex === -1) continue
 
-      // Find the correct date for this day in week w, starting from startDate's week
-      const weekBase = new Date(startDate)
-      // Go to Monday of startDate's week
-      const startDayOfWeek = weekBase.getDay()
-      const mondayOffset = startDayOfWeek === 0 ? -6 : 1 - startDayOfWeek
-      weekBase.setDate(weekBase.getDate() + mondayOffset + (w * 7))
-      // Now advance to the target day (Mon=1, Tue=2... Sun=0 → 7)
-      const adjustedTarget = targetDayIndex === 0 ? 7 : targetDayIndex
-      weekBase.setDate(weekBase.getDate() + adjustedTarget - 1)
+      const date = new Date(today)
+      const currentDay = date.getDay()
+      let diff = targetDayIndex - currentDay + (w * 7)
+      if (diff < 0) diff += 7
+      date.setDate(today.getDate() + diff)
+      const dateStr = date.toISOString().split('T')[0]
 
-      const dateStr = weekBase.toISOString().split('T')[0]
-
-      // Skip if before our start point
-      if (dateStr < startFrom) continue
-      // Skip if after program end date
+      if (program.start_date && dateStr < program.start_date) continue
       if (program.end_date && dateStr > program.end_date) continue
 
       const existing = await env.DB.prepare(
