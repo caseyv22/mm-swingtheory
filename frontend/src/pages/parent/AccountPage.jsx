@@ -139,35 +139,45 @@ export default function AccountPage() {
   // ── Forced password change layout (first login with temp password) ──
   if (isChangePassword && userData?.must_change_password === 1) {
     return (
-      <div className="min-h-screen bg-[#F9FAFB] flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="flex justify-start mb-10">
-            <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" height={32} className="w-auto brightness-0" />
+      <div className="min-h-screen bg-[#064029] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="flex justify-center mb-8">
+            <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" className="h-12 w-auto" />
           </div>
-          <h1 className="font-display text-4xl text-[#064029] tracking-widest mb-2">SET YOUR PASSWORD.</h1>
-          <p className="text-gray-500 text-sm font-medium mb-8">
-            For security, please choose a new password before continuing.
-          </p>
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">SET YOUR PASSWORD</h1>
+            <p className="text-sm text-gray-400 mb-6">Choose a new password to secure your account.</p>
 
-          {passwordError && <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-xl mb-5">{passwordError}</div>}
-          {passwordChanged && <div className="bg-green-50 text-green-700 text-sm font-semibold px-4 py-3 rounded-xl mb-5">Password updated! Redirecting…</div>}
+            {passwordError && (
+              <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
+                {passwordError}
+              </div>
+            )}
+            {passwordChanged && (
+              <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
+                Password updated! Redirecting…
+              </div>
+            )}
 
-          <form onSubmit={handleChangePassword} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">New Password</label>
-              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 8 characters" autoFocus required minLength={8}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Confirm New Password</label>
-              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Re-enter password" required minLength={8}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
-            </div>
-            <button type="submit" disabled={changingPassword}
-              className="w-full bg-[#064029] text-white font-bold py-4 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 text-sm tracking-wide">
-              {changingPassword ? 'Updating…' : 'Update Password & Continue'}
-            </button>
-          </form>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Password</label>
+                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                  placeholder="At least 8 characters" autoFocus required minLength={8}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Confirm Password</label>
+                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password" required minLength={8}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+              </div>
+              <button type="submit" disabled={changingPassword}
+                className="w-full bg-[#064029] text-white font-semibold py-3 rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors text-sm">
+                {changingPassword ? 'Updating…' : 'Set Password & Continue'}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     )
