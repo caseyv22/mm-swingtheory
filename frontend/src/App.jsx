@@ -127,10 +127,12 @@ function LoginPage() {
         await setActive({ session: result.createdSessionId })
         window.location.href = '/home'
       } else {
-        setError('Sign in incomplete. Please try again.')
+        setError(`Status: ${result.status}. Check console for details.`)
+        console.error('Sign in result:', JSON.stringify(result))
       }
     } catch (err) {
-      const msg = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || 'Invalid email or password'
+      console.error('Sign in error:', err)
+      const msg = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || err?.message || 'Invalid email or password'
       setError(msg)
     } finally {
       setLoading(false)
