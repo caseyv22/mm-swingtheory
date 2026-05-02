@@ -29,7 +29,7 @@ export default function AdminLayout({ children }) {
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
     api.init(getToken)
-    api.getMe()
+    api.get('/users/me')
       .then(data => {
         const fetchedRole = data?.user?.role || null
         if (fetchedRole) {
