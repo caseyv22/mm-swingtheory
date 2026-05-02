@@ -308,6 +308,14 @@ app.post('/admin/members/:id/resend-temp-password', requireAdmin, async (c) => {
 
 // ─── SESSION ROUTES (public / parent / student) ───────────────────────────────
 
+// GET /programs — list active programs (used by parent/student program selector)
+app.get('/programs', requireAuth, async (c) => {
+  const programs = await c.env.DB.prepare(
+    'SELECT * FROM programs WHERE is_active = 1 ORDER BY created_at ASC'
+  ).all()
+  return c.json({ programs: programs.results })
+})
+
 // GET /programs/:slug/sessions
 app.get('/programs/:slug/sessions', requireAuth, async (c) => {
   const { slug } = c.req.param()
