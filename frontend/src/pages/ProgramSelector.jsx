@@ -51,6 +51,21 @@ function formatStartDate(dateStr) {
   })
 }
 
+function formatShortDate(dateStr) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric'
+  })
+}
+
+function formatDateRange(program) {
+  if (!program.start_date && !program.end_date) return null
+  if (program.start_date && program.end_date) {
+    return `${formatShortDate(program.start_date)} – ${formatShortDate(program.end_date)}`
+  }
+  if (program.start_date) return `Starts ${formatShortDate(program.start_date)}`
+  return `Through ${formatShortDate(program.end_date)}`
+}
+
 function getProgramStatus(program) {
   const today = new Date().toISOString().split('T')[0]
   // 'upcoming' (future start_date) is no longer a disabling state — students can pre-book
@@ -135,35 +150,70 @@ export default function ProgramSelector() {
                   `}
                 >
                   <div className={`h-0.5 bg-[#064029] transition-transform duration-300 origin-left ${isDisabled ? 'scale-x-0' : 'scale-x-0 group-hover:scale-x-100'}`} />
-                  <div className="p-7">
+                  <div className="p-6 lg:p-7">
+                    {/* Top row: tag pill on left, arrow on right */}
                     <div className="flex items-center justify-between mb-5">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-3 py-1 rounded-full">
                         {PROGRAM_TAG[program.slug] || 'Program'}
                       </span>
                       <span className={`text-gray-100 text-xl font-light transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>→</span>
                     </div>
-                    <h2 className={`font-display text-3xl text-gray-900 tracking-widest leading-none mb-3 transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>
-                      {program.name.toUpperCase()}
-                    </h2>
-                    <p className="text-gray-500 text-sm font-medium leading-relaxed mb-4">
-                      {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
-                    </p>
+
+                    {/* Two-column body: title/description on left, meta on right */}
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:gap-8">
+                      <div className="flex-1 min-w-0">
+                        <h2 className={`font-display text-3xl text-gray-900 tracking-widest leading-none mb-3 transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>
+                          {program.name.toUpperCase()}
+                        </h2>
+                        <p className="text-gray-500 text-sm font-medium leading-relaxed">
+                          {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
+                        </p>
+                      </div>
+
+                      {/* Right meta column — desktop only */}
+                      <div className="hidden sm:flex flex-col items-end gap-3 text-right shrink-0 min-w-[140px]">
+                        {program.price_display && (
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Price</p>
+                            <p className="font-display text-xl text-[#064029] tracking-wide leading-none">{program.price_display}</p>
+                          </div>
+                        )}
+                        {program.default_capacity && (
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Capacity</p>
+                            <p className="font-display text-xl text-[#064029] tracking-wide leading-none">{program.default_capacity} <span className="text-xs font-sans font-medium text-gray-500">spots</span></p>
+                          </div>
+                        )}
+                        {formatDateRange(program) && (
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Dates</p>
+                            <p className="text-sm font-semibold text-[#064029] leading-tight">{formatDateRange(program)}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                     {/* Status message — only show if program has ended */}
                     {isEnded && (
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mb-4">
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mt-4">
                         <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-0.5">Program Ended</p>
                         <p className="text-sm font-semibold text-gray-500">No upcoming sessions</p>
                       </div>
                     )}
 
-                    <div className="pt-5 border-t border-gray-100 flex items-center justify-between gap-2">
+                    {/* Bottom: schedule footer + mobile-only price/capacity row */}
+                    <div className="pt-5 mt-5 border-t border-gray-100 flex items-center justify-between gap-2">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                         {formatProgramSchedule(program)}
                       </p>
-                      {program.price_display && (
-                        <span className="text-sm font-bold text-[#064029] shrink-0">{program.price_display}</span>
-                      )}
+                      <div className="sm:hidden flex items-center gap-3 shrink-0">
+                        {program.price_display && (
+                          <span className="text-sm font-bold text-[#064029]">{program.price_display}</span>
+                        )}
+                        {program.default_capacity && (
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{program.default_capacity} spots</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </button>
