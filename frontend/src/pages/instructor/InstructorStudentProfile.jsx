@@ -50,31 +50,32 @@ function AddLessonModal({ studentId, onClose, onSaved }) {
         </div>
         <div className="px-6 py-5 space-y-4">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          {/* Date + Start + End in one aligned row */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-1">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
+              <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
                 value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End</label>
-              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
                 value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
             </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Bay (optional)</label>
-            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
               value={form.bay} onChange={e => setForm(f => ({ ...f, bay: e.target.value }))} placeholder="e.g. Chambers" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Session Focus (optional)</label>
-            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none"
+            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none"
               value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Goals for this lesson…" />
           </div>
         </div>
