@@ -11,51 +11,20 @@ function formatDate(dateStr) {
 
 function formatDateShort(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
-    year: 'numeric',
-    weekday: 'short', month: 'short', day: 'numeric'
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
   })
 }
 
 function formatTime(t) {
   if (!t) return ''
-  const parts = t.split(':')
-  const hour = parseInt(parts[0])
-  const min = parts[1] ? String(parts[1]).padStart(2, '0') : '00'
-  return `${hour % 12 || 12}:${min} ${hour >= 12 ? 'PM' : 'AM'}`
+  const [h, m] = t.split(':')
+  const hour = parseInt(h)
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`
 }
 
 function isFuture(dateStr) {
   return new Date(dateStr + 'T23:59:59') >= new Date()
 }
-
-// ─── Date/time select helpers ─────────────────────────────────────────────────
-function generateDates(daysAhead = 90) {
-  const dates = []
-  const today = new Date()
-  for (let i = 0; i <= daysAhead; i++) {
-    const d = new Date(today)
-    d.setDate(today.getDate() + i)
-    const val = d.toISOString().split('T')[0]
-    const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-    dates.push({ val, label })
-  }
-  return dates
-}
-function generateTimes() {
-  const times = []
-  for (let h = 6; h < 22; h++) {
-    for (const m of [0, 30]) {
-      const val = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-      const hour12 = h % 12 || 12
-      const ampm = h < 12 ? 'AM' : 'PM'
-      times.push({ val, label: `${hour12}:${String(m).padStart(2, '0')} ${ampm}` })
-    }
-  }
-  return times
-}
-const DATE_OPTIONS = generateDates(90)
-const TIME_OPTIONS = generateTimes()
-const SEL = 'w-full border border-gray-200 rounded-lg px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]'
 
 function AddLessonModal({ studentId, onClose, onSaved }) {
   const [form, setForm] = useState({ date: '', start_time: '10:00', end_time: '11:00', bay: '', notes: '' })
@@ -83,33 +52,29 @@ function AddLessonModal({ studentId, onClose, onSaved }) {
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date</label>
-            <select className={SEL} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}>
-              <option value="">Select a date…</option>
-              {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
-            </select>
-            </div>
+            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start</label>
-              <select className={SEL} value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}>
-                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
-              </select>
-              </div>
+              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+            </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End</label>
-              <select className={SEL} value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}>
-                {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
-              </select>
-              </div>
+              <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+            </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Bay (optional)</label>
-            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+            <input className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
               value={form.bay} onChange={e => setForm(f => ({ ...f, bay: e.target.value }))} placeholder="e.g. Chambers" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Session Focus (optional)</label>
-            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none"
+            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none"
               value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Goals for this lesson…" />
           </div>
         </div>
@@ -139,8 +104,8 @@ function LessonCard({ lesson, onClick }) {
             {isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>}
             {!isCancelled && !past && <span className="text-[10px] font-bold uppercase tracking-wider text-[#064029] bg-[#E1F5EE] px-2 py-0.5 rounded-full">Upcoming</span>}
             {!isCancelled && past && <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>}
-            {lesson.has_note && <span className="text-[10px] font-bold uppercase tracking-wider text-[#1D9E75] border border-[#1D9E75]/30 px-2 py-0.5 rounded-full">Note</span>}
-            {lesson.has_gspro && <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">GSPro</span>}
+            {!!lesson.has_note && <span className="text-[10px] font-bold uppercase tracking-wider text-[#1D9E75] border border-[#1D9E75]/30 px-2 py-0.5 rounded-full">Note</span>}
+            {!!lesson.has_gspro && <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">GSPro</span>}
           </div>
           <p className="text-base font-bold text-gray-900">{formatDateShort(lesson.date)}</p>
           <p className="text-sm text-gray-400">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay ? ` · ${lesson.bay}` : ''}</p>
