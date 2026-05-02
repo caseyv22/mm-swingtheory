@@ -26,6 +26,37 @@ function isFuture(dateStr) {
   return new Date(dateStr + 'T23:59:59') >= new Date()
 }
 
+// ─── Date/time select helpers ─────────────────────────────────────────────────
+function generateDates(daysAhead = 90) {
+  const dates = []
+  const today = new Date()
+  for (let i = 0; i <= daysAhead; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
+    const val = d.toISOString().split('T')[0]
+    const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    dates.push({ val, label })
+  }
+  return dates
+}
+
+function generateTimes() {
+  const times = []
+  for (let h = 6; h < 22; h++) {
+    for (const m of [0, 30]) {
+      const val = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      const hour12 = h % 12 || 12
+      const ampm = h < 12 ? 'AM' : 'PM'
+      times.push({ val, label: `${hour12}:${String(m).padStart(2, '0')} ${ampm}` })
+    }
+  }
+  return times
+}
+
+const DATE_OPTIONS = generateDates(90)
+const TIME_OPTIONS = generateTimes()
+const SEL = 'w-full border border-gray-200 rounded-lg px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]'
+
 function AddLessonModal({ studentId, onClose, onSaved }) {
   const [form, setForm] = useState({ date: '', start_time: '10:00', end_time: '11:00', bay: '', notes: '' })
   const [saving, setSaving] = useState(false)
@@ -57,12 +88,12 @@ function AddLessonModal({ studentId, onClose, onSaved }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start Time</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Start</label>
               <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
                 value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End Time</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">End</label>
               <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
                 value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
             </div>
