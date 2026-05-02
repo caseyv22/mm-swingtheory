@@ -207,8 +207,8 @@ export default function TheoryAI({ lessonId, isInstructor = false }) {
             className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-100 transition-colors"
           >
             <span className={`text-xs font-bold ${!onCourse ? 'text-[#064029]' : 'text-gray-400'}`}>SIM</span>
-            <div className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${onCourse ? 'bg-[#064029]' : 'bg-gray-300'}`}>
-              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${onCourse ? 'translate-x-7' : 'translate-x-1'}`} />
+            <div className={`relative w-14 h-7 rounded-full transition-colors flex-shrink-0 ${onCourse ? 'bg-[#064029]' : 'bg-gray-200'}`}>
+              <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-200 ${onCourse ? 'translate-x-7' : 'translate-x-0'}`} />
             </div>
             <span className={`text-xs font-bold ${onCourse ? 'text-[#064029]' : 'text-gray-400'}`}>COURSE</span>
           </button>
