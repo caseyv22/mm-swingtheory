@@ -54,8 +54,14 @@ export default function AdminLayout({ children }) {
       '/theory-ai': 'Theory AI',
       '/account': 'Account',
     }
-    const page = Object.entries(pageMap).find(([path]) => location.pathname === path || location.pathname.startsWith(path + '/'))
-    const pageName = page ? page[1] : 'Sync'
+    // Longest-prefix-match wins so '/admin/programs' beats '/admin'
+    let bestMatch = ''
+    for (const path of Object.keys(pageMap)) {
+      if ((location.pathname === path || location.pathname.startsWith(path + '/')) && path.length > bestMatch.length) {
+        bestMatch = path
+      }
+    }
+    const pageName = bestMatch ? pageMap[bestMatch] : 'Sync'
     document.title = `${pageName} | Sync | Swing Theory`
   }, [location.pathname])
 
