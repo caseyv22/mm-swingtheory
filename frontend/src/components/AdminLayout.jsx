@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { UserButton, useAuth } from '@clerk/clerk-react'
 import { api } from '../lib/api'
+import { usePWAMode } from '../lib/usePWAMode'
+import BottomNav from './BottomNav'
 
 const ADMIN_NAV = [
   { label: 'Sessions', href: '/admin' },
@@ -24,6 +26,7 @@ export default function AdminLayout({ children }) {
   // role starts null; we resolve it from API before rendering nav
   const [role, setRole] = useState(() => sessionStorage.getItem('st_role'))
   const [roleLoaded, setRoleLoaded] = useState(false)
+  const isPWA = usePWAMode()
 
   // Always re-fetch role from API on mount — sessionStorage can be stale or wrong
   useEffect(() => {
@@ -78,6 +81,19 @@ export default function AdminLayout({ children }) {
   if (role !== 'admin' && role !== 'swinger') {
     if (typeof window !== 'undefined') window.location.href = '/home'
     return null
+  }
+
+  // ── PWA mode: swinger gets the bottom nav, no sidebar.
+  // Admin keeps the sidebar in PWA (per platform decision — admin is desk-tier work).
+  if (isPWA && role === 'swinger') {
+    return (
+      <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
+        <main className="flex-1">
+          {children}
+        </main>
+        <BottomNav role="swinger" />
+      </div>
+    )
   }
 
   const NAV_ITEMS = role === 'swinger' ? SWINGER_NAV : ADMIN_NAV
