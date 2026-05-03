@@ -153,7 +153,7 @@ export default function AccountPage() {
           </div>
           <div className="bg-white rounded-2xl shadow-2xl p-8">
             <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">SET YOUR PASSWORD</h1>
-            <p className="text-sm text-gray-400 mb-6">Choose a new password to secure your account.</p>
+            <p className="text-sm text-gray-500 mb-6">Choose a new password to secure your account.</p>
 
             {passwordError && (
               <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
@@ -211,12 +211,12 @@ export default function AccountPage() {
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Child's First Name *</label>
                   <input type="text" value={childName} onChange={e => setChildName(e.target.value)} placeholder="Jamie" autoFocus
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Child's Age</label>
                   <input type="number" value={childAge} onChange={e => setChildAge(e.target.value)} placeholder="8" min="3" max="18"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
                 </div>
               </div>
             )}
@@ -224,7 +224,7 @@ export default function AccountPage() {
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Phone Number</label>
               <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(626) 555-0100"
                 autoFocus={role !== 'parent'}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
             </div>
           </div>
           <button onClick={handleSave} disabled={saving}
@@ -232,7 +232,7 @@ export default function AccountPage() {
             {saving ? 'Saving...' : saved ? 'Saved ✓' : "Let's Go"}
           </button>
           <button onClick={() => navigate('/home')}
-            className="w-full mt-3 text-gray-400 text-sm font-semibold py-2 hover:text-gray-600 transition-colors">
+            className="w-full mt-3 text-gray-500 text-sm font-semibold py-2 hover:text-gray-600 transition-colors">
             Skip for now
           </button>
         </div>
@@ -250,7 +250,7 @@ export default function AccountPage() {
         <div className="max-w-2xl mx-auto px-4 py-5">
           <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Settings</p>
           <h1 className="font-display text-2xl text-[#064029] tracking-wide">MY ACCOUNT</h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             {role === 'parent' && 'Update your child info and contact details.'}
             {role === 'student' && 'Update your contact details.'}
             {role === 'instructor' && 'Update your profile and contact details.'}
@@ -265,13 +265,13 @@ export default function AccountPage() {
 
         {/* Profile card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Your Account</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4">Your Account</p>
           <div className="flex items-center gap-4">
             <UserButton afterSignOutUrl="/login" />
             <div>
               <p className="font-semibold text-gray-900 text-sm">{clerkUser?.fullName || userData?.full_name}</p>
               <p className="text-gray-500 text-xs mt-0.5">{userData?.email}</p>
-              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-1">{role}</p>
+              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-1">{role}</p>
             </div>
           </div>
         </div>
@@ -279,16 +279,16 @@ export default function AccountPage() {
         {/* Parent — child info */}
         {role === 'parent' && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Junior Golfer</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Junior Golfer</p>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Child's First Name *</label>
               <input type="text" value={childName} onChange={e => setChildName(e.target.value)} placeholder="Jamie"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Child's Age</label>
               <input type="number" value={childAge} onChange={e => setChildAge(e.target.value)} placeholder="8" min="3" max="18"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
             </div>
           </div>
         )}
@@ -296,20 +296,20 @@ export default function AccountPage() {
         {/* Instructor — bio */}
         {role === 'instructor' && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Instructor Profile</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4">Instructor Profile</p>
             <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Bio</label>
             <textarea value={bio} onChange={e => setBio(e.target.value)} rows={4}
               placeholder="Tell students a bit about your coaching background..."
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none" />
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] resize-none" />
           </div>
         )}
 
         {/* Contact — all roles */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Contact</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4">Contact</p>
           <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Phone Number</label>
           <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(626) 555-0100"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
         </div>
 
         <button onClick={handleSave} disabled={saving}
@@ -319,7 +319,7 @@ export default function AccountPage() {
 
         {/* Change Password card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Security</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Security</p>
 
           {passwordError && <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-xl">{passwordError}</div>}
           {passwordChanged && <div className="bg-green-50 text-green-700 text-sm font-semibold px-4 py-3 rounded-xl">Password updated ✓</div>}
@@ -328,17 +328,17 @@ export default function AccountPage() {
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Current Password</label>
               <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" required
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">New Password</label>
               <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 8 characters" required minLength={8}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Confirm New Password</label>
               <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Re-enter new password" required minLength={8}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
             </div>
             <button type="submit" disabled={changingPassword}
               className="w-full bg-[#064029] text-white font-bold py-4 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 text-sm tracking-wide">
