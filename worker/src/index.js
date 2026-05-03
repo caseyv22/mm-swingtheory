@@ -1992,23 +1992,56 @@ app.get('/admin/shifts/swingers', requireAdminOrSwinger, async (c) => {
   return c.json({ swingers: result.results })
 })
 
-// GET /admin/shifts/range?start=YYYY-MM-DD&end=YYYY-MM-DD
-// Returns all shifts in the date range, joined with the swinger's name.
-// Available to admins and swingers (read-only for swingers — no write endpoints accessible).
+// GET /admin/shifts/range?start=YYYY-MM-DD&end=YYYY-MM-DD[&user_id=me|<id>]
+// Returns shifts in the date range, joined with the swinger's name.
+// Admins can pass any user_id (or omit for all). Swingers can ONLY pass user_id=me
+// (or their own id) — this enforces the personal-schedule scoping for SwingerSchedule.
 app.get('/admin/shifts/range', requireAdminOrSwinger, async (c) => {
   const start = c.req.query('start')
   const end = c.req.query('end')
+  const userIdParam = c.req.query('user_id')
   if (!validateDateStr(start) || !validateDateStr(end)) {
     return c.json({ error: 'Invalid start or end date (expected YYYY-MM-DD)' }, 400)
   }
-  const result = await c.env.DB.prepare(`
-    SELECT s.id, s.user_id, s.date, s.start_time, s.end_time, s.shift_type,
-           u.full_name as swinger_name
-    FROM shifts s
-    JOIN users u ON s.user_id = u.id
-    WHERE s.date >= ? AND s.date <= ?
-    ORDER BY s.date ASC, s.start_time ASC
-  `).bind(start, end).all()
+
+  const caller = c.get('user')
+
+  // Resolve user_id filter. 'me' is shorthand for the caller's own id.
+  let userIdFilter = null
+  if (userIdParam === 'me') {
+    userIdFilter = caller.id
+  } else if (userIdParam) {
+    userIdFilter = userIdParam
+  }
+
+  // Swingers must not see other swingers' shifts on this endpoint — force scope to self.
+  if (caller.role === 'swinger') {
+    if (userIdFilter && userIdFilter !== caller.id) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+    userIdFilter = caller.id
+  }
+
+  let result
+  if (userIdFilter) {
+    result = await c.env.DB.prepare(`
+      SELECT s.id, s.user_id, s.date, s.start_time, s.end_time, s.shift_type,
+             u.full_name as swinger_name
+      FROM shifts s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.date >= ? AND s.date <= ? AND s.user_id = ?
+      ORDER BY s.date ASC, s.start_time ASC
+    `).bind(start, end, userIdFilter).all()
+  } else {
+    result = await c.env.DB.prepare(`
+      SELECT s.id, s.user_id, s.date, s.start_time, s.end_time, s.shift_type,
+             u.full_name as swinger_name
+      FROM shifts s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.date >= ? AND s.date <= ?
+      ORDER BY s.date ASC, s.start_time ASC
+    `).bind(start, end).all()
+  }
   return c.json({ shifts: result.results })
 })
 
@@ -2087,8 +2120,8 @@ app.delete('/admin/shifts/:id', requireAdmin, async (c) => {
 
 // GET /admin/shifts/metrics?start=YYYY-MM-DD&end=YYYY-MM-DD
 // Returns aggregated hours/shifts per swinger over the date range.
-// Computed in worker for accuracy; client also recomputes for filter responsiveness.
-app.get('/admin/shifts/metrics', requireAdminOrSwinger, async (c) => {
+// Admin only — swingers no longer see team-wide metrics on their personal schedule.
+app.get('/admin/shifts/metrics', requireAdmin, async (c) => {
   const start = c.req.query('start')
   const end = c.req.query('end')
   if (!validateDateStr(start) || !validateDateStr(end)) {
