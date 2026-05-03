@@ -35,6 +35,13 @@ export default function AccountPage() {
 
   useEffect(() => { loadData() }, [])
 
+  useEffect(() => {
+    let title = 'Account'
+    if (isChangePassword) title = 'Set Password'
+    else if (isOnboarding) title = 'Welcome'
+    document.title = `${title} | Sync | Swing Theory`
+  }, [isChangePassword, isOnboarding])
+
   async function loadData() {
     setLoading(true)
     try {
