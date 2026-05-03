@@ -311,6 +311,7 @@ export default function SwingerTheoryAI() {
   const [selectedSession, setSelectedSession] = useState(null)
 
   useEffect(() => { loadSessions() }, [])
+  useEffect(() => { document.title = 'Theory AI | Sync | Swing Theory' }, [])
 
   async function loadSessions() {
     setLoading(true); setError('')
