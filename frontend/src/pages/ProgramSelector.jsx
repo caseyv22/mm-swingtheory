@@ -78,6 +78,8 @@ export default function ProgramSelector() {
   const navigate = useNavigate()
   const [programs, setPrograms] = useState([])
   const [user, setUser] = useState(null)
+
+  useEffect(() => { document.title = 'Programs | Sync | Swing Theory' }, [])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { loadData() }, [])
@@ -166,7 +168,7 @@ export default function ProgramSelector() {
                           {program.name.toUpperCase()}
                         </h2>
                         <p className="text-gray-500 text-sm font-medium leading-relaxed">
-                          {PROGRAM_DESCRIPTIONS[program.slug] || program.description || ''}
+                          {program.description || PROGRAM_DESCRIPTIONS[program.slug] || ''}
                         </p>
                       </div>
 
@@ -176,12 +178,6 @@ export default function ProgramSelector() {
                           <div>
                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Price</p>
                             <p className="font-display text-xl text-[#064029] tracking-wide leading-none">{program.price_display}</p>
-                          </div>
-                        )}
-                        {program.default_capacity && (
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Capacity</p>
-                            <p className="font-display text-xl text-[#064029] tracking-wide leading-none">{program.default_capacity} <span className="text-xs font-sans font-medium text-gray-500">spots</span></p>
                           </div>
                         )}
                         {formatDateRange(program) && (
@@ -209,9 +205,6 @@ export default function ProgramSelector() {
                       <div className="lg:hidden flex items-center gap-3 shrink-0">
                         {program.price_display && (
                           <span className="text-sm font-bold text-[#064029]">{program.price_display}</span>
-                        )}
-                        {program.default_capacity && (
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{program.default_capacity} spots</span>
                         )}
                       </div>
                     </div>
