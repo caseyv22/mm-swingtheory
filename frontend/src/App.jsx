@@ -3,7 +3,7 @@ import { useAuth, useSignIn, useClerk, useUser } from '@clerk/clerk-react'
 import React from 'react'
 import { useState, useEffect } from 'react'
 import { api } from './lib/api.js'
-import { RoleProvider } from './lib/RoleProvider.jsx'
+import { RoleProvider, useRole } from './lib/RoleProvider.jsx'
 import PWAShell from './components/PWAShell.jsx'
 import ProgramSelector from './pages/ProgramSelector.jsx'
 import ParentHome from './pages/parent/ParentHome.jsx'
@@ -15,6 +15,7 @@ import AdminMembers from './pages/admin/AdminMembers.jsx'
 import AdminPrograms from './pages/admin/AdminPrograms.jsx'
 import AdminSettings from './pages/admin/AdminSettings.jsx'
 import AdminSchedule from './pages/admin/AdminSchedule.jsx'
+import SwingerSchedule from './pages/swinger/SwingerSchedule.jsx'
 import SwingerTheoryAI from './pages/swinger/SwingerTheoryAI.jsx'
 import InstructorSessions from './pages/instructor/InstructorSessions.jsx'
 import InstructorStudents from './pages/instructor/InstructorStudents.jsx'
@@ -399,6 +400,22 @@ function LoginPage() {
   )
 }
 
+// Routes /admin/schedule to the right page based on the caller's role.
+// Admin → full CRUD AdminSchedule. Swinger → personal SwingerSchedule.
+// Falls back to a brief Loading state until the role context resolves.
+function ScheduleRouter() {
+  const { role, isResolving } = useRole()
+  if (isResolving && !role) {
+    return (
+      <div className="min-h-screen bg-st-offwhite flex items-center justify-center">
+        <p className="text-st-green font-bold text-lg">Loading...</p>
+      </div>
+    )
+  }
+  if (role === 'swinger') return <SwingerSchedule />
+  return <AdminSchedule />
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -445,7 +462,7 @@ export default function App() {
           <Route path="/instructor/lessons/:lessonId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorLessonDetail /></ProtectedRoute>} />
 
           <Route path="/admin" element={<ProtectedRoute requiredRole={["admin","swinger"]}><AdminSessions /></ProtectedRoute>} />
-          <Route path="/admin/schedule" element={<ProtectedRoute requiredRole={["admin","swinger"]}><AdminSchedule /></ProtectedRoute>} />
+          <Route path="/admin/schedule" element={<ProtectedRoute requiredRole={["admin","swinger"]}><ScheduleRouter /></ProtectedRoute>} />
           <Route path="/admin/members" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
           <Route path="/admin/members/:id" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
           <Route path="/admin/programs" element={<ProtectedRoute requiredRole={["admin"]}><AdminPrograms /></ProtectedRoute>} />
