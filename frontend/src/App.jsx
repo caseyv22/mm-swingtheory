@@ -242,7 +242,7 @@ function LoginPage() {
           </div>
           <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
             <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">WELCOME BACK</h1>
-            <p className="text-sm text-gray-400 mb-6">You're already signed in</p>
+            <p className="text-sm text-gray-500 mb-6">You're already signed in</p>
 
             <div className="bg-[#F9FAFB] border border-gray-100 rounded-xl px-4 py-4 mb-5">
               <p className="font-semibold text-gray-900 text-sm">{clerkUser.fullName || clerkUser.firstName}</p>
@@ -278,7 +278,7 @@ function LoginPage() {
           </div>
           <div className="bg-white rounded-2xl shadow-2xl p-8">
             <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">RESET PASSWORD</h1>
-            <p className="text-sm text-gray-400 mb-6">Enter your email to get a reset link</p>
+            <p className="text-sm text-gray-500 mb-6">Enter your email to get a reset link</p>
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
@@ -337,7 +337,7 @@ function LoginPage() {
         </div>
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">SIGN IN</h1>
-          <p className="text-sm text-gray-400 mb-6">Welcome back to Swing Theory</p>
+          <p className="text-sm text-gray-500 mb-6">Welcome back to Swing Theory</p>
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
