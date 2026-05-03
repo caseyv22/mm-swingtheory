@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { UserButton, useAuth } from '@clerk/clerk-react'
-import { api } from '../lib/api'
+import { UserButton } from '@clerk/clerk-react'
 import { usePWAMode } from '../lib/usePWAMode'
-import BottomNav from './BottomNav'
+import { useRole } from '../lib/RoleProvider'
 
 const ADMIN_NAV = [
   { label: 'Sessions', href: '/admin' },
@@ -21,31 +20,14 @@ const SWINGER_NAV = [
 export default function AdminLayout({ children }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { getToken, isLoaded, isSignedIn } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  // role starts null; we resolve it from API before rendering nav
-  const [role, setRole] = useState(() => sessionStorage.getItem('st_role'))
-  const [roleLoaded, setRoleLoaded] = useState(false)
   const isPWA = usePWAMode()
 
-  // Always re-fetch role from API on mount — sessionStorage can be stale or wrong
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return
-    api.init(getToken)
-    api.get('/users/me')
-      .then(data => {
-        const fetchedRole = data?.user?.role || null
-        if (fetchedRole) {
-          setRole(fetchedRole)
-          sessionStorage.setItem('st_role', fetchedRole)
-        }
-        setRoleLoaded(true)
-      })
-      .catch(() => {
-        // On error, keep cached role (if any) but mark loaded to avoid blocking forever
-        setRoleLoaded(true)
-      })
-  }, [isLoaded, isSignedIn])
+  // Role from context (single source of truth, fetched once at App-level by RoleProvider).
+  // Falls back to sessionStorage cache while context resolves on first paint to avoid
+  // flashing the wrong sidebar.
+  const { role: ctxRole, isResolving } = useRole()
+  const role = ctxRole || sessionStorage.getItem('st_role')
 
   // Dynamic page title — must be before any early return to keep hook order stable
   useEffect(() => {
@@ -68,8 +50,9 @@ export default function AdminLayout({ children }) {
     document.title = `${pageName} | Sync | Swing Theory`
   }, [location.pathname])
 
-  // Block render until role is resolved — prevents the wrong sidebar from flashing
-  if (!roleLoaded || !role) {
+  // Block render until role is resolved (only blocks first paint of session, not
+  // subsequent navigations — RoleProvider only fetches once).
+  if (isResolving && !role) {
     return (
       <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
         <p className="text-[#064029] font-bold tracking-wide text-sm">Loading…</p>
@@ -83,15 +66,15 @@ export default function AdminLayout({ children }) {
     return null
   }
 
-  // ── PWA mode: swinger gets the bottom nav, no sidebar.
-  // Admin keeps the sidebar in PWA (per platform decision — admin is desk-tier work).
+  // ── PWA mode: swinger gets the persistent BottomNav (mounted at App-level by PWAShell).
+  // AdminLayout becomes a passthrough — render content only, no sidebar, no own BottomNav.
+  // Admin keeps the sidebar even in PWA (per platform decision — admin is desk-tier work).
   if (isPWA && role === 'swinger') {
     return (
       <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
         <main className="flex-1">
           {children}
         </main>
-        <BottomNav role="swinger" />
       </div>
     )
   }
