@@ -819,6 +819,37 @@ app.post('/admin/bookings', requireAdminOrSwinger, async (c) => {
   return c.json({ ok: true, booking_id: id })
 })
 
+// DELETE /admin/bookings/:id — admin/swinger removes a person from a session (bypasses cancellation window)
+app.delete('/admin/bookings/:id', requireAdminOrSwinger, async (c) => {
+  const { id } = c.req.param()
+  const booking = await c.env.DB.prepare(
+    "SELECT b.*, s.date, s.start_time, p.name as program_name, u.email, u.full_name, u.role, ch.first_name as child_name FROM bookings b JOIN sessions s ON b.session_id = s.id JOIN programs p ON s.program_id = p.id JOIN users u ON b.user_id = u.id LEFT JOIN children ch ON b.child_id = ch.id WHERE b.id = ?"
+  ).bind(id).first()
+  if (!booking) return c.json({ error: 'Booking not found' }, 404)
+  if (booking.status === 'cancelled') return c.json({ error: 'Booking already cancelled' }, 400)
+
+  await c.env.DB.prepare(
+    "UPDATE bookings SET status = 'cancelled', cancelled_at = datetime('now') WHERE id = ?"
+  ).bind(id).run()
+
+  // Notify the user that admin cancelled their booking
+  try {
+    const { subject, html } = bookingCancelledEmail({
+      recipientName: booking.full_name,
+      programName: booking.program_name,
+      date: booking.date,
+      startTime: booking.start_time,
+      bookerType: booking.role,
+      childName: booking.child_name,
+    })
+    await sendEmail(c.env, { to: booking.email, subject, html })
+  } catch (e) {
+    console.error('Admin cancel email failed:', e.message)
+  }
+
+  return c.json({ ok: true })
+})
+
 // POST /admin/bookings/:id/checkin
 app.post('/admin/bookings/:id/checkin', requireAdminOrSwinger, async (c) => {
   const { id } = c.req.param()
@@ -1167,7 +1198,7 @@ app.post('/admin/programs', requireAdmin, async (c) => {
     name, description, booking_type, booker_type, session_days,
     start_time, end_time, default_capacity, price_display,
     show_instructor, forward_view_weeks, cancellation_hours, max_bookings_per_week,
-    start_date, end_date
+    start_date, end_date, default_instructor_id
   } = body
 
   if (!name) return c.json({ error: 'Name is required' }, 400)
@@ -1185,8 +1216,8 @@ app.post('/admin/programs', requireAdmin, async (c) => {
       id, name, slug, description, booking_type, booker_type,
       session_days, start_time, end_time, default_capacity, price_display,
       show_instructor, forward_view_weeks, cancellation_hours, max_bookings_per_week,
-      start_date, end_date, is_active
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      start_date, end_date, default_instructor_id, is_active
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).bind(
     id, name, slug, description || null,
     booking_type || 'group', booker_type || 'student',
@@ -1195,7 +1226,7 @@ app.post('/admin/programs', requireAdmin, async (c) => {
     default_capacity || 10, price_display || null,
     show_instructor ? 1 : 0,
     forward_view_weeks || 2, cancellation_hours || 24, max_bookings_per_week || 1,
-    start_date || null, end_date || null
+    start_date || null, end_date || null, default_instructor_id || null
   ).run()
 
   // Auto-generate sessions for the new program
@@ -1228,7 +1259,7 @@ app.put('/admin/programs/:id', requireAdmin, async (c) => {
       session_days = ?, start_time = ?, end_time = ?, default_capacity = ?,
       price_display = ?, show_instructor = ?, forward_view_weeks = ?,
       forward_view_enabled = ?, cancellation_hours = ?, max_bookings_per_week = ?,
-      is_active = ?, start_date = ?, end_date = ?, updated_at = datetime('now')
+      is_active = ?, start_date = ?, end_date = ?, default_instructor_id = ?, updated_at = datetime('now')
     WHERE id = ?
   `).bind(
     body.name ?? program.name,
@@ -1248,6 +1279,7 @@ app.put('/admin/programs/:id', requireAdmin, async (c) => {
     body.is_active !== undefined ? (body.is_active ? 1 : 0) : program.is_active,
     'start_date' in body ? (body.start_date || null) : program.start_date,
     'end_date' in body ? (body.end_date || null) : program.end_date,
+    'default_instructor_id' in body ? (body.default_instructor_id || null) : program.default_instructor_id,
     id
   ).run()
 
@@ -1378,6 +1410,209 @@ app.get('/instructor/students/:id/notes', requireInstructor, async (c) => {
     ORDER BY created_at DESC
   `).bind(instr.id, id).all()
   return c.json({ notes: notes.results })
+})
+
+// ─── INSTRUCTOR SESSIONS ROUTES ──────────────────────────────────────────────
+
+// GET /instructor/program-sessions — sessions where this instructor is assigned (week or range)
+app.get('/instructor/program-sessions', requireInstructor, async (c) => {
+  const user = c.get('user')
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ sessions: [] })
+
+  const week = c.req.query('week')
+  const start = c.req.query('start')
+  const end = c.req.query('end')
+
+  let dateFilter = ''
+  let params = [instr.id, instr.id]
+  if (start && end) {
+    dateFilter = 'AND s.date >= ? AND s.date <= ?'
+    params.push(start, end)
+  } else if (week) {
+    // Sun-Sat week
+    const weekStart = new Date(week)
+    const day = weekStart.getDay()
+    weekStart.setDate(weekStart.getDate() - day)
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekStart.getDate() + 6)
+    dateFilter = 'AND s.date >= ? AND s.date <= ?'
+    params.push(weekStart.toISOString().split('T')[0], weekEnd.toISOString().split('T')[0])
+  }
+
+  const sessions = await c.env.DB.prepare(`
+    SELECT DISTINCT s.*,
+      p.name as program_name, p.slug as program_slug,
+      (SELECT COUNT(*) FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed') as booked_count
+    FROM sessions s
+    JOIN programs p ON s.program_id = p.id
+    LEFT JOIN session_instructors si ON si.session_id = s.id
+    WHERE (s.instructor_id = ? OR si.instructor_id = ?) ${dateFilter}
+    ORDER BY s.date ASC, s.start_time ASC
+  `).bind(...params).all()
+
+  return c.json({ sessions: sessions.results })
+})
+
+// GET /instructor/program-sessions/:id/roster — full roster for an assigned session
+app.get('/instructor/program-sessions/:id/roster', requireInstructor, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  // Verify the instructor is assigned to this session (either via instructor_id or session_instructors)
+  const session = await c.env.DB.prepare(`
+    SELECT s.*, p.name as program_name, p.booker_type
+    FROM sessions s
+    JOIN programs p ON s.program_id = p.id
+    WHERE s.id = ?
+      AND (
+        s.instructor_id = ?
+        OR EXISTS (SELECT 1 FROM session_instructors si WHERE si.session_id = s.id AND si.instructor_id = ?)
+      )
+  `).bind(id, instr.id, instr.id).first()
+  if (!session) return c.json({ error: 'Session not found or not assigned to you' }, 403)
+
+  const bookings = await c.env.DB.prepare(`
+    SELECT b.*, u.full_name, u.email, u.phone, u.role, ch.first_name as child_name
+    FROM bookings b
+    JOIN users u ON b.user_id = u.id
+    LEFT JOIN children ch ON b.child_id = ch.id
+    WHERE b.session_id = ? AND b.status = 'confirmed'
+    ORDER BY u.full_name ASC
+  `).bind(id).all()
+
+  return c.json({ session, bookings: bookings.results })
+})
+
+// POST /instructor/program-sessions/:id/checkin — check in a booking on an assigned session
+app.post('/instructor/bookings/:bookingId/checkin', requireInstructor, async (c) => {
+  const user = c.get('user')
+  const { bookingId } = c.req.param()
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  const booking = await c.env.DB.prepare('SELECT * FROM bookings WHERE id = ?').bind(bookingId).first()
+  if (!booking) return c.json({ error: 'Booking not found' }, 404)
+
+  // Verify instructor is assigned to this session
+  const auth = await c.env.DB.prepare(`
+    SELECT 1 FROM sessions s
+    WHERE s.id = ?
+      AND (s.instructor_id = ? OR EXISTS (SELECT 1 FROM session_instructors si WHERE si.session_id = s.id AND si.instructor_id = ?))
+  `).bind(booking.session_id, instr.id, instr.id).first()
+  if (!auth) return c.json({ error: 'Not assigned to this session' }, 403)
+
+  const newCheckedIn = booking.checked_in ? 0 : 1
+  await c.env.DB.prepare(
+    "UPDATE bookings SET checked_in = ?, checked_in_at = CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END WHERE id = ?"
+  ).bind(newCheckedIn, newCheckedIn, bookingId).run()
+
+  return c.json({ ok: true, checked_in: newCheckedIn })
+})
+
+// POST /instructor/program-sessions/:id/bookings — manually add a person to an assigned session
+app.post('/instructor/program-sessions/:id/bookings', requireInstructor, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.param()
+  const { user_id } = await c.req.json()
+  if (!user_id) return c.json({ error: 'user_id required' }, 400)
+
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  // Verify assignment
+  const auth = await c.env.DB.prepare(`
+    SELECT 1 FROM sessions s
+    WHERE s.id = ?
+      AND (s.instructor_id = ? OR EXISTS (SELECT 1 FROM session_instructors si WHERE si.session_id = s.id AND si.instructor_id = ?))
+  `).bind(id, instr.id, instr.id).first()
+  if (!auth) return c.json({ error: 'Not assigned to this session' }, 403)
+
+  const targetUser = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user_id).first()
+  if (!targetUser) return c.json({ error: 'User not found' }, 404)
+
+  let child_id = null
+  if (targetUser.role === 'parent') {
+    const child = await c.env.DB.prepare('SELECT id FROM children WHERE parent_id = ?').bind(user_id).first()
+    if (child) child_id = child.id
+  }
+
+  const bkId = 'bkg_' + uid()
+  try {
+    await c.env.DB.prepare(
+      'INSERT INTO bookings (id, session_id, user_id, child_id, status) VALUES (?, ?, ?, ?, ?)'
+    ).bind(bkId, id, user_id, child_id, 'confirmed').run()
+  } catch (e) {
+    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already booked' }, 400)
+    throw e
+  }
+
+  return c.json({ ok: true, booking_id: bkId })
+})
+
+// DELETE /instructor/bookings/:bookingId — instructor removes a person from their assigned session
+app.delete('/instructor/bookings/:bookingId', requireInstructor, async (c) => {
+  const user = c.get('user')
+  const { bookingId } = c.req.param()
+  const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
+  if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
+
+  const booking = await c.env.DB.prepare(`
+    SELECT b.*, s.date, s.start_time, p.name as program_name, u.email, u.full_name, u.role, ch.first_name as child_name
+    FROM bookings b
+    JOIN sessions s ON b.session_id = s.id
+    JOIN programs p ON s.program_id = p.id
+    JOIN users u ON b.user_id = u.id
+    LEFT JOIN children ch ON b.child_id = ch.id
+    WHERE b.id = ?
+  `).bind(bookingId).first()
+  if (!booking) return c.json({ error: 'Booking not found' }, 404)
+  if (booking.status === 'cancelled') return c.json({ error: 'Booking already cancelled' }, 400)
+
+  // Verify instructor is assigned to the session
+  const auth = await c.env.DB.prepare(`
+    SELECT 1 FROM sessions s
+    WHERE s.id = ?
+      AND (s.instructor_id = ? OR EXISTS (SELECT 1 FROM session_instructors si WHERE si.session_id = s.id AND si.instructor_id = ?))
+  `).bind(booking.session_id, instr.id, instr.id).first()
+  if (!auth) return c.json({ error: 'Not assigned to this session' }, 403)
+
+  await c.env.DB.prepare(
+    "UPDATE bookings SET status = 'cancelled', cancelled_at = datetime('now') WHERE id = ?"
+  ).bind(bookingId).run()
+
+  // Email user
+  try {
+    const { subject, html } = bookingCancelledEmail({
+      recipientName: booking.full_name,
+      programName: booking.program_name,
+      date: booking.date,
+      startTime: booking.start_time,
+      bookerType: booking.role,
+      childName: booking.child_name,
+    })
+    await sendEmail(c.env, { to: booking.email, subject, html })
+  } catch (e) {
+    console.error('Instructor cancel email failed:', e.message)
+  }
+
+  return c.json({ ok: true })
+})
+
+// GET /instructor/searchable-members — for the manual booking lookup (filtered to active users)
+app.get('/instructor/searchable-members', requireInstructor, async (c) => {
+  const q = c.req.query('q') || ''
+  const result = await c.env.DB.prepare(`
+    SELECT u.id, u.full_name, u.email, u.role, ch.first_name as child_name
+    FROM users u
+    LEFT JOIN children ch ON ch.parent_id = u.id
+    WHERE u.status = 'active' AND (u.full_name LIKE ? OR u.email LIKE ?)
+    ORDER BY u.full_name ASC
+    LIMIT 20
+  `).bind(`%${q}%`, `%${q}%`).all()
+  return c.json({ members: result.results })
 })
 
 // ─── PRIVATE LESSON ROUTES ────────────────────────────────────────────────────
@@ -1789,9 +2024,21 @@ async function generateSessionsForProgram(program, env) {
 
       const id = 'sess_' + crypto.randomUUID().replace(/-/g, '').slice(0, 20)
       await env.DB.prepare(`
-        INSERT INTO sessions (id, program_id, date, day_of_week, start_time, end_time, capacity)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).bind(id, program.id, dateStr, dayName, program.start_time, program.end_time, program.default_capacity).run()
+        INSERT INTO sessions (id, program_id, instructor_id, date, day_of_week, start_time, end_time, capacity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(id, program.id, program.default_instructor_id || null, dateStr, dayName, program.start_time, program.end_time, program.default_capacity).run()
+
+      // Also auto-add to session_instructors join table for consistency
+      if (program.default_instructor_id) {
+        const siId = 'si_' + crypto.randomUUID().replace(/-/g, '').slice(0, 20)
+        try {
+          await env.DB.prepare(
+            'INSERT INTO session_instructors (id, session_id, instructor_id) VALUES (?, ?, ?)'
+          ).bind(siId, id, program.default_instructor_id).run()
+        } catch (e) {
+          // Ignore duplicate constraint errors
+        }
+      }
       count++
     }
   }
