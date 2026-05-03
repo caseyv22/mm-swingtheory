@@ -56,9 +56,15 @@ function CreateProgramModal({ onClose, onSuccess }) {
     session_days: [], start_time: '09:00', end_time: '10:00', default_capacity: 10,
     price_display: '', show_instructor: false, forward_view_weeks: 2,
     cancellation_hours: 24, max_bookings_per_week: 1, start_date: '', end_date: '',
+    default_instructor_id: '',
   })
+  const [instructors, setInstructors] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.get('/admin/instructors').then(d => setInstructors(d.instructors || [])).catch(() => {})
+  }, [])
 
   function toggleDay(day) {
     setForm(f => ({
@@ -83,6 +89,7 @@ function CreateProgramModal({ onClose, onSuccess }) {
         max_bookings_per_week: parseInt(form.max_bookings_per_week),
         start_date: form.start_date || null,
         end_date: form.end_date || null,
+        default_instructor_id: form.default_instructor_id || null,
       })
       onSuccess()
     } catch (e) {
@@ -292,9 +299,15 @@ function ProgramEditor({ program, onSave, showToast }) {
     max_bookings_per_week: program.max_bookings_per_week, is_active: !!program.is_active,
     start_date: program.start_date || '', end_date: program.end_date || '',
     booker_type: program.booker_type || 'student', booking_type: program.booking_type || 'group',
+    default_instructor_id: program.default_instructor_id || '',
   })
+  const [instructors, setInstructors] = useState([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    api.get('/admin/instructors').then(d => setInstructors(d.instructors || [])).catch(() => {})
+  }, [])
 
   const selectedDays = form.session_days ? form.session_days.split(',').map(d => d.trim()) : []
 
@@ -315,6 +328,7 @@ function ProgramEditor({ program, onSave, showToast }) {
         max_bookings_per_week: parseInt(form.max_bookings_per_week),
         start_date: form.start_date || null,
         end_date: form.end_date || null,
+        default_instructor_id: form.default_instructor_id || null,
       })
       setSaved(true); setTimeout(() => setSaved(false), 2000)
       try { await api.post(`/admin/programs/${program.id}/generate-sessions`, {}) } catch (e) { console.error('Session gen failed', e) }
@@ -424,6 +438,22 @@ function ProgramEditor({ program, onSave, showToast }) {
       <div className="grid grid-cols-2 gap-3">
         <div><label className="block text-xs text-gray-500 mb-1">Start Date</label><select className={SEL} value={form.start_date || ''} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}><option value="">Select…</option>{DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}</select></div>
         <div><label className="block text-xs text-gray-500 mb-1">End Date <span className="text-gray-400">(blank = never)</span></label><select className={SEL} value={form.end_date || ''} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}><option value="">No end date</option>{DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}</select></div>
+      </div>
+      <div className="grid grid-cols-1 gap-3">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Default Instructor</label>
+          <select
+            className={SEL}
+            value={form.default_instructor_id || ''}
+            onChange={e => setForm(f => ({ ...f, default_instructor_id: e.target.value }))}
+          >
+            <option value="">— None —</option>
+            {instructors.map(i => (
+              <option key={i.id} value={i.id}>{i.full_name}</option>
+            ))}
+          </select>
+          <p className="text-[11px] text-gray-400 mt-1">Auto-assigns to all newly generated sessions for this program. Existing sessions are not affected.</p>
+        </div>
       </div>
       <div className="flex flex-wrap gap-4">
         {[['show_instructor','Show instructor name'],['forward_view_enabled','Forward view enabled'],['is_active','Program active']].map(([key, label]) => (
