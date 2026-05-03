@@ -74,15 +74,15 @@ export default function TypeaheadSelect({ options = [], value, onChange, placeho
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder={placeholder}
-            className="flex-1 outline-none bg-transparent text-gray-900 placeholder-gray-400 font-sans text-base"
+            className="flex-1 outline-none bg-transparent text-gray-900 placeholder-gray-500 font-sans text-base"
             onClick={e => e.stopPropagation()}
           />
         ) : (
-          <span className={`flex-1 truncate ${selected ? 'text-gray-900' : 'text-gray-400'}`}>
+          <span className={`flex-1 truncate ${selected ? 'text-gray-900' : 'text-gray-500'}`}>
             {selected ? (
               <span>
                 {selected.label}
-                {selected.sublabel && <span className="text-gray-400 text-xs ml-1.5">{selected.sublabel}</span>}
+                {selected.sublabel && <span className="text-gray-500 text-xs ml-1.5">{selected.sublabel}</span>}
               </span>
             ) : placeholder}
           </span>
@@ -92,7 +92,7 @@ export default function TypeaheadSelect({ options = [], value, onChange, placeho
           {selected && !open && (
             <button
               onClick={handleClear}
-              className="w-4 h-4 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              className="w-4 h-4 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-600 hover:bg-gray-100"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-3 h-3">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -101,7 +101,7 @@ export default function TypeaheadSelect({ options = [], value, onChange, placeho
           )}
           <svg
             viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`}
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
@@ -112,7 +112,7 @@ export default function TypeaheadSelect({ options = [], value, onChange, placeho
       {open && (
         <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
           {filtered.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-gray-400 italic">
+            <div className="px-4 py-3 text-sm text-gray-500 italic">
               {query ? `No results for "${query}"` : 'No options available'}
             </div>
           ) : (
@@ -130,7 +130,7 @@ export default function TypeaheadSelect({ options = [], value, onChange, placeho
                   >
                     <span className="block font-medium">{option.label}</span>
                     {option.sublabel && (
-                      <span className="block text-xs text-gray-400 mt-0.5">{option.sublabel}</span>
+                      <span className="block text-xs text-gray-500 mt-0.5">{option.sublabel}</span>
                     )}
                   </button>
                 </li>
