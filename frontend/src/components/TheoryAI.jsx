@@ -83,7 +83,7 @@ function onCourseCarry(avgCarry) {
 
 // ─── Dispersion Chart (SVG) ───────────────────────────────────────────────────
 function DispersionChart({ carries, offlines }) {
-  if (!carries.length) return <div className="h-36 flex items-center justify-center text-xs text-gray-300">No data</div>
+  if (!carries.length) return <div className="h-36 flex items-center justify-center text-xs text-gray-400">No data</div>
   const W = 300, H = 180, pad = 28
   const allX = offlines, allY = carries
   const xAbs = Math.max(Math.abs(Math.min(...allX)), Math.abs(Math.max(...allX)), 5) + 5
@@ -149,13 +149,13 @@ export default function TheoryAI({ lessonId, isInstructor = false, mode = 'instr
     finally { setUploading(false) }
   }
 
-  if (loading) return <div className="text-center py-6 text-sm text-gray-400">Loading GSPro data…</div>
+  if (loading) return <div className="text-center py-6 text-sm text-gray-500">Loading GSPro data…</div>
 
   // ── No data ──
   if (!upload) {
     if (!isInstructor && !canEdit) return (
       <div className="text-center py-6">
-        <p className="text-xs text-gray-400 italic">No GSPro data for this lesson yet.</p>
+        <p className="text-xs text-gray-500 italic">No GSPro data for this lesson yet.</p>
       </div>
     )
     return (
@@ -163,11 +163,11 @@ export default function TheoryAI({ lessonId, isInstructor = false, mode = 'instr
         {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">{error}</div>}
         <div onClick={() => fileRef.current?.click()}
           className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-[#1D9E75] hover:bg-[#E1F5EE]/20 transition-all">
-          <svg className="w-6 h-6 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-6 h-6 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
           <p className="text-sm font-semibold text-gray-600 mb-0.5">Upload GSPro CSV</p>
-          <p className="text-xs text-gray-400">Tap to browse</p>
+          <p className="text-xs text-gray-500">Tap to browse</p>
           <input ref={fileRef} type="file" accept=".csv" className="hidden"
             onChange={e => e.target.files[0] && handleFileUpload(e.target.files[0])} />
         </div>
@@ -200,7 +200,7 @@ export default function TheoryAI({ lessonId, isInstructor = false, mode = 'instr
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75]">Theory AI</p>
-          <p className="text-xs text-gray-400">{totalShots} shots · {clubs.length} clubs</p>
+          <p className="text-xs text-gray-500">{totalShots} shots · {clubs.length} clubs</p>
         </div>
         <div className="flex items-center gap-2">
           {(isInstructor || canEdit) && (
@@ -214,11 +214,11 @@ export default function TheoryAI({ lessonId, isInstructor = false, mode = 'instr
             onClick={() => setOnCourse(o => !o)}
             className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-100 transition-colors"
           >
-            <span className={`text-xs font-bold ${!onCourse ? 'text-[#064029]' : 'text-gray-400'}`}>SIM</span>
+            <span className={`text-xs font-bold ${!onCourse ? 'text-[#064029]' : 'text-gray-500'}`}>SIM</span>
             <div className={`relative w-14 h-7 rounded-full transition-colors flex-shrink-0 ${onCourse ? 'bg-[#064029]' : 'bg-gray-200'}`}>
               <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-200 ${onCourse ? 'translate-x-7' : 'translate-x-0'}`} />
             </div>
-            <span className={`text-xs font-bold ${onCourse ? 'text-[#064029]' : 'text-gray-400'}`}>COURSE</span>
+            <span className={`text-xs font-bold ${onCourse ? 'text-[#064029]' : 'text-gray-500'}`}>COURSE</span>
           </button>
         </div>
         <input ref={fileRef} type="file" accept=".csv" className="hidden"
@@ -246,23 +246,23 @@ export default function TheoryAI({ lessonId, isInstructor = false, mode = 'instr
       {/* Key Metrics */}
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white border border-gray-100 rounded-xl px-3 py-3">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">Avg Carry</p>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg Carry</p>
           <p className="font-display text-2xl text-[#064029] leading-none tracking-wide">
             {onCourse ? oc.expected : Math.round(active.avgCarry)}
           </p>
-          <p className="text-[10px] text-gray-400 mt-0.5">
+          <p className="text-[10px] text-gray-500 mt-0.5">
             {onCourse ? `${oc.low}–${oc.high} yd` : `max ${Math.round(active.maxCarry)} yd`}
           </p>
         </div>
         <div className="bg-white border border-gray-100 rounded-xl px-3 py-3">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">Ball Speed</p>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Ball Speed</p>
           <p className="font-display text-2xl text-[#064029] leading-none tracking-wide">
             {Math.round(active.avgBallSpeed)}
           </p>
-          <p className="text-[10px] text-gray-400 mt-0.5">mph</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">mph</p>
         </div>
         <div className="bg-white border border-gray-100 rounded-xl px-3 py-3">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">Smash</p>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Smash</p>
           <p className={`font-display text-2xl leading-none tracking-wide ${smash.color}`}>
             {active.avgSmash.toFixed(2)}
           </p>
@@ -273,9 +273,9 @@ export default function TheoryAI({ lessonId, isInstructor = false, mode = 'instr
       {/* Shot Dispersion */}
       <div className="bg-white border border-gray-100 rounded-xl p-4">
         <p className="text-xs font-bold text-gray-700 mb-1">Shot Dispersion</p>
-        <p className="text-[10px] text-gray-400 mb-3">How tight or spread out your shots land. Tighter = more repeatable.</p>
+        <p className="text-[10px] text-gray-500 mb-3">How tight or spread out your shots land. Tighter = more repeatable.</p>
         <DispersionChart carries={active.carries} offlines={active.offlines} />
-        <p className="text-[10px] text-gray-400 text-center mt-1">Each dot = 1 shot · {activeClub}</p>
+        <p className="text-[10px] text-gray-500 text-center mt-1">Each dot = 1 shot · {activeClub}</p>
       </div>
 
       {/* Shot Shape Breakdown */}
@@ -300,7 +300,7 @@ export default function TheoryAI({ lessonId, isInstructor = false, mode = 'instr
         </div>
       </div>
 
-      <p className="text-[10px] text-gray-300 text-center">
+      <p className="text-[10px] text-gray-400 text-center">
         Uploaded {new Date(upload.uploaded_at + 'Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
       </p>
     </div>
