@@ -62,9 +62,15 @@ export default function NavBar({ role = 'student' }) {
     document.title = `${pageName} | Sync | Swing Theory`
   }, [location.pathname])
 
-  // ── PWA mode: render bottom nav instead of top nav (parent/student/instructor)
+  // ── PWA mode: render bottom nav instead of top nav.
+  // Applies to all non-admin roles: parent/student/instructor/swinger.
+  // (AdminLayout handles its own swinger PWA branch for /admin and /theory-ai;
+  // this branch covers /account where pages use NavBar directly.)
   // Mobile-web and desktop browsers continue to use the top NavBar exactly as before.
-  if (isPWA && (role === 'parent' || role === 'student' || role === 'instructor')) {
+  if (
+    isPWA &&
+    (role === 'parent' || role === 'student' || role === 'instructor' || role === 'swinger')
+  ) {
     return <BottomNav role={role} />
   }
 
