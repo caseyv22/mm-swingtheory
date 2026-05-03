@@ -6,6 +6,7 @@ import { useRole } from '../lib/RoleProvider'
 
 const ADMIN_NAV = [
   { label: 'Sessions', href: '/admin' },
+  { label: 'Schedule', href: '/admin/schedule' },
   { label: 'Members', href: '/admin/members' },
   { label: 'Programs', href: '/admin/programs' },
   { label: 'Settings', href: '/admin/settings' },
@@ -13,6 +14,7 @@ const ADMIN_NAV = [
 
 const SWINGER_NAV = [
   { label: 'Sessions', href: '/admin' },
+  { label: 'Schedule', href: '/admin/schedule' },
   { label: 'Theory AI', href: '/theory-ai' },
   { label: 'Account', href: '/account' },
 ]
@@ -33,6 +35,7 @@ export default function AdminLayout({ children }) {
   useEffect(() => {
     const pageMap = {
       '/admin': 'Sessions',
+      '/admin/schedule': 'Schedule',
       '/admin/members': 'Members',
       '/admin/programs': 'Programs',
       '/admin/settings': 'Settings',
