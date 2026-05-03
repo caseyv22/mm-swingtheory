@@ -56,7 +56,7 @@ export default function AdminLayout({ children }) {
     }
     const page = Object.entries(pageMap).find(([path]) => location.pathname === path || location.pathname.startsWith(path + '/'))
     const pageName = page ? page[1] : 'Sync'
-    document.title = `Sync | Swing Theory | ${pageName}`
+    document.title = `${pageName} | Sync | Swing Theory`
   }, [location.pathname])
 
   // Block render until role is resolved — prevents the wrong sidebar from flashing
