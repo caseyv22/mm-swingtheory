@@ -3,6 +3,8 @@ import { useAuth, useSignIn, useClerk, useUser } from '@clerk/clerk-react'
 import React from 'react'
 import { useState, useEffect } from 'react'
 import { api } from './lib/api.js'
+import { RoleProvider } from './lib/RoleProvider.jsx'
+import PWAShell from './components/PWAShell.jsx'
 import ProgramSelector from './pages/ProgramSelector.jsx'
 import ParentHome from './pages/parent/ParentHome.jsx'
 import CalendarPage from './pages/parent/CalendarPage.jsx'
@@ -400,55 +402,56 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public routes — no role context, no shell */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/*" element={<LoginPage />} />
-
-        <Route path="/home" element={
-          <ProtectedRoute><RoleRouter /></ProtectedRoute>
-        } />
-        <Route path="/parent-home" element={
-          <ProtectedRoute><ParentHome /></ProtectedRoute>
-        } />
-
-        <Route path="/" element={
-          <ProtectedRoute><RoleRouter /></ProtectedRoute>
-        } />
-
-        <Route path="/account" element={
-          <ProtectedRoute><AccountPage /></ProtectedRoute>
-        } />
-
         <Route path="/child-info" element={
           <Navigate to="/account?onboarding=true" replace />
         } />
 
-        <Route path="/programs" element={
-          <ProtectedRoute><ProgramSelector /></ProtectedRoute>
-        } />
+        {/* Protected routes — wrapped in a single RoleProvider + PWAShell layout.
+            The shell renders <Outlet /> for the matched child plus a persistent
+            BottomNav (in PWA mode, for non-admin roles). The shell stays mounted
+            across child route changes, so the BottomNav doesn't remount/flicker. */}
+        <Route element={<RoleProvider><PWAShell /></RoleProvider>}>
+          <Route path="/home" element={
+            <ProtectedRoute><RoleRouter /></ProtectedRoute>
+          } />
+          <Route path="/parent-home" element={
+            <ProtectedRoute><ParentHome /></ProtectedRoute>
+          } />
+          <Route path="/" element={
+            <ProtectedRoute><RoleRouter /></ProtectedRoute>
+          } />
+          <Route path="/account" element={
+            <ProtectedRoute><AccountPage /></ProtectedRoute>
+          } />
+          <Route path="/programs" element={
+            <ProtectedRoute><ProgramSelector /></ProtectedRoute>
+          } />
+          <Route path="/book/:slug" element={
+            <ProtectedRoute><CalendarPage /></ProtectedRoute>
+          } />
+          <Route path="/my-bookings" element={
+            <ProtectedRoute><MyBookingsPage /></ProtectedRoute>
+          } />
 
-        <Route path="/book/:slug" element={
-          <ProtectedRoute><CalendarPage /></ProtectedRoute>
-        } />
+          <Route path="/instructor" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSessions /></ProtectedRoute>} />
+          <Route path="/instructor/sessions" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSessions /></ProtectedRoute>} />
+          <Route path="/instructor/students" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorStudents /></ProtectedRoute>} />
+          <Route path="/instructor/schedule" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSchedule /></ProtectedRoute>} />
+          <Route path="/instructor/students/:studentId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorStudentProfile /></ProtectedRoute>} />
+          <Route path="/instructor/lessons/:lessonId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorLessonDetail /></ProtectedRoute>} />
 
-        <Route path="/my-bookings" element={
-          <ProtectedRoute><MyBookingsPage /></ProtectedRoute>
-        } />
+          <Route path="/admin" element={<ProtectedRoute requiredRole={["admin","swinger"]}><AdminSessions /></ProtectedRoute>} />
+          <Route path="/admin/members" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
+          <Route path="/admin/members/:id" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
+          <Route path="/admin/programs" element={<ProtectedRoute requiredRole={["admin"]}><AdminPrograms /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute requiredRole={["admin"]}><AdminSettings /></ProtectedRoute>} />
+          <Route path="/theory-ai" element={<ProtectedRoute requiredRole={["swinger","admin"]}><SwingerTheoryAI /></ProtectedRoute>} />
+        </Route>
 
-        <Route path="/instructor" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSessions /></ProtectedRoute>} />
-        <Route path="/instructor/sessions" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSessions /></ProtectedRoute>} />
-        <Route path="/instructor/students" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorStudents /></ProtectedRoute>} />
-        <Route path="/instructor/schedule" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorSchedule /></ProtectedRoute>} />
-        <Route path="/instructor/students/:studentId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorStudentProfile /></ProtectedRoute>} />
-        <Route path="/instructor/lessons/:lessonId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorLessonDetail /></ProtectedRoute>} />
-
-        <Route path="/admin" element={<ProtectedRoute requiredRole={["admin","swinger"]}><AdminSessions /></ProtectedRoute>} />
-        <Route path="/admin/members" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
-        <Route path="/admin/members/:id" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
-        <Route path="/admin/programs" element={<ProtectedRoute requiredRole={["admin"]}><AdminPrograms /></ProtectedRoute>} />
-        <Route path="/admin/settings" element={<ProtectedRoute requiredRole={["admin"]}><AdminSettings /></ProtectedRoute>} />
-        <Route path="/theory-ai" element={<ProtectedRoute requiredRole={["swinger","admin"]}><SwingerTheoryAI /></ProtectedRoute>} />
-
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
