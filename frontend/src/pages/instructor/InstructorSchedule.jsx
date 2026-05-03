@@ -118,7 +118,7 @@ function AddLessonModal({ students, prefilledDate, onClose, onSaved }) {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-display text-xl text-[#064029] tracking-wide">SCHEDULE LESSON</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-5 space-y-4">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
@@ -230,9 +230,9 @@ function EditLessonModal({ lesson, onClose, onSaved }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="font-display text-xl text-[#064029] tracking-wide">EDIT LESSON</h2>
-            <p className="text-sm text-gray-400">{lesson.full_name || lesson.student_name}</p>
+            <p className="text-sm text-gray-500">{lesson.full_name || lesson.student_name}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-5 space-y-4">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
@@ -325,15 +325,15 @@ function LessonCard({ lesson, onClick }) {
         <div>
           <p className="text-xs font-semibold text-[#1D9E75] uppercase tracking-wider mb-0.5">Private Lesson</p>
           <p className="text-sm font-semibold text-gray-900">{formatDateShort(lesson.date)}</p>
-          <p className="text-xs text-gray-400">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay && ` · ${lesson.bay}`}</p>
+          <p className="text-xs text-gray-500">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay && ` · ${lesson.bay}`}</p>
           <p className="text-sm font-semibold text-gray-800 mt-1">{lesson.full_name || lesson.student_name}</p>
-          <p className="text-xs text-gray-400">{lesson.student_email}</p>
+          <p className="text-xs text-gray-500">{lesson.student_email}</p>
         </div>
         <div>
           {!!lesson.is_cancelled ? (
             <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>
           ) : past ? (
-            <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>
+            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>
           ) : (
             <span className="text-xs font-medium text-[#064029] bg-[#E1F5EE] px-2 py-0.5 rounded-full">Upcoming</span>
           )}
@@ -372,7 +372,7 @@ function MiniCalendar({ lessons, selectedDate, onSelectDate, currentMonth, onMon
       </div>
       <div className="grid grid-cols-7 mb-1">
         {['M','T','W','T','F','S','S'].map((d, i) => (
-          <div key={i} className="text-center text-xs font-semibold text-gray-300 py-1">{d}</div>
+          <div key={i} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-y-1">
@@ -486,7 +486,7 @@ export default function InstructorSchedule() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="font-display text-2xl text-[#064029] tracking-wide">SCHEDULE</h1>
-                <p className="text-sm text-gray-400 mt-0.5">{upcomingCount} upcoming lesson{upcomingCount !== 1 ? 's' : ''}</p>
+                <p className="text-sm text-gray-500 mt-0.5">{upcomingCount} upcoming lesson{upcomingCount !== 1 ? 's' : ''}</p>
               </div>
               <button
                 onClick={() => { setPrefilledDate(null); setShowAddLesson(true) }}
@@ -522,8 +522,8 @@ export default function InstructorSchedule() {
                 <p className="text-sm font-semibold text-gray-700">{formatDate(selectedDate)}</p>
                 <div className="flex gap-2">
                   <button onClick={() => handleAddFromDate(selectedDate)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">+ Add lesson this day</button>
-                  <span className="text-gray-400">|</span>
-                  <button onClick={() => setSelectedDate(null)} className="text-xs font-semibold text-gray-400 hover:text-gray-600">← Show all</button>
+                  <span className="text-gray-500">|</span>
+                  <button onClick={() => setSelectedDate(null)} className="text-xs font-semibold text-gray-500 hover:text-gray-600">← Show all</button>
                 </div>
               </div>
             )}
@@ -531,18 +531,12 @@ export default function InstructorSchedule() {
 
           <div className="flex-1 lg:overflow-y-auto px-4 lg:px-6 py-4">
             {loading ? (
-              <div className="text-center py-16 text-sm text-gray-400">Loading…</div>
+              <div className="text-center py-16 text-sm text-gray-500">Loading…</div>
             ) : filtered.length === 0 ? (
               <div className="text-center py-16">
-                <p className="text-sm text-gray-300 italic">
+                <p className="text-sm text-gray-400 italic">
                   {selectedDate ? 'No lessons on this day' : `No ${filter} lessons`}
                 </p>
-                <button
-                  onClick={() => setShowAddLesson(true)}
-                  className="mt-3 text-sm font-semibold text-[#1D9E75] hover:text-[#064029]"
-                >
-                  Schedule a lesson →
-                </button>
               </div>
             ) : (
               <div className="space-y-3">
@@ -568,7 +562,7 @@ export default function InstructorSchedule() {
               </svg>
               {selectedDate ? formatDateShort(selectedDate) : 'Calendar'}
             </span>
-            <svg className={`w-4 h-4 text-gray-400 transition-transform ${calendarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className={`w-4 h-4 text-gray-500 transition-transform ${calendarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -604,14 +598,14 @@ export default function InstructorSchedule() {
           />
           {selectedDate && (
             <div className="mt-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{formatDateShort(selectedDate)}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{formatDateShort(selectedDate)}</p>
               {lessons.filter(l => l.date === selectedDate && !l.is_cancelled).length === 0 ? (
-                <p className="text-xs text-gray-300 italic">No lessons</p>
+                <p className="text-xs text-gray-400 italic">No lessons</p>
               ) : (
                 lessons.filter(l => l.date === selectedDate && !l.is_cancelled).map(l => (
                   <div key={l.id} className="py-1.5 border-b border-gray-50 last:border-0">
                     <p className="text-xs font-medium text-gray-700">{l.full_name || l.student_name}</p>
-                    <p className="text-xs text-gray-400">{formatTime(l.start_time)}</p>
+                    <p className="text-xs text-gray-500">{formatTime(l.start_time)}</p>
                   </div>
                 ))
               )}
