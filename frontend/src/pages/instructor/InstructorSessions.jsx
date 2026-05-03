@@ -123,17 +123,17 @@ function RosterDrawer({ session, onClose }) {
               <h2 className="font-display text-2xl text-[#064029] tracking-wide mt-0.5">
                 {formatDate(session.date)}
               </h2>
-              <p className="text-sm text-gray-400 mt-0.5">
+              <p className="text-sm text-gray-500 mt-0.5">
                 {formatTime(session.start_time)} – {formatTime(session.end_time)}
                 {session.bay && <span className="ml-2">· {session.bay}</span>}
               </p>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
           </div>
 
           {/* Check-in progress */}
           <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
               <span>{checkedInCount} of {bookings.length} checked in</span>
               <span>{session.capacity} capacity</span>
             </div>
@@ -157,9 +157,9 @@ function RosterDrawer({ session, onClose }) {
             </button>
           </div>
           {loading ? (
-            <div className="text-center py-8 text-sm text-gray-400">Loading roster…</div>
+            <div className="text-center py-8 text-sm text-gray-500">Loading roster…</div>
           ) : bookings.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-300 italic">No bookings yet</div>
+            <div className="text-center py-8 text-sm text-gray-400 italic">No bookings yet</div>
           ) : (
             <div className="space-y-2">
               {bookings.map(b => (
@@ -176,7 +176,7 @@ function RosterDrawer({ session, onClose }) {
                       {b.child_name || b.full_name}
                     </p>
                     {b.child_name && (
-                      <p className="text-xs text-gray-400">Parent: {b.full_name}</p>
+                      <p className="text-xs text-gray-500">Parent: {b.full_name}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -193,7 +193,7 @@ function RosterDrawer({ session, onClose }) {
                     <button
                       onClick={() => handleRemoveBooking(b.id, b.child_name || b.full_name)}
                       title="Remove from session"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-red-400 hover:text-red-500 hover:bg-red-50 transition-all">
+                      className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-red-400 hover:text-red-500 hover:bg-red-50 transition-all">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -219,7 +219,7 @@ function RosterDrawer({ session, onClose }) {
               <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                   <h3 className="font-display text-lg text-[#064029] tracking-wide">ADD MEMBER</h3>
-                  <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                  <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
                 </div>
                 <div className="px-6 py-4">
                   <input
@@ -229,18 +229,18 @@ function RosterDrawer({ session, onClose }) {
                   />
                 </div>
                 <div className="flex-1 overflow-y-auto px-3 pb-4">
-                  {searching && <p className="text-center text-xs text-gray-400 py-4">Searching…</p>}
+                  {searching && <p className="text-center text-xs text-gray-500 py-4">Searching…</p>}
                   {!searching && searchQ && searchResults.length === 0 && (
-                    <p className="text-center text-xs text-gray-400 py-4">No members found</p>
+                    <p className="text-center text-xs text-gray-500 py-4">No members found</p>
                   )}
                   {searchResults.map(m => (
                     <button key={m.id} onClick={() => handleManualAdd(m.id)}
                       className="w-full text-left px-3 py-2.5 hover:bg-[#E1F5EE] rounded-lg flex items-center justify-between transition-colors">
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{m.child_name || m.full_name}</p>
-                        <p className="text-xs text-gray-400">{m.child_name ? `Parent: ${m.full_name}` : m.email}</p>
+                        <p className="text-xs text-gray-500">{m.child_name ? `Parent: ${m.full_name}` : m.email}</p>
                       </div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{m.role}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{m.role}</span>
                     </button>
                   ))}
                 </div>
@@ -274,7 +274,7 @@ function SessionCard({ session, onClick }) {
             {session.program_name}
           </p>
           <p className="text-base font-semibold text-gray-900">{formatDateShort(session.date)}</p>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-gray-500">
             {formatTime(session.start_time)} – {formatTime(session.end_time)}
             {session.bay && <span className="ml-2">· {session.bay}</span>}
           </p>
@@ -283,7 +283,7 @@ function SessionCard({ session, onClick }) {
           {session.is_cancelled ? (
             <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-1 rounded-full">Cancelled</span>
           ) : past ? (
-            <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-1 rounded-full">Past</span>
+            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">Past</span>
           ) : (
             <span className="text-xs font-medium text-[#064029] bg-[#E1F5EE] px-2 py-1 rounded-full">Upcoming</span>
           )}
@@ -293,7 +293,7 @@ function SessionCard({ session, onClick }) {
       {/* Capacity bar */}
       {!session.is_cancelled && (
         <div>
-          <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
             <span>{session.booked_count} booked</span>
             <span className={isFull ? 'text-red-500 font-medium' : ''}>{session.capacity} spots</span>
           </div>
@@ -350,38 +350,38 @@ export default function InstructorSessions() {
         <div className="max-w-2xl mx-auto px-4 py-5">
           <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Instructor</p>
           <h1 className="font-display text-2xl text-[#064029] tracking-wide">MY SESSIONS</h1>
-          <p className="text-sm text-gray-400 mt-1">{upcomingCount} upcoming · {pastCount} past</p>
+          <p className="text-sm text-gray-500 mt-1">{upcomingCount} upcoming · {pastCount} past</p>
+
+          {/* Filter tabs */}
+          <div className="flex gap-2 mt-4">
+            {[
+              { key: 'upcoming', label: 'Upcoming' },
+              { key: 'past', label: 'Past' },
+              { key: 'all', label: 'All' },
+            ].map(f => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                  filter === f.key
+                    ? 'bg-[#064029] text-white'
+                    : 'bg-white border border-gray-200 text-gray-500 hover:border-[#064029] hover:text-[#064029]'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-5">
-        {/* Filter tabs */}
-        <div className="flex gap-2 mb-6">
-          {[
-            { key: 'upcoming', label: 'Upcoming' },
-            { key: 'past', label: 'Past' },
-            { key: 'all', label: 'All' },
-          ].map(f => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
-                filter === f.key
-                  ? 'bg-[#064029] text-white'
-                  : 'bg-white border border-gray-200 text-gray-500 hover:border-[#064029] hover:text-[#064029]'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
         {/* Sessions list */}
         {loading ? (
-          <div className="text-center py-16 text-sm text-gray-400">Loading sessions…</div>
+          <div className="text-center py-16 text-sm text-gray-500">Loading sessions…</div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-gray-300 text-sm italic">No {filter} programs assigned</p>
+            <p className="text-gray-400 text-sm italic">No {filter} programs assigned</p>
           </div>
         ) : (
           <div className="space-y-3">
