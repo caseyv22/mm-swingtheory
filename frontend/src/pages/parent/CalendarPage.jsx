@@ -112,7 +112,7 @@ function SessionRow({ session, onBook, onCancel, cancellationHours, showInstruct
 
   let statusLabel = "", statusStyle = ""
   if (session.is_cancelled)         { statusLabel = "Cancelled"; statusStyle = "bg-red-50 text-red-500 border-red-100" }
-  else if (isPast)                  { statusLabel = "Past";      statusStyle = "bg-gray-50 text-gray-400 border-gray-100" }
+  else if (isPast)                  { statusLabel = "Past";      statusStyle = "bg-gray-50 text-gray-500 border-gray-100" }
   else if (isBookedByMe) { statusLabel = "Booked ✓"; statusStyle = "bg-[#E1F5EE] text-[#064029] border-st-green/20" }
   else if (isFull)                  { statusLabel = "Full";      statusStyle = "bg-orange-50 text-orange-500 border-orange-100" }
   else                              { statusLabel = "Available"; statusStyle = "bg-[#E1F5EE] text-[#064029] border-st-green/20" }
