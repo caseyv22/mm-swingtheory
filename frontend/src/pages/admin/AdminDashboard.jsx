@@ -225,7 +225,7 @@ export default function AdminDashboard() {
                         <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full border
                           ${member.status === 'active'
                             ? 'bg-st-light text-st-green border-st-green/20'
-                            : 'bg-gray-50 text-gray-400 border-gray-200'
+                            : 'bg-gray-50 text-gray-500 border-gray-200'
                           }`}>
                           {member.status}
                         </span>
