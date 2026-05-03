@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
+import { usePWAMode } from '../lib/usePWAMode'
+import BottomNav from './BottomNav'
 
 const PARENT_LINKS = [
   { label: 'Home', href: '/home' },
@@ -32,6 +34,7 @@ export default function NavBar({ role = 'student' }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
+  const isPWA = usePWAMode()
 
   // Dynamic page title — pageName | Sync | Swing Theory
   useEffect(() => {
@@ -58,6 +61,12 @@ export default function NavBar({ role = 'student' }) {
     else if (location.pathname.startsWith('/book/')) pageName = 'Book'
     document.title = `${pageName} | Sync | Swing Theory`
   }, [location.pathname])
+
+  // ── PWA mode: render bottom nav instead of top nav (parent/student/instructor)
+  // Mobile-web and desktop browsers continue to use the top NavBar exactly as before.
+  if (isPWA && (role === 'parent' || role === 'student' || role === 'instructor')) {
+    return <BottomNav role={role} />
+  }
 
   const links = role === 'admin'
     ? []
