@@ -125,7 +125,7 @@ export default function ProgramSelector() {
           <h1 className="font-display text-2xl text-[#064029] tracking-wide">
             {user?.full_name?.split(' ')[0]?.toUpperCase() || 'PROGRAMS'}
           </h1>
-          <p className="text-sm text-gray-400 mt-1">Select a program to view and book upcoming sessions.</p>
+          <p className="text-sm text-gray-500 mt-1">Select a program to view and book upcoming sessions.</p>
         </div>
       </div>
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-5">
@@ -176,13 +176,13 @@ export default function ProgramSelector() {
                       <div className="hidden lg:flex flex-col items-end gap-3 text-right shrink-0 min-w-[140px]">
                         {program.price_display && (
                           <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Price</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">Price</p>
                             <p className="font-display text-xl text-[#064029] tracking-wide leading-none">{program.price_display}</p>
                           </div>
                         )}
                         {formatDateRange(program) && (
                           <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Dates</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">Dates</p>
                             <p className="text-sm font-semibold text-[#064029] leading-tight">{formatDateRange(program)}</p>
                           </div>
                         )}
@@ -192,7 +192,7 @@ export default function ProgramSelector() {
                     {/* Status message — only show if program has ended */}
                     {isEnded && (
                       <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mt-4">
-                        <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-0.5">Program Ended</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-0.5">Program Ended</p>
                         <p className="text-sm font-semibold text-gray-500">No upcoming sessions</p>
                       </div>
                     )}
