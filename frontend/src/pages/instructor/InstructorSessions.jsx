@@ -375,7 +375,7 @@ export default function InstructorSessions() {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-5">
+      <div className="max-w-2xl mx-auto w-full px-4 py-5">
         {/* Sessions list */}
         {loading ? (
           <div className="text-center py-16 text-sm text-gray-500">Loading sessions…</div>
