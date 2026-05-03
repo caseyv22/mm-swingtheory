@@ -146,6 +146,8 @@ function LoginPage() {
   const { user: clerkUser } = useUser()
   const clerk = useClerk()
 
+  useEffect(() => { document.title = 'Sign In | Sync | Swing Theory' }, [])
+
   const [mode, setMode] = useState('signin') // 'signin' | 'forgot' | 'session'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
