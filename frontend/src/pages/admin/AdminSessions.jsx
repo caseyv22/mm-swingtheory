@@ -23,7 +23,6 @@ function formatTime(t) {
   return `${hour % 12 || 12}:${m} ${ampm}`
 }
 function getWeekStart(date) {
-  // Sunday-anchored: Sun=0 → 0 days back, Mon=1 → 1 day back, ... Sat=6 → 6 days back
   const d = new Date(date)
   const day = d.getDay()
   d.setDate(d.getDate() - day)
@@ -246,6 +245,19 @@ function RosterPanel({ session, onClose, onUpdate }) {
     finally { setSaving(false) }
   }
 
+  async function handleRemoveBooking(bookingId, displayName) {
+    if (!confirm(`Remove ${displayName} from this session? They will be notified by email.`)) return
+    try {
+      await api.delete(`/admin/bookings/${bookingId}`)
+      // Refresh the roster
+      loadRoster()
+      onUpdate()
+      showToast('Removed from session')
+    } catch (e) {
+      showToast(e.message || 'Could not remove')
+    }
+  }
+
   async function handleCheckin(bookingId) {
     try {
       const res = await api.post(`/admin/bookings/${bookingId}/checkin`, {})
@@ -399,14 +411,24 @@ function RosterPanel({ session, onClose, onUpdate }) {
                     {b.child_name && <p className="text-xs text-gray-400">Parent: {b.full_name}</p>}
                     {b.phone && <p className="text-xs text-gray-400">{b.phone}</p>}
                   </div>
-                  <button onClick={() => handleCheckin(b.id)}
-                    className={`min-w-[88px] py-2.5 px-4 text-sm font-bold rounded-xl transition-all ${
-                      b.checked_in
-                        ? 'bg-[#1D9E75] text-white hover:bg-[#178a64] shadow-sm'
-                        : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-[#1D9E75] hover:text-[#1D9E75]'
-                    }`}>
-                    {b.checked_in ? '✓ In' : 'Check In'}
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => handleCheckin(b.id)}
+                      className={`min-w-[88px] py-2.5 px-4 text-sm font-bold rounded-xl transition-all ${
+                        b.checked_in
+                          ? 'bg-[#1D9E75] text-white hover:bg-[#178a64] shadow-sm'
+                          : 'bg-white border-2 border-gray-200 text-gray-600 hover:border-[#1D9E75] hover:text-[#1D9E75]'
+                      }`}>
+                      {b.checked_in ? '✓ In' : 'Check In'}
+                    </button>
+                    <button
+                      onClick={() => handleRemoveBooking(b.id, b.child_name || b.full_name)}
+                      title="Remove from session"
+                      className="w-9 h-9 flex items-center justify-center rounded-xl border-2 border-gray-200 text-gray-400 hover:border-red-400 hover:text-red-500 hover:bg-red-50 transition-all">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -480,6 +502,8 @@ export default function AdminSessions() {
   const [weekStart, setWeekStart] = useState(getWeekStart(new Date()))
   const [sessions, setSessions] = useState([])
   const [allSessions, setAllSessions] = useState([])
+  // Mobile calendar collapse state — default closed on mobile, ignored on lg+
+  const [calendarOpenMobile, setCalendarOpenMobile] = useState(false)
   const [programs, setPrograms] = useState([])
   const [selectedSession, setSelectedSession] = useState(null)
   const [selectedDate, setSelectedDate] = useState(null)
@@ -561,14 +585,44 @@ export default function AdminSessions() {
       )}
 
       {/* Gray page background */}
-      <div className="bg-[#F9FAFB] p-6 h-[calc(100vh-64px)] flex min-h-0">
+      <div className="bg-[#F9FAFB] p-3 lg:p-6 lg:h-[calc(100vh-64px)] flex flex-col lg:flex-row min-h-0">
+
+        {/* MOBILE: Collapsible Mini Calendar at top (lg: hidden — desktop has its own on the right) */}
+        <div className="lg:hidden bg-white rounded-2xl border border-gray-200 shadow-sm mb-3 overflow-hidden">
+          <button
+            onClick={() => setCalendarOpenMobile(o => !o)}
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-[#1D9E75]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="font-display text-base text-[#064029] tracking-wide">CALENDAR</span>
+              {selectedDate && (
+                <span className="text-xs text-gray-400 ml-1">· {formatDateShort(selectedDate)}</span>
+              )}
+            </div>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${calendarOpenMobile ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {calendarOpenMobile && (
+            <div className="px-5 py-4 border-t border-gray-100">
+              <MiniCalendar
+                sessions={allSessions} selectedDate={selectedDate}
+                onSelectDate={handleCalendarDateSelect} currentMonth={calendarMonth}
+                onMonthChange={handleMonthChange} onCreateForDate={handleCreateForDate}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Single card containing all three panels */}
-        <div className="flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex min-h-0">
+        <div className="flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col lg:flex-row min-h-0">
 
-          {/* LEFT: Roster Panel */}
+          {/* DESKTOP LEFT: Roster Panel — only on lg+ when selected */}
           {selectedSession && (
-            <div className="w-80 lg:w-96 min-w-[300px] flex-shrink-0 overflow-hidden relative">
+            <div className="hidden lg:block w-80 lg:w-96 min-w-[300px] flex-shrink-0 overflow-hidden relative order-1">
               <RosterPanel
                 session={selectedSession}
                 onClose={() => setSelectedSession(null)}
@@ -578,7 +632,7 @@ export default function AdminSessions() {
           )}
 
           {/* MIDDLE: Sessions List */}
-          <div className="flex flex-col flex-1 min-w-0 border-r border-gray-100 overflow-hidden">
+          <div className="flex flex-col flex-1 min-w-0 lg:border-r lg:border-gray-100 overflow-hidden order-2">
             {/* Toolbar inside card */}
             <div className="bg-white border-b border-gray-100 px-6 py-4">
               <div className="flex items-center justify-between mb-4">
@@ -591,16 +645,17 @@ export default function AdminSessions() {
                   )}
                   <button
                     onClick={() => { setCreatePrefilledDate(null); setShowCreateModal(true) }}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
+                    className="flex items-center gap-1.5 px-3 lg:px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors whitespace-nowrap"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
-                    Create Session
+                    <span className="hidden sm:inline">Create Session</span>
+                    <span className="sm:hidden">New</span>
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                 <MetricCard label="Sessions" value={metrics.totalThisWeek} sub="this week" />
                 <MetricCard label="Booked" value={metrics.totalBooked} sub={`of ${metrics.totalCapacity} spots`} />
                 <MetricCard label="Upcoming" value={metrics.upcoming} sub="not cancelled" />
@@ -608,11 +663,12 @@ export default function AdminSessions() {
                   value={metrics.totalCapacity > 0 ? `${Math.round((metrics.totalBooked / metrics.totalCapacity) * 100)}%` : '—'}
                   sub="this week" />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 lg:gap-3">
                 <button onClick={() => setWeekStart(d => addDays(d, -7))}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">‹</button>
-                <span className="text-sm font-semibold text-gray-700 flex-1 text-center">
-                  {new Date(isoDate(weekStart) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} — {new Date(isoDate(addDays(weekStart, 6)) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">‹</button>
+                <span className="text-xs lg:text-sm font-semibold text-gray-700 flex-1 text-center">
+                  <span className="hidden sm:inline">{new Date(isoDate(weekStart) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} — {new Date(isoDate(addDays(weekStart, 6)) + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                  <span className="sm:hidden">{new Date(isoDate(weekStart) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {new Date(isoDate(addDays(weekStart, 6)) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 </span>
                 <button onClick={() => setWeekStart(d => addDays(d, 7))}
                   className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">›</button>
@@ -645,8 +701,19 @@ export default function AdminSessions() {
             </div>
           </div>
 
-          {/* RIGHT: Mini Calendar */}
-          <div className="w-72 flex-shrink-0 bg-white border-l border-gray-100 px-5 py-5 overflow-y-auto">
+          {/* MOBILE: Roster Panel — appears below sessions list when one is selected */}
+          {selectedSession && (
+            <div className="lg:hidden border-t border-gray-100 overflow-hidden">
+              <RosterPanel
+                session={selectedSession}
+                onClose={() => setSelectedSession(null)}
+                onUpdate={() => { fetchSessions(); setSelectedSession(null) }}
+              />
+            </div>
+          )}
+
+          {/* DESKTOP RIGHT: Mini Calendar — hidden on mobile (mobile has its own at top) */}
+          <div className="hidden lg:block w-72 flex-shrink-0 bg-white border-l border-gray-100 px-5 py-5 overflow-y-auto order-3">
             <MiniCalendar
               sessions={allSessions} selectedDate={selectedDate}
               onSelectDate={handleCalendarDateSelect} currentMonth={calendarMonth}
