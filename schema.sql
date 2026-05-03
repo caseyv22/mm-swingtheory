@@ -97,6 +97,22 @@ CREATE TABLE IF NOT EXISTS config (
   updated_at    TEXT DEFAULT (datetime('now'))
 );
 
+-- Staff schedule (swinger work shifts) — totally separate from sessions/bookings
+CREATE TABLE IF NOT EXISTS shifts (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date          TEXT NOT NULL,           -- ISO yyyy-mm-dd
+  start_time    TEXT NOT NULL,           -- HH:MM 24-hour
+  end_time      TEXT NOT NULL,           -- HH:MM 24-hour
+  shift_type    TEXT NOT NULL DEFAULT 'Custom',
+                                          -- Morning, Mid, Day, Evening, Night, All Day, Custom
+  created_at    TEXT DEFAULT (datetime('now')),
+  updated_at    TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_shifts_user_date ON shifts(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_shifts_date      ON shifts(date);
+
 -- Seed
 INSERT OR IGNORE INTO config (id) VALUES (1);
 

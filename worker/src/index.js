@@ -1963,6 +1963,175 @@ app.delete('/swinger/practice/:id/gspro', requireSwinger, async (c) => {
   return c.json({ ok: true })
 })
 
+// ─── STAFF SCHEDULE (SHIFTS) ──────────────────────────────────────────────────
+// Schedule for swinger employees. Admin can CRUD; swingers can read only.
+// Entirely separate from the customer-facing sessions/bookings system.
+
+const SHIFT_TYPES = ['Morning', 'Mid', 'Day', 'Evening', 'Night', 'All Day', 'Custom']
+
+function validateTimeStr(t) {
+  return typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t)
+}
+function validateDateStr(d) {
+  return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
+}
+function timeStrToMin(t) {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
+// GET /admin/shifts/swingers — list all users with role='swinger' for use as the roster
+// Sorted alphabetically by full_name. Available to admins and swingers.
+app.get('/admin/shifts/swingers', requireAdminOrSwinger, async (c) => {
+  const result = await c.env.DB.prepare(`
+    SELECT id, full_name, email, phone
+    FROM users
+    WHERE role = 'swinger' AND status = 'active'
+    ORDER BY full_name ASC
+  `).all()
+  return c.json({ swingers: result.results })
+})
+
+// GET /admin/shifts/range?start=YYYY-MM-DD&end=YYYY-MM-DD
+// Returns all shifts in the date range, joined with the swinger's name.
+// Available to admins and swingers (read-only for swingers — no write endpoints accessible).
+app.get('/admin/shifts/range', requireAdminOrSwinger, async (c) => {
+  const start = c.req.query('start')
+  const end = c.req.query('end')
+  if (!validateDateStr(start) || !validateDateStr(end)) {
+    return c.json({ error: 'Invalid start or end date (expected YYYY-MM-DD)' }, 400)
+  }
+  const result = await c.env.DB.prepare(`
+    SELECT s.id, s.user_id, s.date, s.start_time, s.end_time, s.shift_type,
+           u.full_name as swinger_name
+    FROM shifts s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.date >= ? AND s.date <= ?
+    ORDER BY s.date ASC, s.start_time ASC
+  `).bind(start, end).all()
+  return c.json({ shifts: result.results })
+})
+
+// POST /admin/shifts — create a new shift (admin only)
+// Body: { user_id, date, start_time, end_time, shift_type }
+app.post('/admin/shifts', requireAdmin, async (c) => {
+  const body = await c.req.json()
+  const { user_id, date, start_time, end_time, shift_type } = body || {}
+
+  // Validation
+  if (!user_id) return c.json({ error: 'user_id is required' }, 400)
+  if (!validateDateStr(date)) return c.json({ error: 'date must be YYYY-MM-DD' }, 400)
+  if (!validateTimeStr(start_time)) return c.json({ error: 'start_time must be HH:MM' }, 400)
+  if (!validateTimeStr(end_time)) return c.json({ error: 'end_time must be HH:MM' }, 400)
+  if (timeStrToMin(start_time) >= timeStrToMin(end_time)) {
+    return c.json({ error: 'end_time must be after start_time' }, 400)
+  }
+  const finalType = shift_type && SHIFT_TYPES.includes(shift_type) ? shift_type : 'Custom'
+
+  // Verify user exists and is a swinger
+  const swinger = await c.env.DB.prepare(
+    "SELECT id FROM users WHERE id = ? AND role = 'swinger' AND status = 'active'"
+  ).bind(user_id).first()
+  if (!swinger) return c.json({ error: 'User not found or not an active swinger' }, 404)
+
+  const id = 'shift_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+  await c.env.DB.prepare(`
+    INSERT INTO shifts (id, user_id, date, start_time, end_time, shift_type)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(id, user_id, date, start_time, end_time, finalType).run()
+
+  return c.json({ ok: true, id })
+})
+
+// PUT /admin/shifts/:id — update an existing shift (admin only)
+app.put('/admin/shifts/:id', requireAdmin, async (c) => {
+  const id = c.req.param('id')
+  const body = await c.req.json()
+  const { user_id, date, start_time, end_time, shift_type } = body || {}
+
+  // Validation (same as POST)
+  if (!user_id) return c.json({ error: 'user_id is required' }, 400)
+  if (!validateDateStr(date)) return c.json({ error: 'date must be YYYY-MM-DD' }, 400)
+  if (!validateTimeStr(start_time)) return c.json({ error: 'start_time must be HH:MM' }, 400)
+  if (!validateTimeStr(end_time)) return c.json({ error: 'end_time must be HH:MM' }, 400)
+  if (timeStrToMin(start_time) >= timeStrToMin(end_time)) {
+    return c.json({ error: 'end_time must be after start_time' }, 400)
+  }
+  const finalType = shift_type && SHIFT_TYPES.includes(shift_type) ? shift_type : 'Custom'
+
+  const existing = await c.env.DB.prepare('SELECT id FROM shifts WHERE id = ?').bind(id).first()
+  if (!existing) return c.json({ error: 'Shift not found' }, 404)
+
+  const swinger = await c.env.DB.prepare(
+    "SELECT id FROM users WHERE id = ? AND role = 'swinger' AND status = 'active'"
+  ).bind(user_id).first()
+  if (!swinger) return c.json({ error: 'User not found or not an active swinger' }, 404)
+
+  await c.env.DB.prepare(`
+    UPDATE shifts SET user_id = ?, date = ?, start_time = ?, end_time = ?, shift_type = ?,
+                      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(user_id, date, start_time, end_time, finalType, id).run()
+
+  return c.json({ ok: true })
+})
+
+// DELETE /admin/shifts/:id — delete a shift (admin only)
+app.delete('/admin/shifts/:id', requireAdmin, async (c) => {
+  const id = c.req.param('id')
+  const existing = await c.env.DB.prepare('SELECT id FROM shifts WHERE id = ?').bind(id).first()
+  if (!existing) return c.json({ error: 'Shift not found' }, 404)
+  await c.env.DB.prepare('DELETE FROM shifts WHERE id = ?').bind(id).run()
+  return c.json({ ok: true })
+})
+
+// GET /admin/shifts/metrics?start=YYYY-MM-DD&end=YYYY-MM-DD
+// Returns aggregated hours/shifts per swinger over the date range.
+// Computed in worker for accuracy; client also recomputes for filter responsiveness.
+app.get('/admin/shifts/metrics', requireAdminOrSwinger, async (c) => {
+  const start = c.req.query('start')
+  const end = c.req.query('end')
+  if (!validateDateStr(start) || !validateDateStr(end)) {
+    return c.json({ error: 'Invalid start or end date (expected YYYY-MM-DD)' }, 400)
+  }
+
+  // Pull shifts in range with names. Aggregation is small enough to do in JS for clarity.
+  const result = await c.env.DB.prepare(`
+    SELECT s.user_id, s.date, s.start_time, s.end_time, s.shift_type,
+           u.full_name as swinger_name
+    FROM shifts s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.date >= ? AND s.date <= ?
+    ORDER BY u.full_name ASC, s.date ASC
+  `).bind(start, end).all()
+
+  const byUser = {}
+  for (const r of result.results) {
+    if (!byUser[r.user_id]) {
+      byUser[r.user_id] = {
+        user_id: r.user_id,
+        full_name: r.swinger_name,
+        shifts: 0,
+        total_hours: 0,
+        saturdays: 0,
+        sundays: 0,
+        by_type: { Morning: 0, Mid: 0, Day: 0, Evening: 0, Night: 0, 'All Day': 0, Custom: 0 },
+      }
+    }
+    const m = byUser[r.user_id]
+    const hrs = Math.max(0, (timeStrToMin(r.end_time) - timeStrToMin(r.start_time)) / 60)
+    m.shifts += 1
+    m.total_hours += hrs
+    if (r.shift_type in m.by_type) m.by_type[r.shift_type] += 1
+    // Day-of-week from date string — use noon to dodge UTC shift
+    const dow = new Date(r.date + 'T12:00:00').getDay()
+    if (dow === 6) m.saturdays += 1
+    if (dow === 0) m.sundays += 1
+  }
+
+  return c.json({ metrics: Object.values(byUser) })
+})
+
 // ─── CRON HANDLERS ────────────────────────────────────────────────────────────
 export default {
   fetch: app.fetch,

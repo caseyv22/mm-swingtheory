@@ -4,6 +4,7 @@ import {
   Home,
   Calendar,
   CalendarCheck,
+  CalendarClock,
   User,
   LayoutGrid,
   Users,
@@ -33,9 +34,10 @@ const INSTRUCTOR_TABS = [
 ]
 
 const SWINGER_TABS = [
-  { label: 'Sessions',  href: '/admin',     Icon: Calendar },
-  { label: 'Theory AI', href: '/theory-ai', Icon: BarChart3 },
-  { label: 'Account',   href: '/account',   Icon: User },
+  { label: 'Sessions',  href: '/admin',          Icon: Calendar },
+  { label: 'Schedule',  href: '/admin/schedule', Icon: CalendarClock },
+  { label: 'Theory AI', href: '/theory-ai',      Icon: BarChart3 },
+  { label: 'Account',   href: '/account',        Icon: User },
 ]
 
 function tabsForRole(role) {
