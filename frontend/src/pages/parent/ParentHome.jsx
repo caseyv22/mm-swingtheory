@@ -50,7 +50,7 @@ function formatDays(days) {
 
 function getProgramStatus(program) {
   const today = new Date().toISOString().split('T')[0]
-  if (program.start_date && today < program.start_date) return 'upcoming'
+  // 'upcoming' (future start_date) is no longer a disabling state — students can pre-book
   if (program.end_date && today > program.end_date) return 'ended'
   return 'active'
 }
@@ -129,7 +129,7 @@ export default function ParentHome() {
         {/* Next session card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           {loading ? (
-            <p className="text-gray-500 text-sm">Loading...</p>
+            <p className="text-gray-400 text-sm">Loading...</p>
           ) : nextSession ? (
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">
@@ -155,7 +155,7 @@ export default function ParentHome() {
             </div>
           ) : (
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Next session</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Next session</p>
               <p className="text-gray-500 text-sm font-medium">
                 {isParent ? `No upcoming sessions for ${childName}.` : 'No upcoming sessions.'}
               </p>
@@ -168,7 +168,6 @@ export default function ParentHome() {
           <div className="space-y-3">
             {programs.map(program => {
               const status = getProgramStatus(program)
-              const isUpcoming = status === 'upcoming'
               const isEnded = status === 'ended'
               const isDisabled = isEnded
 
@@ -196,17 +195,9 @@ export default function ParentHome() {
                       {program.description || PROGRAM_DESCRIPTIONS[program.slug] || ''}
                     </p>
 
-                    {isUpcoming && (
-                      <div className="bg-[#E1F5EE] border border-[#064029]/20 rounded-lg px-4 py-2.5 mb-4">
-                        <p className="text-xs font-bold uppercase tracking-widest text-[#064029] mb-0.5">Coming Soon</p>
-                        <p className="text-sm font-semibold text-gray-900">
-                          Sessions begin {formatStartDate(program.start_date)}
-                        </p>
-                      </div>
-                    )}
                     {isEnded && (
                       <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mb-4">
-                        <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-0.5">Program Ended</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-0.5">Program Ended</p>
                         <p className="text-sm font-semibold text-gray-500">No upcoming sessions</p>
                       </div>
                     )}
