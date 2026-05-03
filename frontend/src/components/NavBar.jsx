@@ -15,7 +15,7 @@ const STUDENT_LINKS = [
 ]
 
 const INSTRUCTOR_LINKS = [
-  { label: 'Programs', href: '/instructor/sessions' },
+  { label: 'Sessions', href: '/instructor/sessions' },
   { label: 'Students', href: '/instructor/students' },
   { label: 'Calendar', href: '/instructor/schedule' },
   { label: 'Account', href: '/account' },
@@ -41,8 +41,8 @@ export default function NavBar({ role = 'student' }) {
       '/programs': 'Programs',
       '/my-bookings': 'My Bookings',
       '/account': 'Account',
-      '/instructor': 'My Sessions',
-      '/instructor/sessions': 'My Sessions',
+      '/instructor': 'Sessions',
+      '/instructor/sessions': 'Sessions',
       '/instructor/students': 'My Students',
       '/instructor/schedule': 'Schedule',
     }
