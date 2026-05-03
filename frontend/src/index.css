@@ -15,23 +15,27 @@
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   PWA bottom-nav layout shim
+   PWA layout shim — top + bottom safe-area insets
 
-   When the app runs as an installed PWA, BottomNav.jsx is fixed-positioned
-   at the bottom of the viewport. We need the body to reserve space below
-   so scrollable content isn't trapped under the nav.
+   When the app runs as an installed PWA, content goes edge-to-edge:
+   - On iOS with status-bar-style="black-translucent", the status bar (time,
+     signal, battery) overlays the page. We need to push content DOWN below it.
+   - On iPhones with the home indicator and on Android phones with on-screen
+     gesture areas, fixed bottom UI must clear that area too.
 
-   Height = ~64px (nav content) + safe-area-inset-bottom (home indicator on iPhone)
+   Both insets come from the OS via env(safe-area-inset-*). The values are
+   0 on devices without a notch/indicator, so this is universally safe.
 
    The `pwa-mode` class is added to <html> by the usePWAMode() hook.
    ─────────────────────────────────────────────────────────────────────────── */
 html.pwa-mode body {
+  padding-top: env(safe-area-inset-top);
   padding-bottom: calc(64px + env(safe-area-inset-bottom));
 }
 
 /* When the keyboard is open we hide BottomNav entirely (see useKeyboardOpen).
-   Drop the padding too so the input the user is typing in isn't pushed up
-   awkwardly with empty space below. The `keyboard-open` class is added to
+   Drop the bottom padding too so the input the user is typing in isn't pushed
+   up awkwardly with empty space below. The `keyboard-open` class is added to
    <html> by BottomNav when it hides itself. */
 html.pwa-mode.keyboard-open body {
   padding-bottom: 0;
