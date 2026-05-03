@@ -74,11 +74,11 @@ function LessonCard({ lesson }) {
               {formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}
               {lesson.bay && <span className="ml-1.5">· {lesson.bay}</span>}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">with {lesson.instructor_name}</p>
+            <p className="text-xs text-gray-500 mt-0.5">with {lesson.instructor_name}</p>
           </div>
           {/* Chevron */}
           <svg
-            className={`w-5 h-5 text-gray-400 flex-shrink-0 mt-1 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 text-gray-500 flex-shrink-0 mt-1 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -97,14 +97,14 @@ function LessonCard({ lesson }) {
               <p className="text-[10px] font-bold uppercase tracking-widest text-[#064029] mb-1">Coach's Note · {lesson.instructor_name}</p>
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{lesson.coaching_note}</p>
               {lesson.note_updated_at && (
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="text-xs text-gray-500 mt-2">
                   {new Date(lesson.note_updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </p>
               )}
             </div>
           )}
           {!hasNote && isPast && !isCancelled && (
-            <p className="text-xs text-gray-300 italic">No coaching notes yet</p>
+            <p className="text-xs text-gray-400 italic">No coaching notes yet</p>
           )}
           {!isCancelled && (
             <div className="pt-2 border-t border-gray-100">
