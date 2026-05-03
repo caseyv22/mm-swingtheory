@@ -49,7 +49,7 @@ export default function AdminSettings() {
 
           {loading ? (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex items-center justify-center h-48">
-              <p className="text-sm text-gray-400">Loading…</p>
+              <p className="text-sm text-gray-500">Loading…</p>
             </div>
           ) : (
             <>
@@ -71,9 +71,9 @@ export default function AdminSettings() {
                         value={adminEmail}
                         onChange={e => { setAdminEmail(e.target.value); setSaved(false) }}
                         placeholder="info@swingtheory.golf"
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
                       />
-                      <p className="text-xs text-gray-400 mt-1.5">Booking and cancellation alerts will be sent to this address.</p>
+                      <p className="text-xs text-gray-500 mt-1.5">Booking and cancellation alerts will be sent to this address.</p>
                     </div>
                   </div>
                   <button onClick={saveConfig} disabled={saving}
@@ -100,7 +100,7 @@ export default function AdminSettings() {
                       ['Reminder cron', 'Daily 8:00 AM Pacific'],
                     ].map(([label, value]) => (
                       <div key={label} className="flex items-start gap-4">
-                        <span className="text-xs font-bold uppercase tracking-widest text-gray-400 w-36 shrink-0 mt-0.5">{label}</span>
+                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500 w-36 shrink-0 mt-0.5">{label}</span>
                         <span className="font-mono text-xs text-gray-700 bg-gray-50 px-2 py-1 rounded-lg">{value}</span>
                       </div>
                     ))}
