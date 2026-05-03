@@ -46,7 +46,7 @@ function AddLessonModal({ studentId, onClose, onSaved }) {
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-display text-xl text-[#064029] tracking-wide">ADD LESSON</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-5 space-y-4">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
@@ -103,15 +103,15 @@ function LessonCard({ lesson, onClick }) {
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             {isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>}
             {!isCancelled && !past && <span className="text-[10px] font-bold uppercase tracking-wider text-[#064029] bg-[#E1F5EE] px-2 py-0.5 rounded-full">Upcoming</span>}
-            {!isCancelled && past && <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>}
+            {!isCancelled && past && <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>}
             {!!lesson.has_note && <span className="text-[10px] font-bold uppercase tracking-wider text-[#1D9E75] border border-[#1D9E75]/30 px-2 py-0.5 rounded-full">Note</span>}
             {!!lesson.has_gspro && <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">GSPro</span>}
           </div>
           <p className="text-base font-bold text-gray-900">{formatDateShort(lesson.date)}</p>
-          <p className="text-sm text-gray-400">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay ? ` · ${lesson.bay}` : ''}</p>
-          {lesson.notes && <p className="text-xs text-gray-400 italic mt-1 truncate">Focus: {lesson.notes}</p>}
+          <p className="text-sm text-gray-500">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay ? ` · ${lesson.bay}` : ''}</p>
+          {lesson.notes && <p className="text-xs text-gray-500 italic mt-1 truncate">Focus: {lesson.notes}</p>}
         </div>
-        <svg className="w-5 h-5 text-gray-300 ml-3 mt-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-5 h-5 text-gray-400 ml-3 mt-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
       </div>
@@ -158,7 +158,7 @@ export default function InstructorStudentProfile() {
     <div className="min-h-screen bg-[#F9FAFB]">
       <NavBar role="instructor" />
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-gray-400">Loading…</p>
+        <p className="text-sm text-gray-500">Loading…</p>
       </div>
     </div>
   )
@@ -167,7 +167,7 @@ export default function InstructorStudentProfile() {
     <div className="min-h-screen bg-[#F9FAFB]">
       <NavBar role="instructor" />
       <div className="max-w-2xl mx-auto px-4 py-8 text-center">
-        <p className="text-sm text-gray-400">Student not found.</p>
+        <p className="text-sm text-gray-500">Student not found.</p>
         <button onClick={() => navigate('/instructor/students')} className="mt-4 text-sm font-semibold text-[#1D9E75]">← Back to Students</button>
       </div>
     </div>
@@ -209,8 +209,8 @@ export default function InstructorStudentProfile() {
           <div className="flex items-start justify-between">
             <div>
               <h1 className="font-display text-2xl text-[#064029] tracking-wide">{student.full_name.toUpperCase()}</h1>
-              <p className="text-sm text-gray-400 mt-0.5">{student.email}</p>
-              <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+              <p className="text-sm text-gray-500 mt-0.5">{student.email}</p>
+              <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
                 <span>{upcomingCount} upcoming</span>
                 <span>·</span>
                 <span>{pastCount} past</span>
@@ -244,7 +244,7 @@ export default function InstructorStudentProfile() {
         {/* Lesson list */}
         {filtered.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
-            <p className="text-sm text-gray-400 italic">No {filter} lessons</p>
+            <p className="text-sm text-gray-500 italic">No {filter} lessons</p>
             {filter === 'upcoming' && (
               <button onClick={() => setShowAdd(true)} className="mt-3 text-sm font-semibold text-[#1D9E75] hover:text-[#064029]">
                 Schedule the first lesson →
