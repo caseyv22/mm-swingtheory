@@ -61,7 +61,7 @@ function AddPracticeModal({ onClose, onSaved }) {
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-display text-xl text-[#064029] tracking-wide">NEW PRACTICE</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-5 space-y-4">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
@@ -123,7 +123,7 @@ function EditPracticeModal({ session, onClose, onSaved, onDelete }) {
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-display text-xl text-[#064029] tracking-wide">EDIT PRACTICE</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-5 space-y-4">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
@@ -192,7 +192,7 @@ function PracticeCard({ session, onClick }) {
               GSPro
             </span>
           )}
-          <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </div>
@@ -246,7 +246,7 @@ function PracticeDetail({ session, onClose, onUpdated }) {
       {/* Notes card */}
       <div className="bg-white rounded-2xl border border-gray-100 px-5 py-5">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Notes</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Notes</p>
           {!editingNote && (
             <button onClick={() => { setEditingNote(true); setNoteText(session.notes || '') }}
               className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">
@@ -261,7 +261,7 @@ function PracticeDetail({ session, onClose, onUpdated }) {
           session.notes ? (
             <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{session.notes}</p>
           ) : (
-            <p className="text-sm text-gray-300 italic">No notes yet. Tap Add to write some.</p>
+            <p className="text-sm text-gray-400 italic">No notes yet. Tap Add to write some.</p>
           )
         )}
 
@@ -345,7 +345,7 @@ export default function SwingerTheoryAI() {
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">My Practice</p>
                 <h1 className="font-display text-2xl text-[#064029] tracking-wide">THEORY AI</h1>
-                <p className="text-sm text-gray-400 mt-1">Track your practice sessions, notes, and GSPro data.</p>
+                <p className="text-sm text-gray-500 mt-1">Track your practice sessions, notes, and GSPro data.</p>
               </div>
               {!selectedSession && (
                 <button onClick={() => setShowAddModal(true)}
@@ -368,11 +368,11 @@ export default function SwingerTheoryAI() {
             />
           ) : (
             <>
-              {loading && <p className="text-center text-gray-400 text-sm py-8">Loading…</p>}
+              {loading && <p className="text-center text-gray-500 text-sm py-8">Loading…</p>}
               {!loading && sessions.length === 0 && (
                 <div className="bg-white rounded-2xl border border-gray-100 px-6 py-12 text-center">
                   <p className="font-display text-xl text-[#064029] tracking-wide mb-2">NO PRACTICE YET</p>
-                  <p className="text-sm text-gray-400 mb-5">Log your first practice session to start tracking your data.</p>
+                  <p className="text-sm text-gray-500 mb-5">Log your first practice session to start tracking your data.</p>
                   <button onClick={() => setShowAddModal(true)}
                     className="bg-[#064029] text-white text-sm font-bold px-5 py-2.5 rounded-xl hover:bg-[#085041] transition-colors">
                     + Add Practice
