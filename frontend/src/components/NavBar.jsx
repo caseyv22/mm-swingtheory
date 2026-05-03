@@ -33,11 +33,31 @@ export default function NavBar({ role = 'student' }) {
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  // Dynamic page title
+  // Dynamic page title — pageName | Sync | Swing Theory
   useEffect(() => {
-    const roleLabel = ROLE_LABEL[role] || 'Member'
-    document.title = `Sync | Swing Theory | ${roleLabel}`
-  }, [role])
+    const pageMap = {
+      '/parent-home': 'Home',
+      '/home': 'Home',
+      '/programs': 'Programs',
+      '/my-bookings': 'My Bookings',
+      '/account': 'Account',
+      '/instructor': 'My Sessions',
+      '/instructor/sessions': 'My Sessions',
+      '/instructor/students': 'My Students',
+      '/instructor/schedule': 'Schedule',
+    }
+    let pageName = 'Sync'
+    // Find longest matching prefix
+    let bestMatch = ''
+    for (const path of Object.keys(pageMap)) {
+      if (location.pathname === path || location.pathname.startsWith(path + '/')) {
+        if (path.length > bestMatch.length) bestMatch = path
+      }
+    }
+    if (bestMatch) pageName = pageMap[bestMatch]
+    else if (location.pathname.startsWith('/book/')) pageName = 'Book'
+    document.title = `${pageName} | Sync | Swing Theory`
+  }, [location.pathname])
 
   const links = role === 'admin'
     ? []
