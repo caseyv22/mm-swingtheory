@@ -1,0 +1,25 @@
+{
+  "name": "Swing Sync",
+  "short_name": "Swing Sync",
+  "description": "Booking and coaching for Swing Theory",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F9FAFB",
+  "theme_color": "#064029",
+  "icons": [
+    {
+      "src": "/ST_App_Icon.png",
+      "sizes": "192x192 512x512 1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ST_App_Icon.png",
+      "sizes": "192x192 512x512 1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
