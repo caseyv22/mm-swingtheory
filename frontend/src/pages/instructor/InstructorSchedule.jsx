@@ -577,13 +577,13 @@ export default function InstructorSchedule() {
               <MiniCalendar
                 lessons={lessons.filter(l => !l.is_cancelled)}
                 selectedDate={selectedDate}
-                onSelectDate={(d) => { handleCalendarDateSelect(d); setCalendarOpen(false) }}
+                onSelectDate={(d) => handleCalendarDateSelect(d)}
                 currentMonth={calendarMonth}
                 onMonthChange={handleMonthChange}
               />
               {selectedDate && (
                 <button
-                  onClick={() => { handleAddFromDate(selectedDate); setCalendarOpen(false) }}
+                  onClick={() => handleAddFromDate(selectedDate)}
                   className="mt-3 w-full py-2.5 text-sm font-semibold text-[#1D9E75] border border-[#1D9E75]/30 rounded-lg hover:bg-[#E1F5EE] transition-colors"
                 >
                   + Add lesson on {formatDateShort(selectedDate)}
