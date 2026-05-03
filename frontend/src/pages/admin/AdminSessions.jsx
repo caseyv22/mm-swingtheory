@@ -655,7 +655,7 @@ export default function AdminSessions() {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                 <MetricCard label="Sessions" value={metrics.totalThisWeek} sub="this week" />
                 <MetricCard label="Booked" value={metrics.totalBooked} sub={`of ${metrics.totalCapacity} spots`} />
                 <MetricCard label="Upcoming" value={metrics.upcoming} sub="not cancelled" />
