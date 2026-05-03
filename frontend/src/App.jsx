@@ -14,6 +14,7 @@ import AdminSessions from './pages/admin/AdminSessions.jsx'
 import AdminMembers from './pages/admin/AdminMembers.jsx'
 import AdminPrograms from './pages/admin/AdminPrograms.jsx'
 import AdminSettings from './pages/admin/AdminSettings.jsx'
+import AdminSchedule from './pages/admin/AdminSchedule.jsx'
 import SwingerTheoryAI from './pages/swinger/SwingerTheoryAI.jsx'
 import InstructorSessions from './pages/instructor/InstructorSessions.jsx'
 import InstructorStudents from './pages/instructor/InstructorStudents.jsx'
@@ -444,6 +445,7 @@ export default function App() {
           <Route path="/instructor/lessons/:lessonId" element={<ProtectedRoute requiredRole={["instructor","admin"]}><InstructorLessonDetail /></ProtectedRoute>} />
 
           <Route path="/admin" element={<ProtectedRoute requiredRole={["admin","swinger"]}><AdminSessions /></ProtectedRoute>} />
+          <Route path="/admin/schedule" element={<ProtectedRoute requiredRole={["admin","swinger"]}><AdminSchedule /></ProtectedRoute>} />
           <Route path="/admin/members" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
           <Route path="/admin/members/:id" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
           <Route path="/admin/programs" element={<ProtectedRoute requiredRole={["admin"]}><AdminPrograms /></ProtectedRoute>} />
