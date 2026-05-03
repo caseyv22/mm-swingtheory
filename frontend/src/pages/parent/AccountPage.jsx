@@ -15,7 +15,11 @@ export default function AccountPage() {
   const isChangePassword = searchParams.get('change-password') === 'true'
 
   const [userData, setUserData] = useState(null)
-  const [role, setRole] = useState(null)
+  // Initialize role from sessionStorage so NavBar (or BottomNav in PWA) can render
+  // immediately on mount instead of waiting for the /users/me fetch. The fetch
+  // still runs and overwrites this with authoritative data — sessionStorage is
+  // just a fast first-paint hint.
+  const [role, setRole] = useState(() => sessionStorage.getItem('st_role'))
   const [phone, setPhone] = useState('')
   const [childName, setChildName] = useState('')
   const [childAge, setChildAge] = useState('')
@@ -137,7 +141,12 @@ export default function AccountPage() {
     }
   }
 
-  if (loading) return (
+  // For the forced-password-change flow we keep the full-screen loading splash —
+  // we shouldn't flash the regular page chrome before redirecting into the
+  // password setup layout. For all other entries to /account, we let the page
+  // chrome (NavBar / BottomNav) render immediately and show an inline loader
+  // in the form area while data resolves.
+  if (loading && isChangePassword) return (
     <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
       <p className="text-[#064029] font-bold tracking-wide">Loading...</p>
     </div>
@@ -263,6 +272,14 @@ export default function AccountPage() {
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-5 space-y-4">
         {error && <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-xl">{error}</div>}
 
+        {loading && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
+            <p className="text-sm text-gray-500 font-medium">Loading…</p>
+          </div>
+        )}
+
+        {!loading && (
+        <>
         {/* Profile card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Your Account</p>
@@ -346,9 +363,11 @@ export default function AccountPage() {
             </button>
           </form>
         </div>
+        </>
+        )}
 
-        {/* Sign Out — always visible, all roles. Important for PWA where Clerk's
-            UserButton dropdown can be cramped or non-obvious on mobile. */}
+        {/* Sign Out — always visible, all roles, even while loading. Important for
+            PWA where Clerk's UserButton dropdown can be cramped or non-obvious on mobile. */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <button
             type="button"
