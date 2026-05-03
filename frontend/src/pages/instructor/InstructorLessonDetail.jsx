@@ -99,7 +99,7 @@ export default function InstructorLessonDetail() {
     <div className="min-h-screen bg-[#F9FAFB]">
       <NavBar role="instructor" />
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-gray-400">Loading…</p>
+        <p className="text-sm text-gray-500">Loading…</p>
       </div>
     </div>
   )
@@ -108,7 +108,7 @@ export default function InstructorLessonDetail() {
     <div className="min-h-screen bg-[#F9FAFB]">
       <NavBar role="instructor" />
       <div className="max-w-2xl mx-auto px-4 py-8 text-center">
-        <p className="text-sm text-gray-400">Lesson not found.</p>
+        <p className="text-sm text-gray-500">Lesson not found.</p>
         <button onClick={() => navigate(-1)} className="mt-4 text-sm font-semibold text-[#1D9E75]">← Go back</button>
       </div>
     </div>
@@ -166,7 +166,7 @@ export default function InstructorLessonDetail() {
             <div>
               {isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full inline-block mb-2">Cancelled</span>}
               <h1 className="font-display text-2xl text-[#064029] tracking-wide leading-none">{formatDate(lesson.date).toUpperCase()}</h1>
-              <p className="text-sm text-gray-400 mt-1">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay ? ` · ${lesson.bay}` : ''}</p>
+              <p className="text-sm text-gray-500 mt-1">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay ? ` · ${lesson.bay}` : ''}</p>
               {studentName && <p className="text-sm font-semibold text-gray-600 mt-1">{studentName}</p>}
             </div>
             {!isCancelled && (
@@ -240,11 +240,11 @@ export default function InstructorLessonDetail() {
           {tab === 'overview' && (
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Session Focus</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Session Focus</p>
                 {lesson.notes ? (
                   <p className="text-sm text-gray-700 leading-relaxed">{lesson.notes}</p>
                 ) : (
-                  <p className="text-sm text-gray-300 italic">No focus set for this lesson.</p>
+                  <p className="text-sm text-gray-400 italic">No focus set for this lesson.</p>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-50">
@@ -255,7 +255,7 @@ export default function InstructorLessonDetail() {
                   { label: 'Status', value: isCancelled ? 'Cancelled' : past ? 'Completed' : 'Upcoming' },
                 ].map(({ label, value }) => (
                   <div key={label}>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">{label}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-0.5">{label}</p>
                     <p className="text-sm font-semibold text-gray-800">{value}</p>
                   </div>
                 ))}
@@ -274,14 +274,14 @@ export default function InstructorLessonDetail() {
           {/* Notes */}
           {tab === 'notes' && (
             <div className="space-y-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Coaching Notes</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Coaching Notes</p>
               {!isCancelled && (
                 <>
                   {!editingNote && lesson.coaching_note && (
                     <div className="bg-[#E1F5EE] rounded-xl px-4 py-4">
                       <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{lesson.coaching_note}</p>
                       {lesson.note_updated_at && (
-                        <p className="text-xs text-gray-400 mt-3">
+                        <p className="text-xs text-gray-500 mt-3">
                           {new Date(lesson.note_updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
                       )}
@@ -317,7 +317,7 @@ export default function InstructorLessonDetail() {
                   )}
                 </>
               )}
-              {isCancelled && <p className="text-sm text-gray-300 italic">This lesson was cancelled.</p>}
+              {isCancelled && <p className="text-sm text-gray-400 italic">This lesson was cancelled.</p>}
             </div>
           )}
 
