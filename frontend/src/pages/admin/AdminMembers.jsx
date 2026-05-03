@@ -62,7 +62,7 @@ function AddMemberModal({ onClose, onSuccess }) {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-display text-xl text-[#064029] tracking-wide">ADD MEMBER</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-5 space-y-4">
           {error && (
@@ -164,7 +164,7 @@ function ResetLinkModal({ link, onClose }) {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-display text-xl text-[#064029] tracking-wide">PASSWORD RESET LINK</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-5 space-y-4">
           <p className="text-sm text-gray-600">Share this link with the user. It expires after one use.</p>
@@ -203,7 +203,7 @@ function AssignInstructorModal({ student, currentAssignments, allInstructors, on
             <h2 className="font-display text-xl text-[#064029] tracking-wide">ASSIGN INSTRUCTOR</h2>
             <p className="text-sm text-gray-500">{student.full_name}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-4 space-y-4">
           {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-3 py-2">{error}</div>}
@@ -322,12 +322,12 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
             {isPending && <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded font-medium">Invite Pending</span>}
           </div>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none mt-1">&times;</button>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none mt-1">&times;</button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
         <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Account Actions</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Account Actions</p>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setEditing(!editing)}
               className="px-4 py-2 text-sm font-medium bg-[#E1F5EE] text-[#064029] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors">
@@ -388,7 +388,7 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
 
         {member.role === 'parent' && member.child_name && (
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Child</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Child</p>
             <div className="bg-[#E1F5EE] rounded-lg px-4 py-3">
               <p className="text-sm font-semibold text-[#064029]">{member.child_name}</p>
               {member.child_age && <p className="text-xs text-gray-500">Age {member.child_age}</p>}
@@ -398,19 +398,19 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
 
         {member.role === 'instructor' && (
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Bio</p>
-            <p className="text-sm text-gray-600">{member.instructor_bio || <span className="italic text-gray-400">No bio set</span>}</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Bio</p>
+            <p className="text-sm text-gray-600">{member.instructor_bio || <span className="italic text-gray-500">No bio set</span>}</p>
           </div>
         )}
 
         {member.role === 'instructor' && (
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Assigned Students</p>
-            {assignedStudents.length === 0 ? <p className="text-sm text-gray-400 italic">No students assigned</p> : (
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Assigned Students</p>
+            {assignedStudents.length === 0 ? <p className="text-sm text-gray-500 italic">No students assigned</p> : (
               <div className="space-y-1">
                 {assignedStudents.map(s => (
                   <div key={s.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                    <div><p className="text-sm font-medium text-gray-900">{s.full_name}</p><p className="text-xs text-gray-400">{s.email}</p></div>
+                    <div><p className="text-sm font-medium text-gray-900">{s.full_name}</p><p className="text-xs text-gray-500">{s.email}</p></div>
                     <RoleBadge role={s.role || 'student'} />
                   </div>
                 ))}
@@ -422,10 +422,10 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
         {(member.role === 'student' || member.role === 'parent') && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned Instructor</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Assigned Instructor</p>
               <button onClick={() => setShowAssignInstructor(true)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">Manage →</button>
             </div>
-            {assignedInstructors.length === 0 ? <p className="text-sm text-gray-400 italic">No instructor assigned</p> : (
+            {assignedInstructors.length === 0 ? <p className="text-sm text-gray-500 italic">No instructor assigned</p> : (
               <div className="space-y-1">
                 {assignedInstructors.map(i => (
                   <div key={i.id} className="bg-[#E1F5EE] rounded-lg px-3 py-2">
@@ -438,14 +438,14 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
         )}
 
         <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Booking History ({bookings.length})</p>
-          {bookings.length === 0 ? <p className="text-sm text-gray-400 italic">No bookings yet</p> : (
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Booking History ({bookings.length})</p>
+          {bookings.length === 0 ? <p className="text-sm text-gray-500 italic">No bookings yet</p> : (
             <div className="space-y-1">
               {bookings.slice(0, 20).map(b => (
                 <div key={b.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{new Date(b.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
-                    <p className="text-xs text-gray-400">{b.program_name}</p>
+                    <p className="text-xs text-gray-500">{b.program_name}</p>
                   </div>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${b.status === 'confirmed' ? b.checked_in ? 'bg-[#E1F5EE] text-[#064029]' : 'bg-gray-100 text-gray-600' : 'bg-red-50 text-red-500'}`}>
                     {b.checked_in ? 'Checked In' : b.status}
@@ -553,9 +553,9 @@ export default function AdminMembers() {
             {/* List */}
             <div className="flex-1 overflow-y-auto">
               {loading ? (
-                <div className="flex items-center justify-center h-32 text-sm text-gray-400">Loading…</div>
+                <div className="flex items-center justify-center h-32 text-sm text-gray-500">Loading…</div>
               ) : filtered.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-sm text-gray-400">No members found</div>
+                <div className="flex items-center justify-center h-32 text-sm text-gray-500">No members found</div>
               ) : (
                 filtered.map(m => (
                   <button key={m.id} onClick={() => navigate(`/admin/members/${m.id}`)}
@@ -566,7 +566,7 @@ export default function AdminMembers() {
                           <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${m.status === 'active' ? 'bg-[#1D9E75]' : 'bg-gray-300'}`} />
                           <p className="text-sm font-semibold text-gray-900 truncate">{m.full_name}</p>
                         </div>
-                        <p className="text-xs text-gray-400 truncate pl-4">{m.email}</p>
+                        <p className="text-xs text-gray-500 truncate pl-4">{m.email}</p>
                         {m.role === 'parent' && m.child_name && (
                           <p className="text-xs text-[#1D9E75] mt-0.5 pl-4">Child: {m.child_name}</p>
                         )}
@@ -579,7 +579,7 @@ export default function AdminMembers() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3 border-t border-gray-100 text-xs text-gray-400 flex-shrink-0">
+            <div className="px-6 py-3 border-t border-gray-100 text-xs text-gray-500 flex-shrink-0">
               {filtered.length} member{filtered.length !== 1 ? 's' : ''}
             </div>
           </div>
@@ -595,7 +595,7 @@ export default function AdminMembers() {
               />
             </div>
           ) : (
-            <div className="hidden md:flex flex-1 items-center justify-center text-gray-400">
+            <div className="hidden md:flex flex-1 items-center justify-center text-gray-500">
               <div className="text-center">
                 <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
