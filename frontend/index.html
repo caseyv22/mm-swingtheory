@@ -1,38 +1,30 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover lets us use env(safe-area-inset-*) for iPhone notch/home-indicator
+         interactive-widget=resizes-content asks Chrome/Edge to shrink the layout viewport
+         when the keyboard opens, so visualViewport detection in useKeyboardOpen stays reliable -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <title>Sync | Swing Theory</title>
 
-@layer base {
-  body {
-    @apply bg-st-offwhite text-st-phantom antialiased;
-    font-family: 'Manrope', sans-serif;
-  }
+    <!-- PWA -->
+    <link rel="icon" type="image/png" href="/ST_App_Icon.png" />
+    <link rel="apple-touch-icon" href="/ST_App_Icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#064029" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Swing Sync" />
 
-  /* Prevent iOS Safari auto-zoom on input focus */
-  input, select, textarea {
-    font-size: 16px !important;
-  }
-}
-
-/* ───────────────────────────────────────────────────────────────────────────
-   PWA bottom-nav layout shim
-
-   When the app runs as an installed PWA, BottomNav.jsx is fixed-positioned
-   at the bottom of the viewport. We need the body to reserve space below
-   so scrollable content isn't trapped under the nav.
-
-   Height = ~64px (nav content) + safe-area-inset-bottom (home indicator on iPhone)
-
-   The `pwa-mode` class is added to <html> by the usePWAMode() hook.
-   ─────────────────────────────────────────────────────────────────────────── */
-html.pwa-mode body {
-  padding-bottom: calc(64px + env(safe-area-inset-bottom));
-}
-
-/* When the keyboard is open we hide BottomNav entirely (see useKeyboardOpen).
-   Drop the padding too so the input the user is typing in isn't pushed up
-   awkwardly with empty space below. The `keyboard-open` class is added to
-   <html> by BottomNav when it hides itself. */
-html.pwa-mode.keyboard-open body {
-  padding-bottom: 0;
-}
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
