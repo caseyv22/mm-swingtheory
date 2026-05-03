@@ -349,7 +349,7 @@ export default function InstructorSessions() {
       <div className="bg-white border-b border-gray-100">
         <div className="max-w-2xl mx-auto px-4 py-5">
           <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">Instructor</p>
-          <h1 className="font-display text-2xl text-[#064029] tracking-wide">MY PROGRAMS</h1>
+          <h1 className="font-display text-2xl text-[#064029] tracking-wide">MY SESSIONS</h1>
           <p className="text-sm text-gray-400 mt-1">{upcomingCount} upcoming · {pastCount} past</p>
         </div>
       </div>
