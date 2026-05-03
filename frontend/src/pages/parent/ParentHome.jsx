@@ -129,7 +129,7 @@ export default function ParentHome() {
         {/* Next session card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           {loading ? (
-            <p className="text-gray-400 text-sm">Loading...</p>
+            <p className="text-gray-500 text-sm">Loading...</p>
           ) : nextSession ? (
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-[#1D9E75] mb-1">
@@ -155,7 +155,7 @@ export default function ParentHome() {
             </div>
           ) : (
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Next session</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Next session</p>
               <p className="text-gray-500 text-sm font-medium">
                 {isParent ? `No upcoming sessions for ${childName}.` : 'No upcoming sessions.'}
               </p>
@@ -206,7 +206,7 @@ export default function ParentHome() {
                     )}
                     {isEnded && (
                       <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mb-4">
-                        <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-0.5">Program Ended</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-0.5">Program Ended</p>
                         <p className="text-sm font-semibold text-gray-500">No upcoming sessions</p>
                       </div>
                     )}
