@@ -2118,6 +2118,101 @@ app.delete('/admin/shifts/:id', requireAdmin, async (c) => {
   return c.json({ ok: true })
 })
 
+// POST /admin/shifts/copy-week — copy all shifts from one week into another (admin only)
+// Body: { source_week_start: 'YYYY-MM-DD', target_week_start: 'YYYY-MM-DD' }
+//   - Both dates must be a Sunday (week start in this app's grid).
+//   - For each shift in [source_week_start, source+6], inserts a clone shifted by
+//     the offset between source and target.
+//   - SKIPS any (user_id, target_date) pair that already has at least one shift —
+//     so re-running the copy never overwrites or duplicates a populated day.
+// Returns: { ok: true, created: N, skipped: M }
+app.post('/admin/shifts/copy-week', requireAdmin, async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const { source_week_start, target_week_start } = body || {}
+
+  if (!validateDateStr(source_week_start) || !validateDateStr(target_week_start)) {
+    return c.json({ error: 'source_week_start and target_week_start must be YYYY-MM-DD' }, 400)
+  }
+
+  // Compute source range (7 days inclusive) and the target offset in days
+  const sStart = new Date(source_week_start + 'T12:00:00')
+  const tStart = new Date(target_week_start + 'T12:00:00')
+  if (Number.isNaN(sStart.getTime()) || Number.isNaN(tStart.getTime())) {
+    return c.json({ error: 'Invalid date' }, 400)
+  }
+  const dayMs = 24 * 60 * 60 * 1000
+  const offsetDays = Math.round((tStart - sStart) / dayMs)
+  if (offsetDays === 0) {
+    return c.json({ error: 'source_week_start and target_week_start cannot be the same day' }, 400)
+  }
+
+  const sEnd = new Date(sStart.getTime() + 6 * dayMs)
+  const sStartStr = source_week_start
+  const sEndStr = sEnd.getFullYear() + '-' +
+    String(sEnd.getMonth() + 1).padStart(2, '0') + '-' +
+    String(sEnd.getDate()).padStart(2, '0')
+
+  // Pull source shifts
+  const source = await c.env.DB.prepare(`
+    SELECT user_id, date, start_time, end_time, shift_type
+    FROM shifts
+    WHERE date >= ? AND date <= ?
+  `).bind(sStartStr, sEndStr).all()
+
+  const sourceShifts = source.results || []
+  if (sourceShifts.length === 0) {
+    return c.json({ ok: true, created: 0, skipped: 0 })
+  }
+
+  // Compute target dates and the set of (user_id, target_date) pairs we'd touch
+  const targets = sourceShifts.map(s => {
+    const sd = new Date(s.date + 'T12:00:00')
+    const td = new Date(sd.getTime() + offsetDays * dayMs)
+    const tdStr = td.getFullYear() + '-' +
+      String(td.getMonth() + 1).padStart(2, '0') + '-' +
+      String(td.getDate()).padStart(2, '0')
+    return { ...s, target_date: tdStr }
+  })
+
+  // Find existing shifts in the target week for any of those user-day pairs
+  const tStartStr = target_week_start
+  const tEnd = new Date(tStart.getTime() + 6 * dayMs)
+  const tEndStr = tEnd.getFullYear() + '-' +
+    String(tEnd.getMonth() + 1).padStart(2, '0') + '-' +
+    String(tEnd.getDate()).padStart(2, '0')
+
+  const existing = await c.env.DB.prepare(`
+    SELECT user_id, date FROM shifts
+    WHERE date >= ? AND date <= ?
+  `).bind(tStartStr, tEndStr).all()
+
+  const taken = new Set()
+  for (const r of (existing.results || [])) {
+    taken.add(r.user_id + '|' + r.date)
+  }
+
+  // Insert clones, skipping anything already populated
+  let created = 0
+  let skipped = 0
+  for (const t of targets) {
+    const key = t.user_id + '|' + t.target_date
+    if (taken.has(key)) {
+      skipped += 1
+      continue
+    }
+    const id = 'shift_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+    await c.env.DB.prepare(`
+      INSERT INTO shifts (id, user_id, date, start_time, end_time, shift_type)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(id, t.user_id, t.target_date, t.start_time, t.end_time, t.shift_type).run()
+    // Mark this pair so multiple source shifts on the same day still each get inserted
+    // (we only want to skip if a pre-existing shift was already there)
+    created += 1
+  }
+
+  return c.json({ ok: true, created, skipped })
+})
+
 // GET /admin/shifts/metrics?start=YYYY-MM-DD&end=YYYY-MM-DD
 // Returns aggregated hours/shifts per swinger over the date range.
 // Admin only — swingers no longer see team-wide metrics on their personal schedule.
