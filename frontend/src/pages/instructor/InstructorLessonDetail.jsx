@@ -23,8 +23,8 @@ export default function InstructorLessonDetail() {
   const { lessonId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const studentId = location.state?.studentId
-  const studentName = location.state?.studentName
+  const studentIdFromState = location.state?.studentId
+  const studentNameFromState = location.state?.studentName
 
   const [lesson, setLesson] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -39,12 +39,29 @@ export default function InstructorLessonDetail() {
   const [form, setForm] = useState(null)
   const [editing, setEditing] = useState(false)
 
+  // Students list (needed for the Assign Student picker on unassigned lessons)
+  const [students, setStudents] = useState([])
+  const [assigningStudent, setAssigningStudent] = useState(false)
+  const [pickedStudentId, setPickedStudentId] = useState('')
+
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
+  // Fetch the lesson. If we have a studentId hint from navigation state, use the
+  // student-scoped endpoint (it returns extras like has_gspro). Otherwise fall
+  // back to the all-mine endpoint and filter — this is the path for unassigned
+  // (webhook-created) lessons that don't have a student yet.
   async function fetchLesson() {
+    setLoading(true)
     try {
-      const data = await api.get(`/instructor/students/${studentId || '_'}/lessons`)
-      const found = (data.lessons || []).find(l => l.id === lessonId)
+      let found = null
+      if (studentIdFromState) {
+        const data = await api.get(`/instructor/students/${studentIdFromState}/lessons`)
+        found = (data.lessons || []).find(l => l.id === lessonId)
+      }
+      if (!found) {
+        const data = await api.get('/instructor/lessons')
+        found = (data.lessons || []).find(l => l.id === lessonId)
+      }
       if (found) {
         setLesson(found)
         setNoteText(found.coaching_note || '')
@@ -53,13 +70,27 @@ export default function InstructorLessonDetail() {
           bay: found.bay || '', notes: found.notes || '',
         })
       }
-    } finally { setLoading(false) }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Load instructor's assigned students once — used by the picker on
+  // unassigned lessons. Cheap call; harmless to load even if not needed.
+  async function fetchStudents() {
+    try {
+      const data = await api.get('/instructor/students')
+      setStudents(data.students || [])
+    } catch {
+      // Non-blocking
+    }
   }
 
   useEffect(() => {
-    if (studentId) fetchLesson()
-    else setLoading(false)
-  }, [lessonId, studentId])
+    fetchLesson()
+    fetchStudents()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonId, studentIdFromState])
 
   async function handleSave() {
     setSaving(true)
@@ -72,11 +103,30 @@ export default function InstructorLessonDetail() {
     finally { setSaving(false) }
   }
 
+  async function handleAssignStudent() {
+    if (!pickedStudentId) return
+    setAssigningStudent(true)
+    try {
+      await api.put(`/instructor/lessons/${lessonId}`, { student_id: pickedStudentId })
+      showToast('Student assigned')
+      setPickedStudentId('')
+      fetchLesson()
+    } catch (e) {
+      showToast(e.message || 'Failed to assign student')
+    } finally {
+      setAssigningStudent(false)
+    }
+  }
+
   async function handleSaveNote() {
     if (!noteText.trim()) return
+    if (!lesson?.student_id) {
+      showToast('Assign a student before adding a coaching note')
+      return
+    }
     setSavingNote(true)
     try {
-      await api.post(`/instructor/students/${studentId}/notes`, { lesson_id: lessonId, note: noteText.trim() })
+      await api.post(`/instructor/students/${lesson.student_id}/notes`, { lesson_id: lessonId, note: noteText.trim() })
       showToast('Note saved')
       setEditingNote(false)
       fetchLesson()
@@ -90,7 +140,8 @@ export default function InstructorLessonDetail() {
       await api.delete(`/instructor/lessons/${lessonId}`)
       showToast('Lesson cancelled')
       setShowCancelConfirm(false)
-      setTimeout(() => navigate(studentId ? `/instructor/students/${studentId}` : '/instructor/schedule'), 1200)
+      const back = lesson?.student_id ? `/instructor/students/${lesson.student_id}` : '/instructor/schedule'
+      setTimeout(() => navigate(back), 1200)
     } catch (e) { showToast(e.message || 'Failed to cancel') }
     finally { setCancelling(false) }
   }
@@ -116,11 +167,18 @@ export default function InstructorLessonDetail() {
 
   const isCancelled = !!lesson.is_cancelled
   const past = !isFuture(lesson.date)
-  const tabs = [
-    { key: 'overview', label: 'Overview' },
-    { key: 'notes', label: 'Notes' },
-    { key: 'gspro', label: 'Theory AI' },
-  ]
+  const isUnassigned = !lesson.student_id
+  const isWebhookSourced = lesson.source === 'webhook'
+  const studentName = lesson.full_name || lesson.student_name || studentNameFromState || ''
+
+  // Tabs — Notes/Theory AI need a student assigned, so suppress them when unassigned
+  const tabs = isUnassigned
+    ? [{ key: 'overview', label: 'Overview' }]
+    : [
+      { key: 'overview', label: 'Overview' },
+      { key: 'notes', label: 'Notes' },
+      { key: 'gspro', label: 'Theory AI' },
+    ]
 
   return (
     <div className="min-h-screen bg-[#F9FAFB]">
@@ -152,7 +210,7 @@ export default function InstructorLessonDetail() {
 
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/* Back */}
-        <button onClick={() => navigate(studentId ? `/instructor/students/${studentId}` : '/instructor/schedule')}
+        <button onClick={() => navigate(lesson.student_id ? `/instructor/students/${lesson.student_id}` : '/instructor/schedule')}
           className="flex items-center gap-1.5 text-sm font-semibold text-[#1D9E75] hover:text-[#064029] mb-5">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -163,15 +221,23 @@ export default function InstructorLessonDetail() {
         {/* Header card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-5 mb-5">
           <div className="flex items-start justify-between mb-1">
-            <div>
-              {isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full inline-block mb-2">Cancelled</span>}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                {isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>}
+                {isWebhookSourced && <span className="text-[10px] font-bold uppercase tracking-wider text-[#1D9E75] bg-[#E1F5EE] px-2 py-0.5 rounded-full">Tee Time Booking</span>}
+                {isUnassigned && !isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Unassigned</span>}
+              </div>
               <h1 className="font-display text-2xl text-[#064029] tracking-wide leading-none">{formatDate(lesson.date).toUpperCase()}</h1>
               <p className="text-sm text-gray-500 mt-1">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay ? ` · ${lesson.bay}` : ''}</p>
-              {studentName && <p className="text-sm font-semibold text-gray-600 mt-1">{studentName}</p>}
+              {studentName ? (
+                <p className="text-sm font-semibold text-gray-600 mt-1">{studentName}</p>
+              ) : (
+                <p className="text-sm font-medium text-amber-700 mt-1 italic">No student assigned</p>
+              )}
             </div>
-            {!isCancelled && (
+            {!isCancelled && !isUnassigned && (
               <button onClick={() => setEditing(e => !e)}
-                className="text-xs font-semibold text-[#1D9E75] border border-[#1D9E75]/30 px-3 py-1.5 rounded-lg hover:bg-[#E1F5EE] transition-colors">
+                className="text-xs font-semibold text-[#1D9E75] border border-[#1D9E75]/30 px-3 py-1.5 rounded-lg hover:bg-[#E1F5EE] transition-colors flex-shrink-0">
                 {editing ? 'Cancel Edit' : 'Edit'}
               </button>
             )}
@@ -221,6 +287,41 @@ export default function InstructorLessonDetail() {
           )}
         </div>
 
+        {/* Assign Student card — only when lesson has no student */}
+        {isUnassigned && !isCancelled && (
+          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm px-5 py-5 mb-5">
+            <h2 className="font-display text-lg text-[#064029] tracking-wide mb-1">ASSIGN STUDENT</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {isWebhookSourced
+                ? "This lesson was auto-created from a Registry Golf tee-time booking. Pick the student you'll be coaching so they can see the lesson and you can add notes."
+                : 'Pick a student to assign to this lesson.'}
+            </p>
+            {students.length === 0 ? (
+              <p className="text-sm text-amber-700 italic">No students assigned to you yet. Contact an admin to assign students.</p>
+            ) : (
+              <div className="flex gap-2">
+                <select
+                  value={pickedStudentId}
+                  onChange={e => setPickedStudentId(e.target.value)}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                >
+                  <option value="">Select a student…</option>
+                  {students.map(s => (
+                    <option key={s.id} value={s.id}>{s.full_name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleAssignStudent}
+                  disabled={!pickedStudentId || assigningStudent}
+                  className="px-5 py-2.5 bg-[#064029] text-white text-sm font-bold rounded-xl hover:bg-[#085041] disabled:opacity-40 transition-colors flex-shrink-0"
+                >
+                  {assigningStudent ? 'Assigning…' : 'Assign'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1 mb-5 shadow-sm">
           {tabs.map(t => (
@@ -242,7 +343,7 @@ export default function InstructorLessonDetail() {
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Session Focus</p>
                 {lesson.notes ? (
-                  <p className="text-sm text-gray-700 leading-relaxed">{lesson.notes}</p>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{lesson.notes}</p>
                 ) : (
                   <p className="text-sm text-gray-400 italic">No focus set for this lesson.</p>
                 )}
@@ -271,7 +372,7 @@ export default function InstructorLessonDetail() {
             </div>
           )}
 
-          {/* Notes */}
+          {/* Notes — only available when student is assigned */}
           {tab === 'notes' && (
             <div className="space-y-4">
               <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Coaching Notes</p>

@@ -230,7 +230,7 @@ function EditLessonModal({ lesson, onClose, onSaved }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="font-display text-xl text-[#064029] tracking-wide">EDIT LESSON</h2>
-            <p className="text-sm text-gray-500">{lesson.full_name || lesson.student_name}</p>
+            <p className="text-sm text-gray-500">{lesson.full_name || lesson.student_name || <span className="italic text-amber-700">(Unassigned)</span>}</p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
@@ -314,24 +314,39 @@ function EditLessonModal({ lesson, onClose, onSaved }) {
 // ─── Lesson Card ──────────────────────────────────────────────────────────────
 function LessonCard({ lesson, onClick }) {
   const past = !isFuture(lesson.date)
+  const isUnassigned = !lesson.student_id
+  const isWebhookSourced = lesson.source === 'webhook'
   return (
     <button
       onClick={onClick}
       className={`w-full text-left bg-white rounded-xl border px-4 py-3.5 shadow-sm hover:shadow-md transition-all ${
-        !!lesson.is_cancelled ? 'opacity-50 border-gray-100' : past ? 'border-gray-100 opacity-75' : 'border-gray-100 hover:border-[#1D9E75]/30'
+        !!lesson.is_cancelled ? 'opacity-50 border-gray-100' : past ? 'border-gray-100 opacity-75' : isUnassigned ? 'border-amber-200 hover:border-amber-300' : 'border-gray-100 hover:border-[#1D9E75]/30'
       }`}
     >
       <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-semibold text-[#1D9E75] uppercase tracking-wider mb-0.5">Private Lesson</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+            <p className="text-xs font-semibold text-[#1D9E75] uppercase tracking-wider">Private Lesson</p>
+            {isWebhookSourced && (
+              <span className="text-[9px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-1.5 py-0.5 rounded-full">Tee Time</span>
+            )}
+          </div>
           <p className="text-sm font-semibold text-gray-900">{formatDateShort(lesson.date)}</p>
           <p className="text-xs text-gray-500">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay && ` · ${lesson.bay}`}</p>
-          <p className="text-sm font-semibold text-gray-800 mt-1">{lesson.full_name || lesson.student_name}</p>
-          <p className="text-xs text-gray-500">{lesson.student_email}</p>
+          {isUnassigned ? (
+            <p className="text-sm font-semibold text-amber-700 italic mt-1">(Unassigned)</p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-gray-800 mt-1">{lesson.full_name || lesson.student_name}</p>
+              <p className="text-xs text-gray-500">{lesson.student_email}</p>
+            </>
+          )}
         </div>
-        <div>
+        <div className="flex-shrink-0 ml-2">
           {!!lesson.is_cancelled ? (
             <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>
+          ) : isUnassigned ? (
+            <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Unassigned</span>
           ) : past ? (
             <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>
           ) : (
@@ -604,7 +619,7 @@ export default function InstructorSchedule() {
               ) : (
                 lessons.filter(l => l.date === selectedDate && !l.is_cancelled).map(l => (
                   <div key={l.id} className="py-1.5 border-b border-gray-50 last:border-0">
-                    <p className="text-xs font-medium text-gray-700">{l.full_name || l.student_name}</p>
+                    <p className="text-xs font-medium text-gray-700">{l.full_name || l.student_name || <span className="italic text-amber-700">(Unassigned)</span>}</p>
                     <p className="text-xs text-gray-500">{formatTime(l.start_time)}</p>
                   </div>
                 ))
