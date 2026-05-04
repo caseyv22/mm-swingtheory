@@ -102,6 +102,173 @@ function uid() {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 20)
 }
 
+// ─── PUBLIC WEBHOOKS ─────────────────────────────────────────────────────────
+// These endpoints are intentionally NOT behind Clerk auth — they are called by
+// external services (booking platforms etc). Each one is gated by a shared
+// secret in the URL (?key=…) verified against an env var. Rotate the secret
+// by updating the env var in the Cloudflare dashboard.
+
+// POST /webhooks/registry — Registry Golf tee-time booking webhook
+//
+// Auth:
+//   ?key=<REGISTRY_WEBHOOK_SECRET env var> (required, exact match)
+//
+// Expected payload (Booking.Created):
+//   {
+//     "event": "Booking.Created",
+//     "id":    "<booking uuid>",        — used as our external_ref (idempotency)
+//     "date":  "YYYY-MM-DDTHH:MM:SS",   — wall-clock, no timezone (Pacific local)
+//     "startTime": "HH:MM:SS",
+//     "endTime":   "HH:MM:SS",
+//     "bay":   "Private - Kapalua Bay",
+//     "customer": {
+//       "name":  "First Last",
+//       "email": "lower-or-mixed-case@host.com"
+//     }
+//   }
+//
+// Behavior:
+//   - Verifies key. 401 if missing/wrong.
+//   - Validates body shape. 400 if malformed.
+//   - For events other than Booking.Created: logs and 200s with action 'ignored'
+//     so Registry Golf doesn't keep retrying unsupported events.
+//   - For Booking.Created: looks up the instructor by lowercased email. If the
+//     email doesn't match an instructor user in our DB, silently drops with
+//     action 'no_match' (per business rule).
+//   - Idempotent: if a private_lessons row already exists with the same
+//     external_ref, returns action 'duplicate' without creating anything. The
+//     UNIQUE INDEX on (external_ref) is the backstop if a race somehow slips
+//     past the pre-check.
+//   - On success, inserts a private_lessons row with student_id = NULL,
+//     source = 'webhook', external_ref = <booking id>. Admin assigns a student
+//     later in the Sync UI.
+//   - Always returns HTTP 200 within ~1s for happy paths so Registry Golf
+//     considers the delivery successful and doesn't queue retries.
+app.post('/webhooks/registry', async (c) => {
+  // ── 1. Auth ──────────────────────────────────────────────────────────────
+  const expected = c.env.REGISTRY_WEBHOOK_SECRET
+  if (!expected) {
+    // Misconfigured server — fail closed.
+    console.error('[webhook/registry] REGISTRY_WEBHOOK_SECRET not set')
+    return c.json({ error: 'Webhook not configured' }, 500)
+  }
+  const provided = c.req.query('key') || ''
+  if (provided !== expected) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  // ── 2. Parse + shape-validate payload ───────────────────────────────────
+  let payload
+  try {
+    payload = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const event = payload?.event
+  const bookingId = payload?.id
+  if (!event || typeof event !== 'string') {
+    return c.json({ error: 'Missing event' }, 400)
+  }
+
+  // ── 3. Branch on event type ──────────────────────────────────────────────
+  // We currently only auto-create lessons on Booking.Created. Cancelled /
+  // Updated etc. are accepted but no-ops, so Registry Golf doesn't retry them.
+  if (event !== 'Booking.Created') {
+    console.log(`[webhook/registry] ignored event=${event} id=${bookingId || ''}`)
+    return c.json({ ok: true, action: 'ignored', reason: `Unsupported event: ${event}` })
+  }
+
+  if (!bookingId || typeof bookingId !== 'string') {
+    return c.json({ error: 'Missing booking id' }, 400)
+  }
+
+  const dateRaw = payload?.date
+  const startTime = payload?.startTime
+  const endTime = payload?.endTime
+  const customerEmail = payload?.customer?.email
+  const customerName = payload?.customer?.name || ''
+  const bay = payload?.bay || null
+
+  if (!dateRaw || typeof dateRaw !== 'string') {
+    return c.json({ error: 'Missing date' }, 400)
+  }
+  if (!startTime || typeof startTime !== 'string') {
+    return c.json({ error: 'Missing startTime' }, 400)
+  }
+  if (!endTime || typeof endTime !== 'string') {
+    return c.json({ error: 'Missing endTime' }, 400)
+  }
+  if (!customerEmail || typeof customerEmail !== 'string') {
+    return c.json({ error: 'Missing customer.email' }, 400)
+  }
+
+  // Registry Golf sends date as `YYYY-MM-DDTHH:MM:SS` (wall-clock, no tz).
+  // Take only the date portion — start_time/end_time are separate fields.
+  const date = String(dateRaw).split('T')[0]
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return c.json({ error: 'Invalid date format' }, 400)
+  }
+  if (!/^\d{2}:\d{2}(:\d{2})?$/.test(startTime) || !/^\d{2}:\d{2}(:\d{2})?$/.test(endTime)) {
+    return c.json({ error: 'Invalid time format' }, 400)
+  }
+
+  // ── 4. Idempotency: existing row with this booking id? ──────────────────
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM private_lessons WHERE external_ref = ?'
+  ).bind(bookingId).first()
+  if (existing) {
+    console.log(`[webhook/registry] duplicate id=${bookingId} email=${customerEmail}`)
+    return c.json({ ok: true, action: 'duplicate', lesson_id: existing.id })
+  }
+
+  // ── 5. Match instructor by email (lowercase compare) ────────────────────
+  const emailNorm = String(customerEmail).trim().toLowerCase()
+  const matchedUser = await c.env.DB.prepare(
+    "SELECT id, full_name FROM users WHERE lower(email) = ? AND role = 'instructor'"
+  ).bind(emailNorm).first()
+  if (!matchedUser) {
+    console.log(`[webhook/registry] no_match email=${customerEmail} id=${bookingId}`)
+    return c.json({ ok: true, action: 'no_match' })
+  }
+
+  const instructorRow = await c.env.DB.prepare(
+    'SELECT id FROM instructors WHERE user_id = ?'
+  ).bind(matchedUser.id).first()
+  if (!instructorRow) {
+    // User has role=instructor but no instructors row — treat as no_match,
+    // surface in logs so admin can fix the record.
+    console.warn(`[webhook/registry] no instructors row for user ${matchedUser.id} (${emailNorm})`)
+    return c.json({ ok: true, action: 'no_match' })
+  }
+
+  // ── 6. Build lesson + insert ─────────────────────────────────────────────
+  const lessonId = 'lesson_' + uid()
+  const note = `Booked via Registry Golf · Customer: ${customerName || customerEmail}`
+
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO private_lessons
+        (id, instructor_id, student_id, date, start_time, end_time, bay, notes, source, external_ref)
+      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'webhook', ?)
+    `).bind(lessonId, instructorRow.id, date, startTime, endTime, bay, note, bookingId).run()
+  } catch (err) {
+    // Race condition: another concurrent webhook invocation slipped past the
+    // pre-check and got here first. The unique index will reject. Treat as
+    // duplicate so Registry Golf doesn't retry.
+    const msg = String(err?.message || err)
+    if (msg.toLowerCase().includes('unique')) {
+      console.log(`[webhook/registry] duplicate_race id=${bookingId}`)
+      return c.json({ ok: true, action: 'duplicate' })
+    }
+    console.error(`[webhook/registry] insert_failed id=${bookingId}: ${msg}`)
+    return c.json({ error: 'Insert failed' }, 500)
+  }
+
+  console.log(`[webhook/registry] created lesson=${lessonId} email=${emailNorm} id=${bookingId}`)
+  return c.json({ ok: true, action: 'created', lesson_id: lessonId })
+})
+
 // ─── AUTH ROUTES ─────────────────────────────────────────────────────────────
 
 // GET /users/me
@@ -1301,6 +1468,26 @@ app.put('/admin/config', requireAdmin, async (c) => {
   return c.json({ ok: true })
 })
 
+// GET /admin/webhooks/registry-info
+// Returns the full Registry Golf webhook URL for admin to paste into Registry
+// Golf's webhook config. Includes the secret token from env. Admin-only because
+// the secret token is sensitive — though admins can also see it in the
+// Cloudflare dashboard.
+//
+// Returns { configured: false } if REGISTRY_WEBHOOK_SECRET env var is unset,
+// so the UI can prompt the admin to set it.
+app.get('/admin/webhooks/registry-info', requireAdmin, async (c) => {
+  const secret = c.env.REGISTRY_WEBHOOK_SECRET
+  if (!secret) {
+    return c.json({ configured: false })
+  }
+  // Use the request's own origin so the URL points at the same worker that
+  // answered this request — works for prod and any preview deployments.
+  const url = new URL(c.req.url)
+  const webhookUrl = `${url.origin}/webhooks/registry?key=${encodeURIComponent(secret)}`
+  return c.json({ configured: true, url: webhookUrl })
+})
+
 // GET /admin/instructors — list all instructors for dropdowns
 app.get('/admin/instructors', requireAdminOrSwinger, async (c) => {
   const instructors = await c.env.DB.prepare(`
@@ -1630,7 +1817,7 @@ app.get('/instructor/lessons', requireInstructor, async (c) => {
       ln.note as coaching_note, ln.updated_at as note_updated_at,
       CASE WHEN ln.id IS NOT NULL THEN 1 ELSE 0 END as has_note
     FROM private_lessons pl
-    JOIN users u ON pl.student_id = u.id
+    LEFT JOIN users u ON pl.student_id = u.id
     LEFT JOIN children ch ON ch.parent_id = u.id
     LEFT JOIN lesson_notes ln ON ln.lesson_id = pl.id AND ln.instructor_id = ?
     WHERE pl.instructor_id = ?
@@ -1685,18 +1872,21 @@ app.post('/instructor/students/:id/lessons', requireInstructor, async (c) => {
 
   const lessonId = 'pl_' + uid()
   await c.env.DB.prepare(`
-    INSERT INTO private_lessons (id, instructor_id, student_id, date, start_time, end_time, bay, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO private_lessons (id, instructor_id, student_id, date, start_time, end_time, bay, notes, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual')
   `).bind(lessonId, instr.id, id, date, start_time, end_time, bay || null, notes || null).run()
 
   return c.json({ ok: true, lesson_id: lessonId })
 })
 
 // PUT /instructor/lessons/:id — edit a private lesson
+// Accepts optional student_id so an instructor can assign/reassign the student
+// on an unassigned lesson (e.g. one created by the Registry Golf webhook).
 app.put('/instructor/lessons/:id', requireInstructor, async (c) => {
   const { id } = c.req.param()
   const user = c.get('user')
-  const { date, start_time, end_time, bay, notes } = await c.req.json()
+  const body = await c.req.json()
+  const { date, start_time, end_time, bay, notes, student_id } = body
 
   const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(user.id).first()
   if (!instr) return c.json({ error: 'Instructor record not found' }, 404)
@@ -1706,12 +1896,29 @@ app.put('/instructor/lessons/:id', requireInstructor, async (c) => {
   ).bind(id, instr.id).first()
   if (!lesson) return c.json({ error: 'Lesson not found' }, 404)
 
+  // If client passed student_id explicitly (including null/empty to unassign),
+  // validate and use it. If the field is absent from the payload, keep current.
+  let nextStudentId = lesson.student_id
+  if (Object.prototype.hasOwnProperty.call(body, 'student_id')) {
+    if (student_id === null || student_id === '' || student_id === undefined) {
+      nextStudentId = null
+    } else {
+      // Verify the student exists and is actually assigned to this instructor
+      const assignment = await c.env.DB.prepare(
+        'SELECT 1 as ok FROM student_instructors WHERE student_id = ? AND instructor_id = ?'
+      ).bind(student_id, instr.id).first()
+      if (!assignment) return c.json({ error: 'Student not assigned to you' }, 403)
+      nextStudentId = student_id
+    }
+  }
+
   await c.env.DB.prepare(`
     UPDATE private_lessons SET
-      date = ?, start_time = ?, end_time = ?, bay = ?, notes = ?,
+      student_id = ?, date = ?, start_time = ?, end_time = ?, bay = ?, notes = ?,
       updated_at = datetime('now')
     WHERE id = ?
   `).bind(
+    nextStudentId,
     date ?? lesson.date,
     start_time ?? lesson.start_time,
     end_time ?? lesson.end_time,
