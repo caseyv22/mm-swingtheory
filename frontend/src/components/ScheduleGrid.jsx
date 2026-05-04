@@ -120,6 +120,7 @@ export default function ScheduleGrid({
   swingers = [],
   shifts = [],
   editable = false,
+  cleanView = false,
   onAddShift,
   onEditShift,
   onQuickDelete,
@@ -147,13 +148,14 @@ export default function ScheduleGrid({
     )
   }
 
-  // Cell widths: weekly = wide, monthly = narrow, weekends = medium
-  const dayColWidth = view === 'monthly' ? 'min-w-[44px]' : view === 'weekends' ? 'min-w-[60px]' : 'min-w-[110px]'
+  // Cell widths: weekly = wide, monthly = medium (was narrow, but time-range
+  // labels need more room than "Mid"), weekends = medium.
+  const dayColWidth = view === 'monthly' ? 'min-w-[64px]' : view === 'weekends' ? 'min-w-[60px]' : 'min-w-[110px]'
   const empColWidth = 'w-[160px] min-w-[160px]'
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
-      <table className="w-full border-collapse" style={{ minWidth: view === 'monthly' ? '900px' : '720px' }}>
+      <table className="w-full border-collapse" style={{ minWidth: view === 'monthly' ? '1200px' : '720px' }}>
         <thead>
           <tr>
             <th className={`${empColWidth} sticky left-0 z-10 bg-gray-50 border-b border-r border-gray-100 px-3 py-2 text-left`}>
@@ -165,8 +167,11 @@ export default function ScheduleGrid({
               const isToday = ds === today
               const isSat = dow === 6
               const isSun = dow === 0
-              const bg = isSat ? 'bg-[#FEFCE8]' : isSun ? 'bg-[#FFF5F5]' : 'bg-gray-50'
-              const txt = isSat ? 'text-[#B07A10]' : isSun ? 'text-[#C0392B]' : 'text-gray-500'
+              const isWeekend = isSat || isSun
+              // Weekends use brand-green palette (light-green surface + accent-green text)
+              // instead of the previous yellow/red. Keeps the visual cue, on-brand.
+              const bg = isWeekend ? 'bg-[#E1F5EE]' : 'bg-gray-50'
+              const txt = isWeekend ? 'text-[#1D9E75]' : 'text-gray-500'
               return (
                 <th
                   key={ds}
@@ -195,9 +200,9 @@ export default function ScheduleGrid({
                 const key = emp.id + '|' + ds
                 const cellShifts = shiftIndex[key] || []
                 const dow = col.d.getDay()
-                const isSat = dow === 6
-                const isSun = dow === 0
-                const cellBg = isSat ? 'bg-[#FEFCE8]/30' : isSun ? 'bg-[#FFF5F5]/30' : ''
+                const isWeekend = dow === 6 || dow === 0
+                // Subtle green wash on weekend cells to match the header
+                const cellBg = isWeekend ? 'bg-[#E1F5EE]/30' : ''
                 return (
                   <td
                     key={ds}
@@ -209,11 +214,12 @@ export default function ScheduleGrid({
                         shift={s}
                         compact={view === 'monthly'}
                         editable={editable}
+                        cleanView={cleanView}
                         onClick={() => editable && onEditShift && onEditShift(s)}
                         onQuickDelete={() => editable && onQuickDelete && onQuickDelete(s.id)}
                       />
                     ))}
-                    {editable && (
+                    {editable && !cleanView && (
                       <button
                         onClick={() => onAddShift && onAddShift(emp.id, ds)}
                         className="block w-full mt-1 px-1 py-1 border border-dashed border-gray-200 rounded-md text-[10px] font-semibold text-gray-400 hover:border-[#064029] hover:text-[#064029] hover:bg-[#E1F5EE] transition-colors"
@@ -234,13 +240,12 @@ export default function ScheduleGrid({
 
 // ───────────────────────────────────────────────────────────────────────────────
 // ShiftChip — single shift display. Brand green. Compact mode for monthly view.
+// Label is ALWAYS the time range (e.g. "9am–1pm"); the preset name (Mid, Day, etc.)
+// stays in data + tooltip but no longer shown on the chip face.
 // ───────────────────────────────────────────────────────────────────────────────
 
-function ShiftChip({ shift, compact, editable, onClick, onQuickDelete }) {
-  const isCustom = shift.shift_type === 'Custom'
-  const label = isCustom
-    ? `${fmtTime12(shift.start_time)}–${fmtTime12(shift.end_time)}`
-    : shift.shift_type
+function ShiftChip({ shift, compact, editable, cleanView, onClick, onQuickDelete }) {
+  const label = `${fmtTime12(shift.start_time)}–${fmtTime12(shift.end_time)}`
 
   const sizeCls = compact
     ? 'text-[9px] px-1.5 py-0.5'
@@ -255,7 +260,7 @@ function ShiftChip({ shift, compact, editable, onClick, onQuickDelete }) {
       title={`${shift.shift_type} · ${fmtTime12(shift.start_time)} – ${fmtTime12(shift.end_time)}`}
     >
       <span className="truncate">{label}</span>
-      {editable && onQuickDelete && (
+      {editable && !cleanView && onQuickDelete && (
         <button
           onClick={e => { e.stopPropagation(); onQuickDelete() }}
           className="opacity-50 hover:opacity-100 hover:text-red-600 leading-none flex-shrink-0"
