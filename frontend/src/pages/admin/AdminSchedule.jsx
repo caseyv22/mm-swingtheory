@@ -50,10 +50,19 @@ export default function AdminSchedule() {
   const [view, setView] = useState('weekly')   // 'weekly' | 'monthly' | 'weekends'
   const [dateOffset, setDateOffset] = useState(0)
 
+  // Clean View: hide + add buttons in cells and × on chips. Per-session.
+  const [cleanView, setCleanView] = useState(() => sessionStorage.getItem('st_schedule_clean') === '1')
+  useEffect(() => {
+    sessionStorage.setItem('st_schedule_clean', cleanView ? '1' : '0')
+  }, [cleanView])
+
   const [swingers, setSwingers] = useState([])
   const [shifts, setShifts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  // Copy-from-last-week busy flag
+  const [copyBusy, setCopyBusy] = useState(false)
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
@@ -134,6 +143,47 @@ export default function AdminSchedule() {
     }
   }
 
+  // Copy all shifts from last week into the current Weekly view's week.
+  // Worker side skips any user-day that already has a shift, so this is safe to
+  // re-run and won't create duplicates if the target week is partially populated.
+  async function copyFromLastWeek() {
+    // Only meaningful in the Weekly view — guard against accidental calls
+    if (view !== 'weekly') return
+    const target = buildRangeBounds('weekly', dateOffset)        // current visible week
+    const source = buildRangeBounds('weekly', dateOffset - 1)    // week before it
+    const sourceLabel = buildRangeLabel('weekly', dateOffset - 1)
+    const targetLabel = buildRangeLabel('weekly', dateOffset)
+
+    if (!confirm(
+      `Copy all shifts from ${sourceLabel} into ${targetLabel}?\n\n` +
+      `Days that already have shifts in the target week will be left unchanged.`
+    )) return
+
+    setCopyBusy(true)
+    setError(null)
+    try {
+      const res = await api.post('/admin/shifts/copy-week', {
+        source_week_start: source.start,
+        target_week_start: target.start,
+      })
+      const created = res?.created || 0
+      const skipped = res?.skipped || 0
+      if (created === 0 && skipped === 0) {
+        alert('Nothing to copy — last week had no shifts.')
+      } else if (created === 0) {
+        alert(`No new shifts created. ${skipped} already existed in the target week.`)
+      } else {
+        const skipMsg = skipped > 0 ? ` (${skipped} skipped — already had shifts)` : ''
+        alert(`Copied ${created} shift${created === 1 ? '' : 's'} from last week${skipMsg}.`)
+      }
+      loadShifts()
+    } catch (e) {
+      setError(e.message || 'Copy failed')
+    } finally {
+      setCopyBusy(false)
+    }
+  }
+
   return (
     <AdminLayout>
       {/* Gray page background — matches Members + Sessions */}
@@ -143,19 +193,35 @@ export default function AdminSchedule() {
           {/* Single unified card containing everything */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
 
-            {/* Toolbar — title + add button */}
-            <div className="px-4 lg:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+            {/* Toolbar — title + clean view toggle + add button */}
+            <div className="px-4 lg:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
               <h1 className="font-display text-2xl text-[#064029] tracking-wide">SCHEDULE</h1>
-              <button
-                onClick={() => handleAddShift(swingers[0]?.id, fmtDate(new Date()))}
-                disabled={swingers.length === 0}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors disabled:opacity-50"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Shift
-              </button>
+              <div className="flex items-center gap-2">
+                {tab === 'schedule' && (
+                  <button
+                    onClick={() => setCleanView(v => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-lg border transition-colors ${
+                      cleanView
+                        ? 'bg-[#E1F5EE] border-[#1D9E75] text-[#064029]'
+                        : 'bg-white border-gray-200 text-gray-600 hover:border-[#064029] hover:text-[#064029]'
+                    }`}
+                    title="Hide + and × controls in the grid"
+                  >
+                    <span className={`inline-block w-2 h-2 rounded-full ${cleanView ? 'bg-[#1D9E75]' : 'bg-gray-300'}`} />
+                    Clean View
+                  </button>
+                )}
+                <button
+                  onClick={() => handleAddShift(swingers[0]?.id, fmtDate(new Date()))}
+                  disabled={swingers.length === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Shift
+                </button>
+              </div>
             </div>
 
             {/* Top tabs: Schedule | Metrics */}
@@ -183,6 +249,9 @@ export default function AdminSchedule() {
                   swingers={swingers}
                   shifts={shifts}
                   loading={loading}
+                  cleanView={cleanView}
+                  copyBusy={copyBusy}
+                  onCopyFromLastWeek={copyFromLastWeek}
                   onAddShift={handleAddShift}
                   onEditShift={handleEditShift}
                   onQuickDelete={quickDelete}
@@ -234,6 +303,7 @@ function TopTab({ label, active, onClick }) {
 function ScheduleTab({
   view, setView, dateOffset, setDateOffset,
   swingers, shifts, loading,
+  cleanView, copyBusy, onCopyFromLastWeek,
   onAddShift, onEditShift, onQuickDelete,
 }) {
   const rangeLabel = useMemo(() => buildRangeLabel(view, dateOffset), [view, dateOffset])
@@ -245,11 +315,26 @@ function ScheduleTab({
 
   return (
     <div className="space-y-4">
-      {/* Sub-tabs row */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <SubTab label="Weekly" active={view === 'weekly'} onClick={() => changeView('weekly')} />
-        <SubTab label="Monthly" active={view === 'monthly'} onClick={() => changeView('monthly')} />
-        <SubTab label="Weekends" active={view === 'weekends'} onClick={() => changeView('weekends')} />
+      {/* Sub-tabs row — sub-view tabs on the left, Copy from Last Week on the right (Weekly only) */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <SubTab label="Weekly" active={view === 'weekly'} onClick={() => changeView('weekly')} />
+          <SubTab label="Monthly" active={view === 'monthly'} onClick={() => changeView('monthly')} />
+          <SubTab label="Weekends" active={view === 'weekends'} onClick={() => changeView('weekends')} />
+        </div>
+        {view === 'weekly' && (
+          <button
+            onClick={onCopyFromLastWeek}
+            disabled={copyBusy}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-[#064029] hover:text-[#064029] transition-colors disabled:opacity-50"
+            title="Copy all shifts from the previous week into the current week"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            {copyBusy ? 'Copying…' : 'Copy from Last Week'}
+          </button>
+        )}
       </div>
 
       {/* Date nav */}
@@ -295,6 +380,7 @@ function ScheduleTab({
           swingers={swingers}
           shifts={shifts}
           editable={true}
+          cleanView={cleanView}
           onAddShift={onAddShift}
           onEditShift={onEditShift}
           onQuickDelete={onQuickDelete}
