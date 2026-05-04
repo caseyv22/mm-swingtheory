@@ -410,11 +410,11 @@ function DayRow({ date, dateStr, shifts, isToday, onClick }) {
       }`}
     >
       {/* Date pill */}
-      <div className={`flex flex-col items-center justify-center w-12 rounded-lg flex-shrink-0 ${
+      <div className={`flex flex-col items-center justify-center w-14 py-2.5 rounded-lg flex-shrink-0 ${
         isToday ? 'bg-[#064029] text-white' : 'bg-[#F9FAFB] text-gray-700'
       }`}>
         <span className="text-[10px] font-bold tracking-widest leading-none">{dayShort}</span>
-        <span className="font-display text-xl tracking-wide leading-none mt-1">{dayNum}</span>
+        <span className="font-display text-xl tracking-wide leading-none mt-1.5">{dayNum}</span>
       </div>
 
       {/* Content */}
