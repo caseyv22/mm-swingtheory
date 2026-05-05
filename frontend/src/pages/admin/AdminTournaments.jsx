@@ -367,7 +367,14 @@ function StandingsTab({ seasonData, seasonLoading, seasonError }) {
                 <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-500 w-12">Rank</th>
                 <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-500">Team</th>
                 {Array.from({ length: weeks }, (_, i) => (
-                  <th key={i} className="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-gray-500 w-12">Wk {i + 1}</th>
+                  // Render "Wk" and the number on separate lines so every
+                  // week header is two lines tall, regardless of column width.
+                  // (Single-digit weeks would otherwise fit on one line and
+                  // look misaligned next to wrapped "Wk 10" etc.)
+                  <th key={i} className="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-gray-500 w-12">
+                    <div className="leading-tight">Wk</div>
+                    <div className="leading-tight">{i + 1}</div>
+                  </th>
                 ))}
                 <th className="px-3 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-gray-500 w-16">Total</th>
               </tr>
