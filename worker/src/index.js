@@ -1214,7 +1214,30 @@ app.put('/admin/members/:id', requireAdmin, async (c) => {
 })
 
 // ─── DELETE /admin/members/:id ─────────────────────────────────────────────────
-// Deletes user from Clerk + cascades through D1
+// Deletes user from Clerk + cascades through D1.
+//
+// Cascade order matters: anything that references private_lessons.id must be
+// removed BEFORE the private_lessons rows themselves. Same goes for the
+// instructors table and other relational dependencies.
+//
+// Tables and columns currently referencing this user/instructor:
+//   bookings.user_id              → user
+//   children.parent_id            → user
+//   lesson_notes.student_id       → user
+//   lesson_notes.instructor_id    → instructors
+//   lesson_notes.lesson_id        → private_lessons (THIRD-PARTY notes blocking lesson delete)
+//   gspro_uploads.lesson_id       → private_lessons (blocking lesson delete)
+//   private_lessons.student_id    → user
+//   private_lessons.instructor_id → instructors
+//   sessions.instructor_id        → instructors (NULL-able — we null it out, don't delete)
+//   session_instructors.instructor_id  → instructors
+//   student_instructors.student_id     → user
+//   student_instructors.instructor_id  → instructors
+//   instructors.user_id           → user
+//
+// We track failures and verify the user row is actually gone before reporting
+// success. If the cascade silently fails, we return 500 with details so the
+// frontend doesn't show a phantom "deleted" state while the row is still in DB.
 app.delete('/admin/members/:id', requireAdmin, async (c) => {
   const { id } = c.req.param()
 
@@ -1234,28 +1257,132 @@ app.delete('/admin/members/:id', requireAdmin, async (c) => {
     }
   }
 
-  // Cascade delete — order matters for FK constraints
-  const deletes = [
-    ['DELETE FROM bookings WHERE user_id = ?', [id]],
-    ['DELETE FROM lesson_notes WHERE student_id = ?', [id]],
-    ['DELETE FROM lesson_notes WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = ?)', [id]],
-    ['DELETE FROM private_lessons WHERE student_id = ?', [id]],
-    ['DELETE FROM private_lessons WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = ?)', [id]],
-    ['DELETE FROM session_instructors WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = ?)', [id]],
-    ['DELETE FROM children WHERE parent_id = ?', [id]],
-    ['DELETE FROM student_instructors WHERE student_id = ?', [id]],
-    ['DELETE FROM student_instructors WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = ?)', [id]],
-    ['DELETE FROM instructors WHERE user_id = ?', [id]],
-    ['DELETE FROM users WHERE id = ?', [id]],
-  ]
-  for (const [sql, params] of deletes) {
+  // Resolve the instructor ID once (if any) so subsequent deletes can use simple
+  // WHERE clauses instead of nested SELECTs.
+  const instructorRow = await c.env.DB.prepare(
+    'SELECT id FROM instructors WHERE user_id = ?'
+  ).bind(id).first()
+  const instructorId = instructorRow?.id || null
+
+  // Collect all private_lesson IDs this user is tied to (as student or instructor).
+  // Anything referencing these IDs (lesson_notes, gspro_uploads, etc.) must be
+  // deleted BEFORE the private_lessons rows themselves.
+  const lessonRows = await c.env.DB.prepare(`
+    SELECT id FROM private_lessons
+    WHERE student_id = ?
+       OR (? IS NOT NULL AND instructor_id = ?)
+  `).bind(id, instructorId, instructorId).all()
+  const lessonIds = (lessonRows.results || []).map(r => r.id)
+
+  // Build a parameterised IN-list, e.g. "(?, ?, ?)". When there are no lessons
+  // we skip those steps entirely.
+  function inClause(values) {
+    return '(' + values.map(() => '?').join(',') + ')'
+  }
+
+  // Cascade plan. Each entry: [label, sql, params]
+  // Steps are executed in order; failures are tracked but don't abort the loop.
+  const steps = []
+
+  // 1. Delete dependent rows on private_lessons that this user owns
+  if (lessonIds.length > 0) {
+    steps.push(['gspro_uploads_by_lesson',
+      `DELETE FROM gspro_uploads WHERE lesson_id IN ${inClause(lessonIds)}`,
+      lessonIds])
+    steps.push(['lesson_notes_by_lesson',
+      `DELETE FROM lesson_notes WHERE lesson_id IN ${inClause(lessonIds)}`,
+      lessonIds])
+  }
+
+  // 2. Delete things tied directly to the user
+  steps.push(['bookings_by_user',
+    'DELETE FROM bookings WHERE user_id = ?',
+    [id]])
+  steps.push(['lesson_notes_by_student',
+    'DELETE FROM lesson_notes WHERE student_id = ?',
+    [id]])
+  if (instructorId) {
+    steps.push(['lesson_notes_by_instructor',
+      'DELETE FROM lesson_notes WHERE instructor_id = ?',
+      [instructorId]])
+  }
+
+  // 3. Delete the private_lessons rows themselves
+  steps.push(['private_lessons_by_student',
+    'DELETE FROM private_lessons WHERE student_id = ?',
+    [id]])
+  if (instructorId) {
+    steps.push(['private_lessons_by_instructor',
+      'DELETE FROM private_lessons WHERE instructor_id = ?',
+      [instructorId]])
+  }
+
+  // 4. Detach from sessions (instructor_id is NULL-able per schema, so we
+  //    null it out instead of deleting the session — the session may still
+  //    have students booked).
+  if (instructorId) {
+    steps.push(['session_instructors_detach',
+      'DELETE FROM session_instructors WHERE instructor_id = ?',
+      [instructorId]])
+    steps.push(['sessions_clear_instructor',
+      'UPDATE sessions SET instructor_id = NULL WHERE instructor_id = ?',
+      [instructorId]])
+  }
+
+  // 5. Children and student-instructor links
+  steps.push(['children_by_parent',
+    'DELETE FROM children WHERE parent_id = ?',
+    [id]])
+  steps.push(['student_instructors_by_student',
+    'DELETE FROM student_instructors WHERE student_id = ?',
+    [id]])
+  if (instructorId) {
+    steps.push(['student_instructors_by_instructor',
+      'DELETE FROM student_instructors WHERE instructor_id = ?',
+      [instructorId]])
+  }
+
+  // 6. Finally the instructor row, then the user row
+  if (instructorId) {
+    steps.push(['instructors_by_user',
+      'DELETE FROM instructors WHERE user_id = ?',
+      [id]])
+  }
+  steps.push(['users',
+    'DELETE FROM users WHERE id = ?',
+    [id]])
+
+  const failures = []
+  for (const [label, sql, params] of steps) {
     try {
       await c.env.DB.prepare(sql).bind(...params).run()
     } catch (e) {
-      console.error('Delete step failed:', sql, e.message)
+      const msg = String(e?.message || e)
+      console.error('Delete step failed:', label, sql, msg)
+      failures.push({ step: label, error: msg })
     }
   }
 
+  // Verify the user row is actually gone. This is the source of truth — if this
+  // check shows the row still exists, we know the cascade didn't fully complete
+  // and we must NOT report success to the frontend.
+  const stillExists = await c.env.DB.prepare(
+    'SELECT id FROM users WHERE id = ?'
+  ).bind(id).first()
+
+  if (stillExists) {
+    return c.json({
+      error: 'Delete did not complete — user still exists. The Clerk record may have been removed but the database delete failed. Check failed_steps for details.',
+      failed_steps: failures,
+    }, 500)
+  }
+
+  // True success. If there were non-fatal failures earlier (e.g. orphan rows
+  // we couldn't clean up but that didn't block the user delete) we surface them
+  // as warnings. The admin can ignore them.
+  if (failures.length > 0) {
+    return c.json({ ok: true, warnings: failures })
+  }
   return c.json({ ok: true })
 })
 
