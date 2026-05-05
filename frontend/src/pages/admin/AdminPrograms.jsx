@@ -251,6 +251,90 @@ function CreateProgramModal({ onClose, onSuccess }) {
 }
 
 // ─── Program Settings Editor ──────────────────────────────────────────────────
+// ─── Instructor Change Confirm Modal ─────────────────────────────────────────
+// Shown when admin changes the Default Instructor on a program and there are
+// existing future sessions assigned to a different instructor. Three options:
+//   - Replace on all sessions (bulk reassign)
+//   - Only fill empty sessions (preserves manual overrides)
+//   - Cancel (don't save)
+function InstructorChangeConfirmModal({ conflicting, totalConflicts, empty, newName, onOverwrite, onFillEmpty, onCancel, saving }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-5 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#E1F5EE] rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-[#1D9E75]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="font-display text-xl text-[#064029] tracking-wide">EXISTING ASSIGNMENTS</h2>
+              <p className="text-sm text-gray-500">Some sessions already have an instructor</p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-gray-700">
+            Changing the default instructor to <span className="font-semibold">{newName}</span> affects existing future sessions:
+          </p>
+          <div className="bg-gray-50 rounded-xl divide-y divide-gray-100">
+            {conflicting.map(b => (
+              <div key={b.instructor_id} className="flex items-center justify-between px-4 py-2.5">
+                <p className="text-sm text-gray-700">
+                  Currently assigned to <span className="font-semibold">{b.full_name}</span>
+                </p>
+                <span className="text-xs font-bold text-gray-700 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                  {b.count} {b.count === 1 ? 'session' : 'sessions'}
+                </span>
+              </div>
+            ))}
+            {empty > 0 && (
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <p className="text-sm text-gray-500 italic">
+                  Currently unassigned
+                </p>
+                <span className="text-xs font-bold text-gray-700 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                  {empty} {empty === 1 ? 'session' : 'sessions'}
+                </span>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-500">
+            <span className="font-semibold">Replace on all</span> overwrites every future session with {newName}.
+            {' '}<span className="font-semibold">Only fill empty</span> assigns {newName} to unassigned sessions only — manually-assigned sessions keep their current instructor.
+          </p>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex flex-col gap-2">
+          <button
+            onClick={onOverwrite}
+            disabled={saving}
+            className="w-full px-4 py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
+          >
+            Replace on all {totalConflicts + empty} sessions
+          </button>
+          <button
+            onClick={onFillEmpty}
+            disabled={saving || empty === 0}
+            className="w-full px-4 py-2.5 bg-white border border-[#1D9E75] text-[#064029] text-sm font-semibold rounded-lg hover:bg-[#E1F5EE] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {empty > 0
+              ? `Only fill ${empty} empty ${empty === 1 ? 'session' : 'sessions'}`
+              : 'No empty sessions to fill'}
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="w-full px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Trim Sessions Confirm Modal ─────────────────────────────────────────────
 function TrimConfirmModal({ affectedDates, onConfirm, onCancel, confirming }) {
   return (
@@ -304,6 +388,10 @@ function TrimConfirmModal({ affectedDates, onConfirm, onCancel, confirming }) {
 function ProgramEditor({ program, onSave, showToast }) {
   const [trimModal, setTrimModal] = useState(null) // { affectedDates: [] }
   const [trimConfirming, setTrimConfirming] = useState(false)
+  // Instructor change confirmation modal: shows when admin changes the default
+  // instructor and there are existing sessions assigned to a different instructor.
+  // null = closed, otherwise = { stats: {...}, oldName, newName }
+  const [instructorModal, setInstructorModal] = useState(null)
   const [form, setForm] = useState({
     name: program.name, description: program.description || '',
     session_days: program.session_days || '', start_time: program.start_time, end_time: program.end_time,
@@ -331,7 +419,8 @@ function ProgramEditor({ program, onSave, showToast }) {
     setForm(f => ({ ...f, session_days: updated.join(',') }))
   }
 
-  async function doSave() {
+  // existingSessionsAction: 'fill_empty_only' (default) | 'overwrite'
+  async function doSave(existingSessionsAction = 'fill_empty_only') {
     setSaving(true)
     try {
       await api.put(`/admin/programs/${program.id}`, {
@@ -343,6 +432,7 @@ function ProgramEditor({ program, onSave, showToast }) {
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         default_instructor_id: form.default_instructor_id || null,
+        existing_sessions_action: existingSessionsAction,
       })
       setSaved(true); setTimeout(() => setSaved(false), 2000)
       try { await api.post(`/admin/programs/${program.id}/generate-sessions`, {}) } catch (e) { console.error('Session gen failed', e) }
@@ -352,7 +442,7 @@ function ProgramEditor({ program, onSave, showToast }) {
   }
 
   async function handleSave() {
-    // If end_date moved earlier than current program end_date, check for affected sessions
+    // ── Step 1: end_date trim check (existing flow) ──────────────────────────
     const currentEndDate = program.end_date
     const newEndDate = form.end_date || null
 
@@ -373,7 +463,36 @@ function ProgramEditor({ program, onSave, showToast }) {
       } catch (e) { console.error('Trim check failed', e) }
     }
 
-    await doSave()
+    // ── Step 2: instructor change conflict check ────────────────────────────
+    // If admin changed the default instructor to a non-NULL value AND existing
+    // future sessions are already assigned to a different instructor, ask before
+    // bulk-overwriting them. NULL transitions ("set to None") are unconditional
+    // so we don't need a confirmation for those — already handled by the worker.
+    const oldInstr = program.default_instructor_id || null
+    const newInstr = form.default_instructor_id || null
+    const instructorChanged = newInstr !== oldInstr
+
+    if (instructorChanged && newInstr !== null) {
+      try {
+        const stats = await api.get(`/admin/programs/${program.id}/session-instructor-stats`)
+        // Find sessions assigned to instructors OTHER than the new default
+        const conflicting = (stats.by_instructor || []).filter(b => b.instructor_id !== newInstr)
+        const totalConflicts = conflicting.reduce((sum, b) => sum + (b.count || 0), 0)
+        if (totalConflicts > 0) {
+          const newName = instructors.find(i => i.id === newInstr)?.full_name || 'the new instructor'
+          setInstructorModal({
+            stats,
+            conflicting,
+            totalConflicts,
+            empty: stats.empty || 0,
+            newName,
+          })
+          return
+        }
+      } catch (e) { console.error('Instructor stats check failed', e) }
+    }
+
+    await doSave('fill_empty_only')
   }
 
   async function handleTrimConfirm() {
@@ -383,8 +502,18 @@ function ProgramEditor({ program, onSave, showToast }) {
       await api.post(`/admin/programs/${program.id}/trim-sessions`, { end_date: newEndDate, confirm: true })
       setTrimModal(null)
       showToast('Sessions cancelled — emails sent to affected students')
-      await doSave()
+      await doSave('fill_empty_only')
     } catch (e) { console.error(e) } finally { setTrimConfirming(false) }
+  }
+
+  // Instructor confirmation modal handlers — admin chose Overwrite or Fill empty only
+  async function handleInstructorOverwrite() {
+    setInstructorModal(null)
+    await doSave('overwrite')
+  }
+  async function handleInstructorFillEmpty() {
+    setInstructorModal(null)
+    await doSave('fill_empty_only')
   }
 
   return (
@@ -395,6 +524,18 @@ function ProgramEditor({ program, onSave, showToast }) {
           onConfirm={handleTrimConfirm}
           onCancel={() => setTrimModal(null)}
           confirming={trimConfirming}
+        />
+      )}
+      {instructorModal && (
+        <InstructorChangeConfirmModal
+          conflicting={instructorModal.conflicting}
+          totalConflicts={instructorModal.totalConflicts}
+          empty={instructorModal.empty}
+          newName={instructorModal.newName}
+          onOverwrite={handleInstructorOverwrite}
+          onFillEmpty={handleInstructorFillEmpty}
+          onCancel={() => setInstructorModal(null)}
+          saving={saving}
         />
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
