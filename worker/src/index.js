@@ -1564,12 +1564,29 @@ app.post('/admin/programs/:id/generate-sessions', requireAdmin, async (c) => {
 })
 
 // PUT /admin/programs/:id
+//
+// In addition to the standard field updates, this endpoint backfills the
+// program's `default_instructor_id` onto any future, non-cancelled, NULL-instructor
+// sessions for the program. This handles the common flow where a program is
+// created without a default (no field on the create modal historically), then
+// edited later to add one — without this backfill, the already-generated
+// sessions would be orphaned with no instructor.
+//
+// Safety: we ONLY touch sessions where instructor_id IS NULL. Sessions that
+// already have an instructor (whether from a previous default, or manually
+// reassigned by an admin) are NEVER overwritten. So changing a default from
+// Rafael → Jae will not bulk-rewrite Rafael's existing sessions — the admin
+// must do that explicitly if they want it.
 app.put('/admin/programs/:id', requireAdmin, async (c) => {
   const { id } = c.req.param()
   const body = await c.req.json()
 
   const program = await c.env.DB.prepare('SELECT * FROM programs WHERE id = ?').bind(id).first()
   if (!program) return c.json({ error: 'Program not found' }, 404)
+
+  const newDefaultInstructor = 'default_instructor_id' in body
+    ? (body.default_instructor_id || null)
+    : program.default_instructor_id
 
   await c.env.DB.prepare(`
     UPDATE programs SET
@@ -1597,11 +1614,55 @@ app.put('/admin/programs/:id', requireAdmin, async (c) => {
     body.is_active !== undefined ? (body.is_active ? 1 : 0) : program.is_active,
     'start_date' in body ? (body.start_date || null) : program.start_date,
     'end_date' in body ? (body.end_date || null) : program.end_date,
-    'default_instructor_id' in body ? (body.default_instructor_id || null) : program.default_instructor_id,
+    newDefaultInstructor,
     id
   ).run()
 
-  return c.json({ ok: true })
+  // Backfill: if the program now has a default instructor, fill in any future
+  // sessions that have NO instructor assigned. Doesn't touch sessions that
+  // already have an instructor or that are in the past or cancelled. Also
+  // creates the corresponding session_instructors rows so the join-based
+  // queries see the assignment too.
+  let backfilled = 0
+  if (newDefaultInstructor) {
+    // Find empty future sessions for this program
+    const empties = await c.env.DB.prepare(`
+      SELECT id FROM sessions
+      WHERE program_id = ?
+        AND instructor_id IS NULL
+        AND date >= date('now')
+        AND (is_cancelled IS NULL OR is_cancelled = 0)
+    `).bind(id).all()
+
+    const sessionIds = (empties.results || []).map(r => r.id)
+    if (sessionIds.length > 0) {
+      const placeholders = '(' + sessionIds.map(() => '?').join(',') + ')'
+
+      // Update sessions.instructor_id
+      await c.env.DB.prepare(
+        `UPDATE sessions SET instructor_id = ? WHERE id IN ${placeholders}`
+      ).bind(newDefaultInstructor, ...sessionIds).run()
+
+      // Mirror in session_instructors (used by some join queries). Insert one
+      // row per session — duplicates are guarded by the table's PK / unique
+      // constraints if any, otherwise the prior NULL-instructor state means
+      // there are no existing rows to clash with for these sessions.
+      for (const sid of sessionIds) {
+        try {
+          const siId = 'si_' + uid()
+          await c.env.DB.prepare(
+            'INSERT INTO session_instructors (id, session_id, instructor_id) VALUES (?, ?, ?)'
+          ).bind(siId, sid, newDefaultInstructor).run()
+        } catch (e) {
+          // Pre-existing row for this session_id — fine, ignore. The
+          // sessions.instructor_id update above is the source of truth.
+        }
+      }
+      backfilled = sessionIds.length
+    }
+  }
+
+  return c.json({ ok: true, backfilled })
 })
 
 // GET /admin/config
