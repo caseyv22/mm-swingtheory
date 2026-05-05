@@ -9,6 +9,7 @@ const ADMIN_NAV = [
   { label: 'Schedule', href: '/admin/schedule' },
   { label: 'Members', href: '/admin/members' },
   { label: 'Programs', href: '/admin/programs' },
+  { label: 'Tournaments', href: '/admin/tournaments' },
   { label: 'Settings', href: '/admin/settings' },
 ]
 
@@ -38,6 +39,7 @@ export default function AdminLayout({ children }) {
       '/admin/schedule': 'Schedule',
       '/admin/members': 'Members',
       '/admin/programs': 'Programs',
+      '/admin/tournaments': 'Tournaments',
       '/admin/settings': 'Settings',
       '/theory-ai': 'Theory AI',
       '/account': 'Account',
