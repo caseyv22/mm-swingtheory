@@ -2808,7 +2808,6 @@ app.get('/admin/shifts/metrics', requireAdmin, async (c) => {
 //                          player2 (individuals, used for CTP picking) plus
 //                          a denormalized name (defaults to "P1 & P2" but
 //                          can be a custom team name like "Cobra Kai").
-//                          fedex_carry_in stores pre-platform carry-in.
 //   tournament_seasons   — a competition window (default 4 weeks).
 //   tournament_results   — one row per (season, team, week_number) with a
 //                          placement 1..6. NULL placement = team didn't
@@ -2913,7 +2912,7 @@ app.get('/admin/tournaments/leagues/:id', requireAdmin, async (c) => {
   if (!league) return c.json({ error: 'League not found' }, 404)
 
   const teams = await c.env.DB.prepare(`
-    SELECT id, league_id, name, player1, player2, fedex_carry_in, active, created_at
+    SELECT id, league_id, name, player1, player2, active, created_at
     FROM tournament_teams WHERE league_id = ? ORDER BY created_at ASC
   `).bind(id).all()
 
@@ -2970,18 +2969,16 @@ app.post('/admin/tournaments/leagues/:id/teams', requireAdmin, async (c) => {
   ).bind(leagueId, name).first()
   if (dup) return c.json({ error: 'A team with this name already exists in this league' }, 400)
 
-  const carryIn = Number.isFinite(body.fedex_carry_in) ? Math.max(0, Math.floor(body.fedex_carry_in)) : 0
-
   const id = 'tt_' + uid()
   await c.env.DB.prepare(`
-    INSERT INTO tournament_teams (id, league_id, name, player1, player2, fedex_carry_in, active)
-    VALUES (?, ?, ?, ?, ?, ?, 1)
-  `).bind(id, leagueId, name, player1, player2, carryIn).run()
+    INSERT INTO tournament_teams (id, league_id, name, player1, player2, active)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `).bind(id, leagueId, name, player1, player2).run()
 
   return c.json({ ok: true, id })
 })
 
-// PUT /admin/tournaments/teams/:id — rename / set carry-in / archive
+// PUT /admin/tournaments/teams/:id — rename / archive
 app.put('/admin/tournaments/teams/:id', requireAdmin, async (c) => {
   const { id } = c.req.param()
   const body = await c.req.json()
@@ -3004,9 +3001,6 @@ app.put('/admin/tournaments/teams/:id', requireAdmin, async (c) => {
   }
   if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
 
-  const carryIn = body.fedex_carry_in === undefined
-    ? team.fedex_carry_in
-    : Math.max(0, Math.floor(Number(body.fedex_carry_in) || 0))
   const active = body.active === undefined ? team.active : (body.active ? 1 : 0)
 
   // Re-check uniqueness if name is changing (case-insensitive, only against active teams).
@@ -3019,9 +3013,9 @@ app.put('/admin/tournaments/teams/:id', requireAdmin, async (c) => {
 
   await c.env.DB.prepare(`
     UPDATE tournament_teams
-    SET name = ?, player1 = ?, player2 = ?, fedex_carry_in = ?, active = ?
+    SET name = ?, player1 = ?, player2 = ?, active = ?
     WHERE id = ?
-  `).bind(name, player1, player2, carryIn, active, id).run()
+  `).bind(name, player1, player2, active, id).run()
   return c.json({ ok: true })
 })
 
@@ -3142,7 +3136,7 @@ app.get('/admin/tournaments/seasons/:id', requireAdmin, async (c) => {
   // a result in this season (so deleted/archived teams that have history
   // don't disappear from the grid).
   const teams = await c.env.DB.prepare(`
-    SELECT id, league_id, name, player1, player2, fedex_carry_in, active, created_at
+    SELECT id, league_id, name, player1, player2, active, created_at
     FROM tournament_teams
     WHERE league_id = ? AND (
       active = 1
@@ -3220,7 +3214,7 @@ app.put('/admin/tournaments/seasons/:id/results', requireAdmin, async (c) => {
 
   // Recompute and return fresh standings + the full results grid + week meta.
   const teams = await c.env.DB.prepare(`
-    SELECT id, league_id, name, player1, player2, fedex_carry_in, active, created_at
+    SELECT id, league_id, name, player1, player2, active, created_at
     FROM tournament_teams
     WHERE league_id = ? AND (
       active = 1
@@ -3384,9 +3378,8 @@ function computeFedexStandings(teams, seasons, results) {
       team_id: t.id,
       name: t.name,
       active: t.active,
-      carry_in: t.fedex_carry_in || 0,
       season_points: new Array(seasonOrder.length).fill(0),
-      total: t.fedex_carry_in || 0,
+      total: 0,
       rank: 0,
     }
   }
