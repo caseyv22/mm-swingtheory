@@ -280,7 +280,7 @@ export default function AdminTournaments() {
             />
           )}
           {leagueData && tab === 'fedex' && (
-            <FedexTab leagueData={leagueData} onTeamUpdated={refreshLeague} />
+            <FedexTab leagueData={leagueData} onRefresh={refreshLeague} />
           )}
           {leagueData && tab === 'manage' && (
             <ManageTab
@@ -369,7 +369,7 @@ function StandingsTab({ seasonData, seasonLoading, seasonError }) {
                 {Array.from({ length: weeks }, (_, i) => (
                   <th key={i} className="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-gray-500 w-12">Wk {i + 1}</th>
                 ))}
-                <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-widest text-gray-500 w-16">Total</th>
+                <th className="px-3 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-gray-500 w-16">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -385,11 +385,11 @@ function StandingsTab({ seasonData, seasonLoading, seasonError }) {
                   <td className="px-3 py-2.5"><RankBadge rank={row.rank} /></td>
                   <td className="px-3 py-2.5 font-semibold text-gray-900">{row.name}</td>
                   {row.week_points.map((pts, i) => (
-                    <td key={i} className="px-2 py-2.5 text-center text-gray-700">
+                    <td key={i} className="px-2 py-2.5 text-center text-gray-700 tabular-nums">
                       {pts > 0 ? pts : <span className="text-gray-300">·</span>}
                     </td>
                   ))}
-                  <td className="px-3 py-2.5 text-right font-bold text-[#064029]">{row.total}</td>
+                  <td className="px-3 py-2.5 text-center font-bold text-[#064029] tabular-nums">{row.total}</td>
                 </tr>
               ))}
             </tbody>
@@ -409,19 +409,17 @@ function StandingsTab({ seasonData, seasonLoading, seasonError }) {
             {Array.from({ length: weeks }, (_, i) => {
               const w = i + 1
               const meta = weekMetaByWeek[w]
-              if (!meta) return (
-                <div key={w} className="px-6 py-3 text-sm text-gray-400">
-                  <span className="font-bold uppercase tracking-widest text-xs text-gray-500 mr-3">Wk {w}</span>
-                  No details recorded.
-                </div>
-              )
-              const courseLabel = [meta.course_name, meta.nine ? (meta.nine === 'front' ? 'Front 9' : 'Back 9') : null].filter(Boolean).join(' · ')
-              const ctp = meta.ctp_hole || meta.ctp_winner_team_id
+              const courseLabel = meta
+                ? [meta.course_name, meta.nine ? (meta.nine === 'front' ? 'Front 9' : 'Back 9') : null].filter(Boolean).join(' · ')
+                : ''
+              const ctp = meta && (meta.ctp_hole || meta.ctp_winner_team_id)
                 ? `Hole ${meta.ctp_hole || '?'} → ${ctpWinnerLabel(meta, teams) || '— no winner —'}`
                 : null
+              const empty = !courseLabel && !ctp
               return (
                 <div key={w} className="px-6 py-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
                   <span className="font-bold uppercase tracking-widest text-xs text-gray-500 w-12 shrink-0">Wk {w}</span>
+                  {empty && <span className="text-sm text-gray-400">No details recorded.</span>}
                   {courseLabel && <span className="text-sm font-semibold text-gray-900">{courseLabel}</span>}
                   {ctp && (
                     <span className="text-sm text-gray-700">
@@ -429,7 +427,6 @@ function StandingsTab({ seasonData, seasonLoading, seasonError }) {
                       {ctp}
                     </span>
                   )}
-                  {!courseLabel && !ctp && <span className="text-sm text-gray-400">No details recorded.</span>}
                 </div>
               )
             })}
@@ -532,111 +529,334 @@ function PlacementsTab({ seasonData, seasonLoading, seasonError, activeSeasonId,
 
   return (
     <div className="space-y-4">
-      {/* Week details strip — course/CTP per week */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-100">
-          <h2 className="font-display text-lg text-[#064029] tracking-wide">WEEK DETAILS</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Course played, Closest-to-the-Pin hole + winner. Each row saves on its own.
-          </p>
+
+      {/* ── Mobile layout (< lg): one card per week, stacked vertically ──
+          Each card holds the full week's data — course/CTP details on top,
+          then the 6 placement dropdowns labeled 1st–6th. No horizontal
+          scroll, one week visible at a time. */}
+      <div className="lg:hidden space-y-4">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-2">
+            <div>
+              <h2 className="font-display text-lg text-[#064029] tracking-wide">WEEKLY PLACEMENTS</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Tap each position to record a team. Standings update automatically.</p>
+            </div>
+            {savingCell && <span className="text-xs text-gray-400">Saving…</span>}
+          </div>
         </div>
-        <div className="divide-y divide-gray-100">
-          {Array.from({ length: weeks }, (_, i) => {
+        {cellError && (
+          <div className="bg-red-50 text-red-700 text-sm font-semibold px-4 py-2.5 rounded-lg">{cellError}</div>
+        )}
+        {seasonTeams.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-5 py-8 text-center text-sm text-gray-500">
+            Add teams in the Manage tab before entering placements.
+          </div>
+        ) : (
+          Array.from({ length: weeks }, (_, i) => {
             const w = i + 1
             return (
-              <WeekDetailRow
+              <MobileWeekCard
                 key={w}
                 weekNumber={w}
                 meta={weekMetaByWeek[w]}
                 teams={seasonTeams}
                 seasonId={activeSeasonId}
-                onPatch={(week_meta) => onPatchSeason({ week_meta })}
+                onPatchMeta={(week_meta) => onPatchSeason({ week_meta })}
+                grid={grid}
+                locations={teamLocationByWeek(w)}
+                onSetPlacement={setCell}
+                savingCell={savingCell}
               />
             )
-          })}
+          })
+        )}
+      </div>
+
+      {/* ── Desktop layout (lg+): two cards — Week Details strip + grid ── */}
+      <div className="hidden lg:block space-y-4">
+        {/* Week details strip — course/CTP per week */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100">
+            <h2 className="font-display text-lg text-[#064029] tracking-wide">WEEK DETAILS</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Course played, Closest-to-the-Pin hole + winner. Each row saves on its own.
+            </p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {Array.from({ length: weeks }, (_, i) => {
+              const w = i + 1
+              return (
+                <WeekDetailRow
+                  key={w}
+                  weekNumber={w}
+                  meta={weekMetaByWeek[w]}
+                  teams={seasonTeams}
+                  seasonId={activeSeasonId}
+                  onPatch={(week_meta) => onPatchSeason({ week_meta })}
+                />
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Placement grid */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-display text-lg text-[#064029] tracking-wide">WEEKLY PLACEMENTS</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Set each week's finishing order. Standings update automatically.
+              </p>
+            </div>
+            {savingCell && <span className="text-xs text-gray-400">Saving…</span>}
+          </div>
+          {cellError && (
+            <div className="px-6 pt-4">
+              <div className="bg-red-50 text-red-700 text-sm font-semibold px-4 py-2.5 rounded-lg">{cellError}</div>
+            </div>
+          )}
+          {seasonTeams.length === 0 ? (
+            <div className="px-6 py-8 text-center text-sm text-gray-500">
+              Add teams in the Manage tab before entering placements.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-500 sticky left-0 bg-gray-50 z-10 w-32">
+                      Position
+                    </th>
+                    {Array.from({ length: weeks }, (_, i) => (
+                      <th key={i} className="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-gray-500 min-w-[140px]">
+                        Wk {i + 1}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[1, 2, 3, 4, 5, 6].map(p => (
+                    <tr key={p} className="border-b border-gray-100 last:border-0">
+                      <td className="px-3 py-2 sticky left-0 bg-white z-10 border-r border-gray-100">
+                        <div className="flex items-center gap-2">
+                          <RankBadge rank={p} />
+                          <div>
+                            <div className="text-xs font-semibold text-gray-700">{PLACEMENT_LABELS[p - 1]}</div>
+                            <div className="text-[10px] text-gray-400">{LEAGUE_POINTS[p]} league · {FEDEX_POINTS[p]} FedEx</div>
+                          </div>
+                        </div>
+                      </td>
+                      {Array.from({ length: weeks }, (_, i) => {
+                        const w = i + 1
+                        const teamId = grid[p][w] || ''
+                        const locations = teamLocationByWeek(w)
+                        return (
+                          <td key={w} className="px-1.5 py-2 text-center">
+                            <select
+                              value={teamId}
+                              onChange={e => setCell(w, p, e.target.value)}
+                              disabled={savingCell === `${w}-${p}`}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-medium bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75] disabled:opacity-50"
+                            >
+                              <option value="">—</option>
+                              {seasonTeams.map(t => {
+                                const placedAt = locations[t.id]
+                                const usedElsewhere = placedAt && placedAt !== p
+                                return (
+                                  <option key={t.id} value={t.id} disabled={usedElsewhere}>
+                                    {t.name}{usedElsewhere ? ` (${PLACEMENT_LABELS[placedAt - 1]})` : ''}
+                                  </option>
+                                )
+                              })}
+                            </select>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── MobileWeekCard ──────────────────────────────────────────────────────────
+//
+// Single-week card used in the mobile layout. Holds course/nine/CTP details
+// at the top + the 6 placement dropdowns below. Self-saves on every change.
+// Logic mirrors the desktop layout — same setCell/onPatch callbacks — so the
+// data path is identical regardless of viewport.
+function MobileWeekCard({
+  weekNumber, meta, teams, seasonId, onPatchMeta,
+  grid, locations, onSetPlacement, savingCell,
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-100 bg-[#E1F5EE]/40">
+        <span className="font-display text-lg text-[#064029] tracking-wide">WEEK {weekNumber}</span>
+      </div>
+
+      {/* Details: course/nine/hole/winner — vertical stack on mobile */}
+      <div className="px-5 py-4 border-b border-gray-100">
+        <MobileWeekDetail
+          weekNumber={weekNumber}
+          meta={meta}
+          teams={teams}
+          seasonId={seasonId}
+          onPatch={onPatchMeta}
+        />
+      </div>
+
+      {/* Placements: vertical stack of position rows */}
+      <div className="divide-y divide-gray-100">
+        {[1, 2, 3, 4, 5, 6].map(p => {
+          const teamId = grid[p][weekNumber] || ''
+          return (
+            <div key={p} className="px-5 py-2.5 flex items-center gap-3">
+              <div className="flex items-center gap-2 w-28 shrink-0">
+                <RankBadge rank={p} />
+                <div>
+                  <div className="text-xs font-semibold text-gray-700">{PLACEMENT_LABELS[p - 1]}</div>
+                  <div className="text-[10px] text-gray-400">{LEAGUE_POINTS[p]} · {FEDEX_POINTS[p]}</div>
+                </div>
+              </div>
+              <select
+                value={teamId}
+                onChange={e => onSetPlacement(weekNumber, p, e.target.value)}
+                disabled={savingCell === `${weekNumber}-${p}`}
+                className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-2 text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75] disabled:opacity-50"
+              >
+                <option value="">—</option>
+                {teams.map(t => {
+                  const placedAt = locations[t.id]
+                  const usedElsewhere = placedAt && placedAt !== p
+                  return (
+                    <option key={t.id} value={t.id} disabled={usedElsewhere}>
+                      {t.name}{usedElsewhere ? ` (${PLACEMENT_LABELS[placedAt - 1]})` : ''}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Vertical-stack version of WeekDetailRow for mobile cards. Same fields,
+// same save logic — just labels above inputs in a 2-column grid instead of
+// the horizontal flex.
+function MobileWeekDetail({ weekNumber, meta, teams, seasonId, onPatch }) {
+  const [course, setCourse] = useState(meta?.course_name || '')
+  const [nine, setNine] = useState(meta?.nine || '')
+  const [hole, setHole] = useState(meta?.ctp_hole || '')
+  const [winner, setWinner] = useState(
+    meta?.ctp_winner_team_id && meta?.ctp_winner_slot
+      ? `${meta.ctp_winner_team_id}|${meta.ctp_winner_slot}`
+      : ''
+  )
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setCourse(meta?.course_name || '')
+    setNine(meta?.nine || '')
+    setHole(meta?.ctp_hole || '')
+    setWinner(
+      meta?.ctp_winner_team_id && meta?.ctp_winner_slot
+        ? `${meta.ctp_winner_team_id}|${meta.ctp_winner_slot}`
+        : ''
+    )
+  }, [meta?.course_name, meta?.nine, meta?.ctp_hole, meta?.ctp_winner_team_id, meta?.ctp_winner_slot])
+
+  async function save(patch) {
+    setError(''); setSaving(true)
+    try {
+      const r = await api.put(`/admin/tournaments/seasons/${seasonId}/weeks/${weekNumber}`, patch)
+      onPatch(r.week_meta)
+    } catch (e) { setError(e.message || 'Failed to save') } finally { setSaving(false) }
+  }
+
+  function saveCourse() {
+    if ((course || null) === (meta?.course_name || null)) return
+    save({ course_name: course || null })
+  }
+  function saveNine(val) { setNine(val); save({ nine: val || null }) }
+  function saveHole(val) { setHole(val); save({ ctp_hole: val ? Number(val) : null }) }
+  function saveWinner(val) {
+    setWinner(val)
+    if (!val) { save({ ctp_winner_team_id: null, ctp_winner_slot: null }); return }
+    const [teamId, slot] = val.split('|')
+    save({ ctp_winner_team_id: teamId, ctp_winner_slot: slot })
+  }
+
+  const winnerOptions = []
+  for (const t of teams) {
+    if (t.player1) winnerOptions.push({ val: `${t.id}|player1`, label: `${t.player1} (${t.name})` })
+    if (t.player2) winnerOptions.push({ val: `${t.id}|player2`, label: `${t.player2} (${t.name})` })
+  }
+
+  return (
+    <div className="space-y-3">
+      {error && <div className="bg-red-50 text-red-700 text-xs font-semibold px-3 py-2 rounded-lg">{error}</div>}
+
+      <div>
+        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Course</label>
+        <input
+          type="text"
+          value={course}
+          onChange={e => setCourse(e.target.value)}
+          onBlur={saveCourse}
+          placeholder="e.g. Pebble Beach"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Nine</label>
+          <select
+            value={nine}
+            onChange={e => saveNine(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+          >
+            <option value="">—</option>
+            <option value="front">Front 9</option>
+            <option value="back">Back 9</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">CTP Hole</label>
+          <select
+            value={hole}
+            onChange={e => saveHole(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+          >
+            <option value="">—</option>
+            {HOLES.map(h => <option key={h} value={h}>Hole {h}</option>)}
+          </select>
         </div>
       </div>
 
-      {/* Placement grid */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="font-display text-lg text-[#064029] tracking-wide">WEEKLY PLACEMENTS</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Set each week's finishing order. Standings update automatically.
-            </p>
-          </div>
-          {savingCell && <span className="text-xs text-gray-400">Saving…</span>}
-        </div>
-        {cellError && (
-          <div className="px-6 pt-4">
-            <div className="bg-red-50 text-red-700 text-sm font-semibold px-4 py-2.5 rounded-lg">{cellError}</div>
-          </div>
-        )}
-        {seasonTeams.length === 0 ? (
-          <div className="px-6 py-8 text-center text-sm text-gray-500">
-            Add teams in the Manage tab before entering placements.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-500 sticky left-0 bg-gray-50 z-10 w-32">
-                    Position
-                  </th>
-                  {Array.from({ length: weeks }, (_, i) => (
-                    <th key={i} className="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-gray-500 min-w-[140px]">
-                      Wk {i + 1}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[1, 2, 3, 4, 5, 6].map(p => (
-                  <tr key={p} className="border-b border-gray-100 last:border-0">
-                    <td className="px-3 py-2 sticky left-0 bg-white z-10 border-r border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <RankBadge rank={p} />
-                        <div>
-                          <div className="text-xs font-semibold text-gray-700">{PLACEMENT_LABELS[p - 1]}</div>
-                          <div className="text-[10px] text-gray-400">{LEAGUE_POINTS[p]} league · {FEDEX_POINTS[p]} FedEx</div>
-                        </div>
-                      </div>
-                    </td>
-                    {Array.from({ length: weeks }, (_, i) => {
-                      const w = i + 1
-                      const teamId = grid[p][w] || ''
-                      const locations = teamLocationByWeek(w)
-                      return (
-                        <td key={w} className="px-1.5 py-2 text-center">
-                          <select
-                            value={teamId}
-                            onChange={e => setCell(w, p, e.target.value)}
-                            disabled={savingCell === `${w}-${p}`}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-medium bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75] disabled:opacity-50"
-                          >
-                            <option value="">—</option>
-                            {seasonTeams.map(t => {
-                              const placedAt = locations[t.id]
-                              const usedElsewhere = placedAt && placedAt !== p
-                              return (
-                                <option key={t.id} value={t.id} disabled={usedElsewhere}>
-                                  {t.name}{usedElsewhere ? ` (${PLACEMENT_LABELS[placedAt - 1]})` : ''}
-                                </option>
-                              )
-                            })}
-                          </select>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <div>
+        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">CTP Winner</label>
+        <select
+          value={winner}
+          onChange={e => saveWinner(e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+        >
+          <option value="">—</option>
+          {winnerOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+        </select>
       </div>
+
+      {saving && <span className="text-[10px] text-gray-400">Saving…</span>}
     </div>
   )
 }
@@ -771,54 +991,47 @@ function WeekDetailRow({ weekNumber, meta, teams, seasonId, onPatch }) {
 }
 
 // ─── FedEx tab ────────────────────────────────────────────────────────────────
-function FedexTab({ leagueData, onTeamUpdated }) {
+//
+// Renders FedEx all-time standings. Refetches the league payload every time
+// the user navigates into this tab, so totals reflect any weekly placements
+// just entered. The tab is conditionally rendered by the parent (mounted /
+// unmounted on tab switch), so the empty-deps effect fires on each entry.
+function FedexTab({ leagueData, onRefresh }) {
   const { teams, seasons, fedex } = leagueData
-  const [editing, setEditing] = useState(null)
-  const [editValue, setEditValue] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
 
-  function startEdit(team) {
-    setEditing(team.team_id); setEditValue(String(team.carry_in)); setError('')
-  }
-  async function saveEdit() {
-    setSaving(true); setError('')
-    try {
-      await api.put(`/admin/tournaments/teams/${editing}`, {
-        fedex_carry_in: Number(editValue) || 0,
-      })
-      setEditing(null); onTeamUpdated()
-    } catch (e) { setError(e.message || 'Failed to save') } finally { setSaving(false) }
-  }
+  // Run once per mount = once per tab activation. onRefresh = parent's
+  // loadLeague(activeLeagueId), which repulls teams + results + computed FedEx.
+  useEffect(() => {
+    onRefresh?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
       <div className="px-6 py-5 border-b border-gray-100">
         <h2 className="font-display text-lg text-[#064029] tracking-wide">FEDEX ALL-TIME STANDINGS</h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          Carry-in (pre-platform history) plus FedEx points earned in every season of this league.
+          FedEx points earned in every season of this league. Updates automatically as weekly placements are entered.
         </p>
       </div>
-      {error && <div className="px-6 pt-3"><div className="bg-red-50 text-red-700 text-sm font-semibold px-4 py-2.5 rounded-lg">{error}</div></div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-500 w-12">Rank</th>
               <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-500">Team</th>
-              <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-widest text-gray-500 w-32">Carry-in</th>
               {seasons.map(s => (
-                <th key={s.id} className="px-2 py-2.5 text-right text-xs font-bold uppercase tracking-widest text-gray-500 w-16">
+                <th key={s.id} className="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-gray-500 w-16">
                   S{s.season_number}
                 </th>
               ))}
-              <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-widest text-gray-500 w-20">Total</th>
+              <th className="px-3 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-gray-500 w-20">Total</th>
             </tr>
           </thead>
           <tbody>
             {fedex.length === 0 && (
               <tr>
-                <td colSpan={seasons.length + 4} className="px-3 py-6 text-center text-sm text-gray-500">
+                <td colSpan={seasons.length + 3} className="px-3 py-6 text-center text-sm text-gray-500">
                   No teams yet — create teams in the Manage tab.
                 </td>
               </tr>
@@ -832,34 +1045,12 @@ function FedexTab({ leagueData, onTeamUpdated }) {
                     <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">archived</span>
                   )}
                 </td>
-                <td className="px-3 py-2.5 text-right">
-                  {editing === row.team_id ? (
-                    <div className="flex items-center justify-end gap-1">
-                      <input
-                        type="number"
-                        min="0"
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        autoFocus
-                        className="w-20 border border-gray-200 rounded-md px-2 py-1 text-xs text-right focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                      />
-                      <button onClick={saveEdit} disabled={saving} className="text-xs font-bold text-[#064029] hover:opacity-70 disabled:opacity-50">
-                        {saving ? '…' : 'Save'}
-                      </button>
-                      <button onClick={() => setEditing(null)} className="text-xs font-bold text-gray-400 hover:text-gray-600">✕</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => startEdit(row)} className="text-gray-700 hover:text-[#064029] tabular-nums">
-                      {row.carry_in}
-                    </button>
-                  )}
-                </td>
                 {row.season_points.map((pts, i) => (
-                  <td key={i} className="px-2 py-2.5 text-right text-gray-700 tabular-nums">
+                  <td key={i} className="px-2 py-2.5 text-center text-gray-700 tabular-nums">
                     {pts > 0 ? pts : <span className="text-gray-300">·</span>}
                   </td>
                 ))}
-                <td className="px-3 py-2.5 text-right font-bold text-[#064029] tabular-nums">{row.total}</td>
+                <td className="px-3 py-2.5 text-center font-bold text-[#064029] tabular-nums">{row.total}</td>
               </tr>
             ))}
           </tbody>
@@ -954,7 +1145,6 @@ function ManageTab({ league, teams, seasons, onChange, onLeagueDeleted }) {
                 {!t.active && (
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">archived</span>
                 )}
-                <span className="text-xs text-gray-500 shrink-0">FedEx carry-in: <span className="tabular-nums">{t.fedex_carry_in}</span></span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => setEditingTeam(t)} className="text-xs font-semibold text-gray-500 hover:text-[#064029]">Edit</button>
@@ -1155,7 +1345,6 @@ function CreateTeamModal({ leagueId, activeTeamCount, onClose, onSuccess }) {
   const [player1, setPlayer1] = useState('')
   const [player2, setPlayer2] = useState('')
   const [customName, setCustomName] = useState('')
-  const [carryIn, setCarryIn] = useState('0')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -1173,7 +1362,6 @@ function CreateTeamModal({ leagueId, activeTeamCount, onClose, onSuccess }) {
         player1: player1.trim() || null,
         player2: player2.trim() || null,
         name: customName.trim() || null,
-        fedex_carry_in: Number(carryIn) || 0,
       })
       onSuccess()
     } catch (e) { setError(e.message || 'Failed') } finally { setLoading(false) }
@@ -1207,12 +1395,6 @@ function CreateTeamModal({ leagueId, activeTeamCount, onClose, onSuccess }) {
         </p>
       </div>
 
-      <div>
-        <FieldLabel>FedEx carry-in</FieldLabel>
-        <input type="number" min="0" className={INPUT_CLS} value={carryIn} onChange={e => setCarryIn(e.target.value)} />
-        <p className="text-xs text-gray-500 mt-1">Pre-platform FedEx points. Leave 0 for new teams.</p>
-      </div>
-
       <p className="text-xs text-gray-500">Subs aren't tracked — points always go to the original team.</p>
 
       <div className="flex gap-2 pt-2">
@@ -1235,7 +1417,6 @@ function EditTeamModal({ team, onClose, onSuccess }) {
       return composed === team.name ? '' : team.name
     })()
   )
-  const [carryIn, setCarryIn] = useState(String(team.fedex_carry_in))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -1253,7 +1434,6 @@ function EditTeamModal({ team, onClose, onSuccess }) {
         player2: player2.trim() || null,
         // Send custom name if set; otherwise let server recompose from players
         name: customName.trim() || null,
-        fedex_carry_in: Number(carryIn) || 0,
       })
       onSuccess()
     } catch (e) { setError(e.message || 'Failed') } finally { setLoading(false) }
@@ -1275,8 +1455,6 @@ function EditTeamModal({ team, onClose, onSuccess }) {
           Will display as: <span className="font-semibold text-gray-700">{previewName}</span>
         </p>
       </div>
-
-      <div><FieldLabel>FedEx carry-in</FieldLabel><input type="number" min="0" className={INPUT_CLS} value={carryIn} onChange={e => setCarryIn(e.target.value)} /></div>
 
       <div className="flex gap-2 pt-2">
         <button onClick={onClose} className="flex-1 border border-gray-200 text-gray-600 font-bold text-sm py-2.5 rounded-xl hover:border-gray-300">Cancel</button>
