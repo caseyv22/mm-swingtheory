@@ -1178,6 +1178,30 @@ app.put('/admin/members/:id', requireAdmin, async (c) => {
     id
   ).run()
 
+  // Ensure an `instructors` row exists when the user's role is (or just became)
+  // instructor. The CREATE flow handles this for new users, but role changes
+  // via this endpoint historically did not — leaving such users in a broken
+  // state where joins like `users → instructors` would silently fail and
+  // private lessons could not be created or fetched for them.
+  //
+  // We only handle the promote-to-instructor case here. Demotions
+  // (instructor → other role) deliberately leave the orphan `instructors` row
+  // in place: it may still be referenced by sessions or private_lessons, and a
+  // future re-promotion can pick it back up. Use DELETE /admin/members/:id for
+  // a true tear-down.
+  const finalRole = role ?? user.role
+  if (finalRole === 'instructor') {
+    const existingInstr = await c.env.DB.prepare(
+      'SELECT id FROM instructors WHERE user_id = ?'
+    ).bind(id).first()
+    if (!existingInstr) {
+      const instrId = 'instr_' + uid()
+      await c.env.DB.prepare(
+        'INSERT INTO instructors (id, user_id) VALUES (?, ?)'
+      ).bind(instrId, id).run()
+    }
+  }
+
   // If instructor, update bio
   if (bio !== undefined) {
     const instr = await c.env.DB.prepare('SELECT id FROM instructors WHERE user_id = ?').bind(id).first()
