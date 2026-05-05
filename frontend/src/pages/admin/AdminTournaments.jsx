@@ -99,7 +99,7 @@ export default function AdminTournaments() {
     try {
       const data = await api.get('/admin/tournaments')
       setOverview(data)
-    } catch (e) { setOverviewError(e.message || 'Failed to load tournaments') } finally { setOverviewLoading(false) }
+    } catch (e) { setOverviewError(e.message || 'Failed to load leagues') } finally { setOverviewLoading(false) }
   }
 
   async function loadLeague(id) {
@@ -153,7 +153,7 @@ export default function AdminTournaments() {
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-6 py-5 border-b border-gray-100">
-                <h1 className="font-display text-2xl text-[#064029] tracking-wide">TOURNAMENTS</h1>
+                <h1 className="font-display text-2xl text-[#064029] tracking-wide">LEAGUE</h1>
               </div>
               <div className="px-6 py-12 text-center">
                 <p className="font-display text-lg text-[#064029] tracking-wide mb-2">NO LEAGUES YET</p>
@@ -192,7 +192,7 @@ export default function AdminTournaments() {
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h1 className="font-display text-2xl text-[#064029] tracking-wide">TOURNAMENTS</h1>
+                <h1 className="font-display text-2xl text-[#064029] tracking-wide">LEAGUE</h1>
                 <p className="text-sm text-gray-500 mt-0.5">
                   Manage league nights, weekly placements, and the FedEx leaderboard.
                 </p>
