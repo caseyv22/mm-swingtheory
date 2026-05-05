@@ -1563,20 +1563,69 @@ app.post('/admin/programs/:id/generate-sessions', requireAdmin, async (c) => {
   return c.json({ ok: true, sessions_created: count })
 })
 
+// GET /admin/programs/:id/session-instructor-stats
+// Returns counts of future, non-cancelled sessions for this program, broken
+// down by instructor assignment state. Used by the frontend before a Default
+// Instructor change so the confirmation dialog can show real numbers.
+//
+// Response:
+//   {
+//     empty: <count of sessions with NULL instructor>,
+//     by_instructor: [{ instructor_id, full_name, count }, ...]
+//   }
+app.get('/admin/programs/:id/session-instructor-stats', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+
+  const empty = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS n FROM sessions
+    WHERE program_id = ?
+      AND instructor_id IS NULL
+      AND date >= date('now')
+      AND (is_cancelled IS NULL OR is_cancelled = 0)
+  `).bind(id).first()
+
+  const grouped = await c.env.DB.prepare(`
+    SELECT s.instructor_id, COUNT(*) AS count, u.full_name
+    FROM sessions s
+    JOIN instructors i ON i.id = s.instructor_id
+    JOIN users u ON u.id = i.user_id
+    WHERE s.program_id = ?
+      AND s.instructor_id IS NOT NULL
+      AND s.date >= date('now')
+      AND (s.is_cancelled IS NULL OR s.is_cancelled = 0)
+    GROUP BY s.instructor_id
+  `).bind(id).all()
+
+  return c.json({
+    empty: empty?.n || 0,
+    by_instructor: grouped.results || [],
+  })
+})
+
 // PUT /admin/programs/:id
 //
-// In addition to the standard field updates, this endpoint backfills the
-// program's `default_instructor_id` onto any future, non-cancelled, NULL-instructor
-// sessions for the program. This handles the common flow where a program is
-// created without a default (no field on the create modal historically), then
-// edited later to add one — without this backfill, the already-generated
-// sessions would be orphaned with no instructor.
+// Updates the program record, then propagates Default Instructor changes to
+// future, non-cancelled sessions per the rules below.
 //
-// Safety: we ONLY touch sessions where instructor_id IS NULL. Sessions that
-// already have an instructor (whether from a previous default, or manually
-// reassigned by an admin) are NEVER overwritten. So changing a default from
-// Rafael → Jae will not bulk-rewrite Rafael's existing sessions — the admin
-// must do that explicitly if they want it.
+// Frontend opt-in flag `existing_sessions_action` controls how to handle the
+// instructor change when there are sessions already assigned to a DIFFERENT
+// instructor:
+//   - 'overwrite'        : reassign all future non-cancelled sessions to the
+//                          new default, even if they already have a different
+//                          instructor
+//   - 'fill_empty_only'  : only assign the new default to sessions whose
+//                          instructor_id is NULL — leave manually-reassigned
+//                          sessions alone (this is also the default behavior
+//                          if the frontend omits the flag)
+//
+// Special cases:
+//   - new default = NULL  → ALWAYS clear all future non-cancelled sessions for
+//                           this program. Admin explicitly removed the program's
+//                           instructor; existing assignments would be misleading.
+//   - new default = same as old → no-op on sessions
+//
+// Always safe: sessions that have already happened (date < today) and cancelled
+// sessions are NEVER touched, regardless of action.
 app.put('/admin/programs/:id', requireAdmin, async (c) => {
   const { id } = c.req.param()
   const body = await c.req.json()
@@ -1584,9 +1633,11 @@ app.put('/admin/programs/:id', requireAdmin, async (c) => {
   const program = await c.env.DB.prepare('SELECT * FROM programs WHERE id = ?').bind(id).first()
   if (!program) return c.json({ error: 'Program not found' }, 404)
 
+  const oldDefaultInstructor = program.default_instructor_id || null
   const newDefaultInstructor = 'default_instructor_id' in body
     ? (body.default_instructor_id || null)
-    : program.default_instructor_id
+    : oldDefaultInstructor
+  const action = body.existing_sessions_action || 'fill_empty_only'
 
   await c.env.DB.prepare(`
     UPDATE programs SET
@@ -1618,51 +1669,108 @@ app.put('/admin/programs/:id', requireAdmin, async (c) => {
     id
   ).run()
 
-  // Backfill: if the program now has a default instructor, fill in any future
-  // sessions that have NO instructor assigned. Doesn't touch sessions that
-  // already have an instructor or that are in the past or cancelled. Also
-  // creates the corresponding session_instructors rows so the join-based
-  // queries see the assignment too.
-  let backfilled = 0
-  if (newDefaultInstructor) {
-    // Find empty future sessions for this program
-    const empties = await c.env.DB.prepare(`
-      SELECT id FROM sessions
-      WHERE program_id = ?
-        AND instructor_id IS NULL
-        AND date >= date('now')
-        AND (is_cancelled IS NULL OR is_cancelled = 0)
-    `).bind(id).all()
+  // ── Session backfill logic ───────────────────────────────────────────────
+  let sessionsUpdated = 0
+  let sessionsCleared = 0
 
-    const sessionIds = (empties.results || []).map(r => r.id)
-    if (sessionIds.length > 0) {
-      const placeholders = '(' + sessionIds.map(() => '?').join(',') + ')'
+  // Case 1: New default is NULL — clear instructor on all future non-cancelled sessions
+  if (newDefaultInstructor === null) {
+    if (oldDefaultInstructor !== null || action === 'overwrite') {
+      // Find sessions to clear
+      const toClear = await c.env.DB.prepare(`
+        SELECT id FROM sessions
+        WHERE program_id = ?
+          AND instructor_id IS NOT NULL
+          AND date >= date('now')
+          AND (is_cancelled IS NULL OR is_cancelled = 0)
+      `).bind(id).all()
+
+      const ids = (toClear.results || []).map(r => r.id)
+      if (ids.length > 0) {
+        const ph = '(' + ids.map(() => '?').join(',') + ')'
+        await c.env.DB.prepare(
+          `UPDATE sessions SET instructor_id = NULL WHERE id IN ${ph}`
+        ).bind(...ids).run()
+
+        // Also clear the corresponding session_instructors rows
+        await c.env.DB.prepare(
+          `DELETE FROM session_instructors WHERE session_id IN ${ph}`
+        ).bind(...ids).run()
+
+        sessionsCleared = ids.length
+      }
+    }
+  }
+  // Case 2: New default is set, no change from old — no-op (don't touch sessions
+  //         the admin didn't actually change anything related to instructor)
+  else if (newDefaultInstructor === oldDefaultInstructor) {
+    // No session changes
+  }
+  // Case 3: New default is set, different from old (or old was NULL) — backfill
+  else {
+    // Determine which sessions to update based on action
+    let toUpdateQuery
+    if (action === 'overwrite') {
+      // All future non-cancelled sessions, regardless of current instructor
+      toUpdateQuery = `
+        SELECT id FROM sessions
+        WHERE program_id = ?
+          AND date >= date('now')
+          AND (is_cancelled IS NULL OR is_cancelled = 0)
+      `
+    } else {
+      // Only NULL-instructor future non-cancelled sessions
+      toUpdateQuery = `
+        SELECT id FROM sessions
+        WHERE program_id = ?
+          AND instructor_id IS NULL
+          AND date >= date('now')
+          AND (is_cancelled IS NULL OR is_cancelled = 0)
+      `
+    }
+
+    const toUpdate = await c.env.DB.prepare(toUpdateQuery).bind(id).all()
+    const ids = (toUpdate.results || []).map(r => r.id)
+
+    if (ids.length > 0) {
+      const ph = '(' + ids.map(() => '?').join(',') + ')'
 
       // Update sessions.instructor_id
       await c.env.DB.prepare(
-        `UPDATE sessions SET instructor_id = ? WHERE id IN ${placeholders}`
-      ).bind(newDefaultInstructor, ...sessionIds).run()
+        `UPDATE sessions SET instructor_id = ? WHERE id IN ${ph}`
+      ).bind(newDefaultInstructor, ...ids).run()
 
-      // Mirror in session_instructors (used by some join queries). Insert one
-      // row per session — duplicates are guarded by the table's PK / unique
-      // constraints if any, otherwise the prior NULL-instructor state means
-      // there are no existing rows to clash with for these sessions.
-      for (const sid of sessionIds) {
+      // For overwrite mode, replace session_instructors rows. For fill_empty_only,
+      // there shouldn't be any existing session_instructors rows for these
+      // sessions (since their instructor_id was NULL), but we DELETE first
+      // defensively in case they exist for any reason.
+      await c.env.DB.prepare(
+        `DELETE FROM session_instructors WHERE session_id IN ${ph}`
+      ).bind(...ids).run()
+
+      // Insert fresh session_instructors rows
+      for (const sid of ids) {
         try {
           const siId = 'si_' + uid()
           await c.env.DB.prepare(
             'INSERT INTO session_instructors (id, session_id, instructor_id) VALUES (?, ?, ?)'
           ).bind(siId, sid, newDefaultInstructor).run()
         } catch (e) {
-          // Pre-existing row for this session_id — fine, ignore. The
-          // sessions.instructor_id update above is the source of truth.
+          // Defensive: if the insert fails for any reason, sessions.instructor_id
+          // is already updated above and remains the source of truth. Log and continue.
+          console.error('session_instructors insert failed for session', sid, e?.message)
         }
       }
-      backfilled = sessionIds.length
+
+      sessionsUpdated = ids.length
     }
   }
 
-  return c.json({ ok: true, backfilled })
+  return c.json({
+    ok: true,
+    sessions_updated: sessionsUpdated,
+    sessions_cleared: sessionsCleared,
+  })
 })
 
 // GET /admin/config
