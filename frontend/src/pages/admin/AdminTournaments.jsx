@@ -417,16 +417,21 @@ function StandingsTab({ seasonData, seasonLoading, seasonError }) {
                 : null
               const empty = !courseLabel && !ctp
               return (
-                <div key={w} className="px-6 py-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                  <span className="font-bold uppercase tracking-widest text-xs text-gray-500 w-12 shrink-0">Wk {w}</span>
-                  {empty && <span className="text-sm text-gray-400">No details recorded.</span>}
-                  {courseLabel && <span className="text-sm font-semibold text-gray-900">{courseLabel}</span>}
-                  {ctp && (
-                    <span className="text-sm text-gray-700">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] mr-1">CTP</span>
-                      {ctp}
-                    </span>
-                  )}
+                // Two-column row: fixed-width "Wk N" label on the left, stacked
+                // content column on the right. Course and CTP sit on their own
+                // lines but share the same left edge so they align vertically.
+                <div key={w} className="px-6 py-3 flex items-start gap-4">
+                  <span className="font-bold uppercase tracking-widest text-xs text-gray-500 w-12 shrink-0 mt-0.5">Wk {w}</span>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    {empty && <div className="text-sm text-gray-400">No details recorded.</div>}
+                    {courseLabel && <div className="text-sm font-semibold text-gray-900">{courseLabel}</div>}
+                    {ctp && (
+                      <div className="text-sm text-gray-700">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] mr-1">CTP</span>
+                        {ctp}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -642,7 +647,10 @@ function PlacementsTab({ seasonData, seasonLoading, seasonError, activeSeasonId,
                           <RankBadge rank={p} />
                           <div>
                             <div className="text-xs font-semibold text-gray-700">{PLACEMENT_LABELS[p - 1]}</div>
-                            <div className="text-[10px] text-gray-400">{LEAGUE_POINTS[p]} league · {FEDEX_POINTS[p]} FedEx</div>
+                            <div className="text-[10px] text-gray-400 leading-tight">
+                              <div>{LEAGUE_POINTS[p]} league</div>
+                              <div>{FEDEX_POINTS[p]} FedEx</div>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -931,7 +939,7 @@ function WeekDetailRow({ weekNumber, meta, teams, seasonId, onPatch }) {
     <div className="px-6 py-3">
       {error && <div className="bg-red-50 text-red-700 text-xs font-semibold px-3 py-2 rounded-lg mb-2">{error}</div>}
       <div className="flex flex-wrap items-end gap-3">
-        <div className="w-12 shrink-0 pb-2">
+        <div className="w-28 shrink-0 pb-2">
           <span className="font-bold uppercase tracking-widest text-xs text-gray-500">Wk {weekNumber}</span>
         </div>
 
