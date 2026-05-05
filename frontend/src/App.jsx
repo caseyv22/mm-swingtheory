@@ -14,6 +14,7 @@ import AdminSessions from './pages/admin/AdminSessions.jsx'
 import AdminMembers from './pages/admin/AdminMembers.jsx'
 import AdminPrograms from './pages/admin/AdminPrograms.jsx'
 import AdminSettings from './pages/admin/AdminSettings.jsx'
+import AdminTournaments from './pages/admin/AdminTournaments.jsx'
 import AdminSchedule from './pages/admin/AdminSchedule.jsx'
 import SwingerSchedule from './pages/swinger/SwingerSchedule.jsx'
 import SwingerTheoryAI from './pages/swinger/SwingerTheoryAI.jsx'
@@ -466,6 +467,9 @@ export default function App() {
           <Route path="/admin/members" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
           <Route path="/admin/members/:id" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
           <Route path="/admin/programs" element={<ProtectedRoute requiredRole={["admin"]}><AdminPrograms /></ProtectedRoute>} />
+          <Route path="/admin/tournaments" element={<ProtectedRoute requiredRole={["admin"]}><AdminTournaments /></ProtectedRoute>} />
+          <Route path="/admin/tournaments/:leagueId" element={<ProtectedRoute requiredRole={["admin"]}><AdminTournaments /></ProtectedRoute>} />
+          <Route path="/admin/tournaments/:leagueId/seasons/:seasonId" element={<ProtectedRoute requiredRole={["admin"]}><AdminTournaments /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute requiredRole={["admin"]}><AdminSettings /></ProtectedRoute>} />
           <Route path="/theory-ai" element={<ProtectedRoute requiredRole={["swinger","admin"]}><SwingerTheoryAI /></ProtectedRoute>} />
         </Route>
