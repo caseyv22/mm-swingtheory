@@ -467,9 +467,9 @@ export default function App() {
           <Route path="/admin/members" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
           <Route path="/admin/members/:id" element={<ProtectedRoute requiredRole={["admin"]}><AdminMembers /></ProtectedRoute>} />
           <Route path="/admin/programs" element={<ProtectedRoute requiredRole={["admin"]}><AdminPrograms /></ProtectedRoute>} />
-          <Route path="/admin/tournaments" element={<ProtectedRoute requiredRole={["admin"]}><AdminTournaments /></ProtectedRoute>} />
-          <Route path="/admin/tournaments/:leagueId" element={<ProtectedRoute requiredRole={["admin"]}><AdminTournaments /></ProtectedRoute>} />
-          <Route path="/admin/tournaments/:leagueId/seasons/:seasonId" element={<ProtectedRoute requiredRole={["admin"]}><AdminTournaments /></ProtectedRoute>} />
+          <Route path="/admin/leagues" element={<ProtectedRoute requiredRole={["admin"]}><AdminTournaments /></ProtectedRoute>} />
+          <Route path="/admin/leagues/:leagueId" element={<ProtectedRoute requiredRole={["admin"]}><AdminTournaments /></ProtectedRoute>} />
+          <Route path="/admin/leagues/:leagueId/seasons/:seasonId" element={<ProtectedRoute requiredRole={["admin"]}><AdminTournaments /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute requiredRole={["admin"]}><AdminSettings /></ProtectedRoute>} />
           <Route path="/theory-ai" element={<ProtectedRoute requiredRole={["swinger","admin"]}><SwingerTheoryAI /></ProtectedRoute>} />
         </Route>
