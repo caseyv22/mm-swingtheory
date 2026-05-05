@@ -13,6 +13,17 @@ import {
   welcomeEmail,
   passwordResetEmail,
 } from './lib/email.js'
+import {
+  leaguePointsForPlacement,
+  fedexPointsForPlacement,
+  normalizePlacement,
+  normalizeHole,
+  normalizeNine,
+  normalizeSlot,
+  composeTeamName,
+  MAX_TEAMS_PER_LEAGUE,
+  DEFAULT_SEASON_WEEKS,
+} from './lib/tournamentPoints.js'
 
 const app = new Hono()
 
@@ -2786,6 +2797,621 @@ app.get('/admin/shifts/metrics', requireAdmin, async (c) => {
 
   return c.json({ metrics: Object.values(byUser) })
 })
+
+// ─── TOURNAMENTS (Admin only) ────────────────────────────────────────────────
+//
+// Module: Monday League / FedEx tracking. Admin-only.
+//
+// Schema:
+//   tournament_leagues   — top-level container (e.g. "Monday League").
+//   tournament_teams     — fixed pairings within a league. Stores player1 +
+//                          player2 (individuals, used for CTP picking) plus
+//                          a denormalized name (defaults to "P1 & P2" but
+//                          can be a custom team name like "Cobra Kai").
+//                          fedex_carry_in stores pre-platform carry-in.
+//   tournament_seasons   — a competition window (default 4 weeks).
+//   tournament_results   — one row per (season, team, week_number) with a
+//                          placement 1..6. NULL placement = team didn't
+//                          compete that week (worth 0 pts).
+//   tournament_weeks     — per-week metadata (course played, CTP hole, CTP
+//                          winner). One row per (season, week_number),
+//                          created lazily on first edit.
+//
+// Points are derived in code from placement (see lib/tournamentPoints.js) and
+// never stored on the row, so changing the points table never requires a
+// backfill. Standings are computed in the GET handler and returned alongside
+// the raw cells, so the frontend only needs ONE fetch per tab navigation.
+//
+// Idempotent UPSERT pattern for results: PUT /admin/tournaments/seasons/:id/results
+// takes (team_id, week_number, placement) and either inserts a new row or
+// replaces the existing placement. Placement = null → DELETEs the cell so the
+// table stays sparse (matches the "didn't compete" state cleanly).
+//
+// Max 6 teams per league (see MAX_TEAMS_PER_LEAGUE). Enforced at create time.
+// Placement uniqueness per (season, week) is enforced server-side.
+
+// GET /admin/tournaments — overview (list of leagues with team/season counts)
+app.get('/admin/tournaments', requireAdmin, async (c) => {
+  const leagues = await c.env.DB.prepare(`
+    SELECT l.id, l.name, l.night_of_week, l.status, l.created_at,
+           (SELECT COUNT(*) FROM tournament_teams t WHERE t.league_id = l.id AND t.active = 1) AS team_count,
+           (SELECT COUNT(*) FROM tournament_seasons s WHERE s.league_id = l.id) AS season_count
+    FROM tournament_leagues l
+    ORDER BY l.created_at ASC
+  `).all()
+  return c.json({ leagues: leagues.results })
+})
+
+// POST /admin/tournaments/leagues — create league
+app.post('/admin/tournaments/leagues', requireAdmin, async (c) => {
+  const body = await c.req.json()
+  const name = (body.name || '').trim()
+  if (!name) return c.json({ error: 'Name is required' }, 400)
+  const night = Number.isInteger(body.night_of_week) ? body.night_of_week : 1
+  if (night < 0 || night > 6) return c.json({ error: 'night_of_week must be 0..6' }, 400)
+
+  const id = 'tlg_' + uid()
+  await c.env.DB.prepare(`
+    INSERT INTO tournament_leagues (id, name, night_of_week, status)
+    VALUES (?, ?, ?, 'active')
+  `).bind(id, name, night).run()
+
+  return c.json({ ok: true, id })
+})
+
+// PUT /admin/tournaments/leagues/:id — rename / change night / archive
+app.put('/admin/tournaments/leagues/:id', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const body = await c.req.json()
+  const league = await c.env.DB.prepare('SELECT * FROM tournament_leagues WHERE id = ?').bind(id).first()
+  if (!league) return c.json({ error: 'League not found' }, 404)
+
+  const name = body.name === undefined ? league.name : (body.name || '').trim()
+  if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
+  const night = body.night_of_week === undefined ? league.night_of_week : body.night_of_week
+  if (!Number.isInteger(night) || night < 0 || night > 6) {
+    return c.json({ error: 'night_of_week must be 0..6' }, 400)
+  }
+  const status = body.status === undefined ? league.status : body.status
+  if (!['active', 'archived'].includes(status)) {
+    return c.json({ error: 'status must be active or archived' }, 400)
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE tournament_leagues SET name = ?, night_of_week = ?, status = ? WHERE id = ?
+  `).bind(name, night, status, id).run()
+  return c.json({ ok: true })
+})
+
+// DELETE /admin/tournaments/leagues/:id — delete league + all dependent rows
+app.delete('/admin/tournaments/leagues/:id', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const league = await c.env.DB.prepare('SELECT id FROM tournament_leagues WHERE id = ?').bind(id).first()
+  if (!league) return c.json({ error: 'League not found' }, 404)
+
+  // Manual cascade (D1 doesn't enforce FK CASCADE by default in this schema).
+  // Order: weeks → results → seasons → teams → league.
+  await c.env.DB.prepare(`
+    DELETE FROM tournament_weeks
+    WHERE season_id IN (SELECT id FROM tournament_seasons WHERE league_id = ?)
+  `).bind(id).run()
+  await c.env.DB.prepare(`
+    DELETE FROM tournament_results
+    WHERE season_id IN (SELECT id FROM tournament_seasons WHERE league_id = ?)
+  `).bind(id).run()
+  await c.env.DB.prepare('DELETE FROM tournament_seasons WHERE league_id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM tournament_teams WHERE league_id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM tournament_leagues WHERE id = ?').bind(id).run()
+
+  return c.json({ ok: true })
+})
+
+// GET /admin/tournaments/leagues/:id — full league payload (teams + seasons + fedex)
+app.get('/admin/tournaments/leagues/:id', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const league = await c.env.DB.prepare('SELECT * FROM tournament_leagues WHERE id = ?').bind(id).first()
+  if (!league) return c.json({ error: 'League not found' }, 404)
+
+  const teams = await c.env.DB.prepare(`
+    SELECT id, league_id, name, player1, player2, fedex_carry_in, active, created_at
+    FROM tournament_teams WHERE league_id = ? ORDER BY created_at ASC
+  `).bind(id).all()
+
+  const seasons = await c.env.DB.prepare(`
+    SELECT id, league_id, name, season_number, weeks, status, started_at, created_at
+    FROM tournament_seasons WHERE league_id = ? ORDER BY season_number ASC
+  `).bind(id).all()
+
+  // Pull every result row for every season in this league in one query.
+  const results = await c.env.DB.prepare(`
+    SELECT r.season_id, r.team_id, r.week_number, r.placement
+    FROM tournament_results r
+    JOIN tournament_seasons s ON r.season_id = s.id
+    WHERE s.league_id = ?
+  `).bind(id).all()
+
+  const fedex = computeFedexStandings(teams.results, seasons.results, results.results)
+
+  return c.json({
+    league,
+    teams: teams.results,
+    seasons: seasons.results,
+    fedex,
+  })
+})
+
+// POST /admin/tournaments/leagues/:id/teams — create team in a league
+app.post('/admin/tournaments/leagues/:id/teams', requireAdmin, async (c) => {
+  const { id: leagueId } = c.req.param()
+  const body = await c.req.json()
+  const player1 = (body.player1 || '').trim() || null
+  const player2 = (body.player2 || '').trim() || null
+  // If caller didn't pass a `name`, auto-compose from the players. If neither
+  // a name nor any players were provided, reject — we need *something* to
+  // display.
+  const composed = composeTeamName(player1, player2)
+  const name = (body.name || '').trim() || composed
+  if (!name) return c.json({ error: 'Provide a team name or at least one player' }, 400)
+
+  const league = await c.env.DB.prepare('SELECT id FROM tournament_leagues WHERE id = ?').bind(leagueId).first()
+  if (!league) return c.json({ error: 'League not found' }, 404)
+
+  // Enforce 6-team max per league (active teams only).
+  const activeCountRow = await c.env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM tournament_teams WHERE league_id = ? AND active = 1'
+  ).bind(leagueId).first()
+  if ((activeCountRow?.n || 0) >= MAX_TEAMS_PER_LEAGUE) {
+    return c.json({ error: `Max ${MAX_TEAMS_PER_LEAGUE} active teams per league` }, 400)
+  }
+
+  // Case-insensitive uniqueness check within the league.
+  const dup = await c.env.DB.prepare(
+    'SELECT id FROM tournament_teams WHERE league_id = ? AND LOWER(name) = LOWER(?) AND active = 1'
+  ).bind(leagueId, name).first()
+  if (dup) return c.json({ error: 'A team with this name already exists in this league' }, 400)
+
+  const carryIn = Number.isFinite(body.fedex_carry_in) ? Math.max(0, Math.floor(body.fedex_carry_in)) : 0
+
+  const id = 'tt_' + uid()
+  await c.env.DB.prepare(`
+    INSERT INTO tournament_teams (id, league_id, name, player1, player2, fedex_carry_in, active)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+  `).bind(id, leagueId, name, player1, player2, carryIn).run()
+
+  return c.json({ ok: true, id })
+})
+
+// PUT /admin/tournaments/teams/:id — rename / set carry-in / archive
+app.put('/admin/tournaments/teams/:id', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const body = await c.req.json()
+  const team = await c.env.DB.prepare('SELECT * FROM tournament_teams WHERE id = ?').bind(id).first()
+  if (!team) return c.json({ error: 'Team not found' }, 404)
+
+  // Player edits.
+  const player1 = body.player1 === undefined ? team.player1 : ((body.player1 || '').trim() || null)
+  const player2 = body.player2 === undefined ? team.player2 : ((body.player2 || '').trim() || null)
+
+  // Name resolution: if caller passed a `name`, use it. Otherwise, if either
+  // player field changed, recompose; else keep the current name.
+  let name
+  if (body.name !== undefined) {
+    name = (body.name || '').trim()
+  } else if (body.player1 !== undefined || body.player2 !== undefined) {
+    name = composeTeamName(player1, player2) || team.name
+  } else {
+    name = team.name
+  }
+  if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
+
+  const carryIn = body.fedex_carry_in === undefined
+    ? team.fedex_carry_in
+    : Math.max(0, Math.floor(Number(body.fedex_carry_in) || 0))
+  const active = body.active === undefined ? team.active : (body.active ? 1 : 0)
+
+  // Re-check uniqueness if name is changing (case-insensitive, only against active teams).
+  if (name.toLowerCase() !== (team.name || '').toLowerCase()) {
+    const dup = await c.env.DB.prepare(
+      'SELECT id FROM tournament_teams WHERE league_id = ? AND LOWER(name) = LOWER(?) AND active = 1 AND id != ?'
+    ).bind(team.league_id, name, id).first()
+    if (dup) return c.json({ error: 'A team with this name already exists in this league' }, 400)
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE tournament_teams
+    SET name = ?, player1 = ?, player2 = ?, fedex_carry_in = ?, active = ?
+    WHERE id = ?
+  `).bind(name, player1, player2, carryIn, active, id).run()
+  return c.json({ ok: true })
+})
+
+// DELETE /admin/tournaments/teams/:id — hard delete (with results + CTP refs)
+app.delete('/admin/tournaments/teams/:id', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const team = await c.env.DB.prepare('SELECT id FROM tournament_teams WHERE id = ?').bind(id).first()
+  if (!team) return c.json({ error: 'Team not found' }, 404)
+
+  // Null-out CTP winner pointers in any week metadata that referenced this
+  // team so we don't leave dangling references.
+  await c.env.DB.prepare(
+    'UPDATE tournament_weeks SET ctp_winner_team_id = NULL, ctp_winner_slot = NULL WHERE ctp_winner_team_id = ?'
+  ).bind(id).run()
+  await c.env.DB.prepare('DELETE FROM tournament_results WHERE team_id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM tournament_teams WHERE id = ?').bind(id).run()
+  return c.json({ ok: true })
+})
+
+// POST /admin/tournaments/leagues/:id/seasons — create season
+app.post('/admin/tournaments/leagues/:id/seasons', requireAdmin, async (c) => {
+  const { id: leagueId } = c.req.param()
+  const body = await c.req.json()
+  const league = await c.env.DB.prepare('SELECT id FROM tournament_leagues WHERE id = ?').bind(leagueId).first()
+  if (!league) return c.json({ error: 'League not found' }, 404)
+
+  const maxRow = await c.env.DB.prepare(
+    'SELECT COALESCE(MAX(season_number), 0) AS max_n FROM tournament_seasons WHERE league_id = ?'
+  ).bind(leagueId).first()
+  const nextNumber = (maxRow?.max_n || 0) + 1
+
+  const name = (body.name || `Season ${nextNumber}`).trim()
+  const weeks = Number.isInteger(body.weeks) && body.weeks > 0 && body.weeks <= 52
+    ? body.weeks
+    : DEFAULT_SEASON_WEEKS
+  const startedAt = (body.started_at && /^\d{4}-\d{2}-\d{2}$/.test(body.started_at))
+    ? body.started_at
+    : null
+
+  const id = 'tsn_' + uid()
+  await c.env.DB.prepare(`
+    INSERT INTO tournament_seasons (id, league_id, name, season_number, weeks, status, started_at)
+    VALUES (?, ?, ?, ?, ?, 'active', ?)
+  `).bind(id, leagueId, name, nextNumber, weeks, startedAt).run()
+
+  return c.json({ ok: true, id, season_number: nextNumber })
+})
+
+// PUT /admin/tournaments/seasons/:id — rename / change weeks / change status
+app.put('/admin/tournaments/seasons/:id', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const body = await c.req.json()
+  const season = await c.env.DB.prepare('SELECT * FROM tournament_seasons WHERE id = ?').bind(id).first()
+  if (!season) return c.json({ error: 'Season not found' }, 404)
+
+  const name = body.name === undefined ? season.name : (body.name || '').trim()
+  if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
+  const weeks = body.weeks === undefined ? season.weeks : Number(body.weeks)
+  if (!Number.isInteger(weeks) || weeks < 1 || weeks > 52) {
+    return c.json({ error: 'weeks must be 1..52' }, 400)
+  }
+  const status = body.status === undefined ? season.status : body.status
+  if (!['active', 'completed', 'archived'].includes(status)) {
+    return c.json({ error: 'status must be active, completed, or archived' }, 400)
+  }
+  const startedAt = body.started_at === undefined
+    ? season.started_at
+    : (body.started_at && /^\d{4}-\d{2}-\d{2}$/.test(body.started_at) ? body.started_at : null)
+
+  // If shrinking weeks, prune any results AND week metadata past the new last
+  // week so totals don't include orphaned cells. We surface this as a soft
+  // warning in the UI before submitting.
+  if (weeks < season.weeks) {
+    await c.env.DB.prepare(
+      'DELETE FROM tournament_results WHERE season_id = ? AND week_number > ?'
+    ).bind(id, weeks).run()
+    await c.env.DB.prepare(
+      'DELETE FROM tournament_weeks WHERE season_id = ? AND week_number > ?'
+    ).bind(id, weeks).run()
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE tournament_seasons SET name = ?, weeks = ?, status = ?, started_at = ? WHERE id = ?
+  `).bind(name, weeks, status, startedAt, id).run()
+  return c.json({ ok: true })
+})
+
+// DELETE /admin/tournaments/seasons/:id — delete season + its results + weeks
+app.delete('/admin/tournaments/seasons/:id', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const season = await c.env.DB.prepare('SELECT id FROM tournament_seasons WHERE id = ?').bind(id).first()
+  if (!season) return c.json({ error: 'Season not found' }, 404)
+
+  await c.env.DB.prepare('DELETE FROM tournament_weeks WHERE season_id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM tournament_results WHERE season_id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM tournament_seasons WHERE id = ?').bind(id).run()
+  return c.json({ ok: true })
+})
+
+// GET /admin/tournaments/seasons/:id — full season payload (results grid + standings + week meta)
+//
+// Returns:
+//   - season row
+//   - league row (for breadcrumb)
+//   - teams (active + any team that has results in this season, even if archived)
+//   - results: array of { team_id, week_number, placement }
+//   - week_meta: array of week metadata rows (course, nine, ctp_*)
+//   - standings: derived [{ team_id, name, week_points, total, rank }]
+app.get('/admin/tournaments/seasons/:id', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const season = await c.env.DB.prepare('SELECT * FROM tournament_seasons WHERE id = ?').bind(id).first()
+  if (!season) return c.json({ error: 'Season not found' }, 404)
+  const league = await c.env.DB.prepare(
+    'SELECT id, name, night_of_week, status FROM tournament_leagues WHERE id = ?'
+  ).bind(season.league_id).first()
+
+  // Teams = all currently-active teams in the league + any team referenced by
+  // a result in this season (so deleted/archived teams that have history
+  // don't disappear from the grid).
+  const teams = await c.env.DB.prepare(`
+    SELECT id, league_id, name, player1, player2, fedex_carry_in, active, created_at
+    FROM tournament_teams
+    WHERE league_id = ? AND (
+      active = 1
+      OR id IN (SELECT DISTINCT team_id FROM tournament_results WHERE season_id = ?)
+    )
+    ORDER BY created_at ASC
+  `).bind(season.league_id, id).all()
+
+  const results = await c.env.DB.prepare(`
+    SELECT team_id, week_number, placement
+    FROM tournament_results WHERE season_id = ?
+  `).bind(id).all()
+
+  const weekMeta = await c.env.DB.prepare(`
+    SELECT week_number, course_name, nine, ctp_hole, ctp_winner_team_id, ctp_winner_slot
+    FROM tournament_weeks WHERE season_id = ? ORDER BY week_number ASC
+  `).bind(id).all()
+
+  const standings = computeSeasonStandings(teams.results, results.results, season.weeks)
+
+  return c.json({
+    season,
+    league,
+    teams: teams.results,
+    results: results.results,
+    week_meta: weekMeta.results,
+    standings,
+  })
+})
+
+// PUT /admin/tournaments/seasons/:id/results — upsert a single (team, week) cell
+app.put('/admin/tournaments/seasons/:id/results', requireAdmin, async (c) => {
+  const { id: seasonId } = c.req.param()
+  const body = await c.req.json()
+  const teamId = body.team_id
+  const week = Number(body.week_number)
+  const placementCheck = normalizePlacement(body.placement)
+  if (!placementCheck.ok) return c.json({ error: 'placement must be 1..6 or null' }, 400)
+  const placement = placementCheck.value
+
+  if (!teamId) return c.json({ error: 'team_id is required' }, 400)
+  if (!Number.isInteger(week) || week < 1) return c.json({ error: 'week_number must be a positive integer' }, 400)
+
+  const season = await c.env.DB.prepare('SELECT * FROM tournament_seasons WHERE id = ?').bind(seasonId).first()
+  if (!season) return c.json({ error: 'Season not found' }, 404)
+  if (week > season.weeks) {
+    return c.json({ error: `week_number must be 1..${season.weeks} for this season` }, 400)
+  }
+
+  const team = await c.env.DB.prepare(
+    'SELECT id FROM tournament_teams WHERE id = ? AND league_id = ?'
+  ).bind(teamId, season.league_id).first()
+  if (!team) return c.json({ error: 'Team not found in this league' }, 404)
+
+  // Clear cell.
+  if (placement === null) {
+    await c.env.DB.prepare(
+      'DELETE FROM tournament_results WHERE season_id = ? AND team_id = ? AND week_number = ?'
+    ).bind(seasonId, teamId, week).run()
+  } else {
+    // If another team holds this placement this week, clear theirs.
+    await c.env.DB.prepare(`
+      DELETE FROM tournament_results
+      WHERE season_id = ? AND week_number = ? AND placement = ? AND team_id != ?
+    `).bind(seasonId, week, placement, teamId).run()
+
+    // Upsert.
+    await c.env.DB.prepare(`
+      INSERT INTO tournament_results (id, season_id, team_id, week_number, placement)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(season_id, team_id, week_number)
+      DO UPDATE SET placement = excluded.placement
+    `).bind('tr_' + uid(), seasonId, teamId, week, placement).run()
+  }
+
+  // Recompute and return fresh standings + the full results grid + week meta.
+  const teams = await c.env.DB.prepare(`
+    SELECT id, league_id, name, player1, player2, fedex_carry_in, active, created_at
+    FROM tournament_teams
+    WHERE league_id = ? AND (
+      active = 1
+      OR id IN (SELECT DISTINCT team_id FROM tournament_results WHERE season_id = ?)
+    )
+    ORDER BY created_at ASC
+  `).bind(season.league_id, seasonId).all()
+  const results = await c.env.DB.prepare(`
+    SELECT team_id, week_number, placement FROM tournament_results WHERE season_id = ?
+  `).bind(seasonId).all()
+  const standings = computeSeasonStandings(teams.results, results.results, season.weeks)
+
+  return c.json({ ok: true, results: results.results, standings })
+})
+
+// PUT /admin/tournaments/seasons/:id/weeks/:week — upsert week metadata
+//
+// Body (any subset; only fields explicitly present are written):
+//   { course_name, nine, ctp_hole, ctp_winner_team_id, ctp_winner_slot }
+//
+// Pass an empty string or null to a field to clear it. CTP winner: pass
+// (team_id, slot). To clear the CTP winner, pass team_id = null.
+//
+// Note: ctp_winner_team_id is foreign-keyed, so the team must exist and
+// belong to this league.
+app.put('/admin/tournaments/seasons/:id/weeks/:week', requireAdmin, async (c) => {
+  const { id: seasonId, week: weekParam } = c.req.param()
+  const week = Number(weekParam)
+  const body = await c.req.json()
+
+  const season = await c.env.DB.prepare('SELECT * FROM tournament_seasons WHERE id = ?').bind(seasonId).first()
+  if (!season) return c.json({ error: 'Season not found' }, 404)
+  if (!Number.isInteger(week) || week < 1 || week > season.weeks) {
+    return c.json({ error: `week must be 1..${season.weeks} for this season` }, 400)
+  }
+
+  // Pull existing row (if any) so we can patch only the fields the caller sent.
+  const existing = await c.env.DB.prepare(
+    'SELECT * FROM tournament_weeks WHERE season_id = ? AND week_number = ?'
+  ).bind(seasonId, week).first()
+
+  // Validate + resolve each field: undefined = leave alone, null/'' = clear,
+  // otherwise validate.
+  let courseName = existing?.course_name ?? null
+  if (body.course_name !== undefined) {
+    if (body.course_name === null || body.course_name === '') courseName = null
+    else courseName = String(body.course_name).trim().slice(0, 200) || null
+  }
+
+  let nine = existing?.nine ?? null
+  if (body.nine !== undefined) {
+    const r = normalizeNine(body.nine)
+    if (!r.ok) return c.json({ error: "nine must be 'front' or 'back'" }, 400)
+    nine = r.value
+  }
+
+  let ctpHole = existing?.ctp_hole ?? null
+  if (body.ctp_hole !== undefined) {
+    const r = normalizeHole(body.ctp_hole)
+    if (!r.ok) return c.json({ error: 'ctp_hole must be 1..18 or null' }, 400)
+    ctpHole = r.value
+  }
+
+  let ctpTeamId = existing?.ctp_winner_team_id ?? null
+  let ctpSlot = existing?.ctp_winner_slot ?? null
+  if (body.ctp_winner_team_id !== undefined) {
+    if (body.ctp_winner_team_id === null || body.ctp_winner_team_id === '') {
+      ctpTeamId = null
+      ctpSlot = null
+    } else {
+      const t = await c.env.DB.prepare(
+        'SELECT id FROM tournament_teams WHERE id = ? AND league_id = ?'
+      ).bind(body.ctp_winner_team_id, season.league_id).first()
+      if (!t) return c.json({ error: 'CTP winner team not found in this league' }, 404)
+      ctpTeamId = body.ctp_winner_team_id
+    }
+  }
+  if (body.ctp_winner_slot !== undefined) {
+    const r = normalizeSlot(body.ctp_winner_slot)
+    if (!r.ok) return c.json({ error: "ctp_winner_slot must be 'player1' or 'player2'" }, 400)
+    ctpSlot = r.value
+  }
+  // If we have a team but no slot, that's an inconsistency — reject so we
+  // don't silently store a half-set winner.
+  if (ctpTeamId && !ctpSlot) {
+    return c.json({ error: 'ctp_winner_slot is required when ctp_winner_team_id is set' }, 400)
+  }
+  // If slot but no team, normalize to "no winner" (slot alone is meaningless).
+  if (!ctpTeamId) ctpSlot = null
+
+  if (existing) {
+    await c.env.DB.prepare(`
+      UPDATE tournament_weeks
+      SET course_name = ?, nine = ?, ctp_hole = ?,
+          ctp_winner_team_id = ?, ctp_winner_slot = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(courseName, nine, ctpHole, ctpTeamId, ctpSlot, existing.id).run()
+  } else {
+    await c.env.DB.prepare(`
+      INSERT INTO tournament_weeks
+        (id, season_id, week_number, course_name, nine, ctp_hole, ctp_winner_team_id, ctp_winner_slot)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind('tw_' + uid(), seasonId, week, courseName, nine, ctpHole, ctpTeamId, ctpSlot).run()
+  }
+
+  // Return the freshly-written week + the full week_meta array so the page
+  // can splice in without an extra fetch.
+  const weekMeta = await c.env.DB.prepare(`
+    SELECT week_number, course_name, nine, ctp_hole, ctp_winner_team_id, ctp_winner_slot
+    FROM tournament_weeks WHERE season_id = ? ORDER BY week_number ASC
+  `).bind(seasonId).all()
+
+  return c.json({ ok: true, week_meta: weekMeta.results })
+})
+
+// ─── Tournament helpers (computed in worker, not stored) ─────────────────────
+
+// Compute per-team season standings from raw result rows.
+function computeSeasonStandings(teams, results, weeks) {
+  const byTeam = {}
+  for (const t of teams) {
+    byTeam[t.id] = {
+      team_id: t.id,
+      name: t.name,
+      week_points: new Array(weeks).fill(0),
+      total: 0,
+      rank: 0,
+    }
+  }
+  for (const r of results) {
+    const row = byTeam[r.team_id]
+    if (!row) continue
+    if (r.week_number < 1 || r.week_number > weeks) continue
+    const pts = leaguePointsForPlacement(r.placement)
+    row.week_points[r.week_number - 1] = pts
+    row.total += pts
+  }
+  const arr = Object.values(byTeam)
+  arr.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+  let lastTotal = null
+  let lastRank = 0
+  arr.forEach((row, i) => {
+    if (row.total !== lastTotal) {
+      lastRank = i + 1
+      lastTotal = row.total
+    }
+    row.rank = lastRank
+  })
+  return arr
+}
+
+// Compute FedEx all-time standings across every season in a league.
+function computeFedexStandings(teams, seasons, results) {
+  const seasonOrder = seasons.map(s => s.id)
+  const seasonIndex = Object.fromEntries(seasonOrder.map((sid, i) => [sid, i]))
+
+  const byTeam = {}
+  for (const t of teams) {
+    byTeam[t.id] = {
+      team_id: t.id,
+      name: t.name,
+      active: t.active,
+      carry_in: t.fedex_carry_in || 0,
+      season_points: new Array(seasonOrder.length).fill(0),
+      total: t.fedex_carry_in || 0,
+      rank: 0,
+    }
+  }
+  for (const r of results) {
+    const row = byTeam[r.team_id]
+    if (!row) continue
+    const idx = seasonIndex[r.season_id]
+    if (idx === undefined) continue
+    const pts = fedexPointsForPlacement(r.placement)
+    row.season_points[idx] += pts
+    row.total += pts
+  }
+  const arr = Object.values(byTeam)
+  arr.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+  let lastTotal = null
+  let lastRank = 0
+  arr.forEach((row, i) => {
+    if (row.total !== lastTotal) {
+      lastRank = i + 1
+      lastTotal = row.total
+    }
+    row.rank = lastRank
+  })
+  return arr
+}
 
 // ─── CRON HANDLERS ────────────────────────────────────────────────────────────
 export default {
