@@ -198,7 +198,6 @@ app.post('/webhooks/registry', async (c) => {
   const startTime = payload?.startTime
   const endTime = payload?.endTime
   const customerEmail = payload?.customer?.email
-  const customerName = payload?.customer?.name || ''
   const bay = payload?.bay || null
 
   if (!dateRaw || typeof dateRaw !== 'string') {
@@ -254,15 +253,19 @@ app.post('/webhooks/registry', async (c) => {
   }
 
   // ── 6. Build lesson + insert ─────────────────────────────────────────────
+  // notes is intentionally NULL on webhook-created rows: the `source='webhook'`
+  // column is the source-of-truth for "this came from Registry", and the
+  // instructor-only "Registry" pill on the lesson detail surfaces it in the UI.
+  // Students see the same lesson, so we don't leak customer name/email or
+  // upstream-system identifiers into a field they can read.
   const lessonId = 'lesson_' + uid()
-  const note = `Booked via Registry Golf · Customer: ${customerName || customerEmail}`
 
   try {
     await c.env.DB.prepare(`
       INSERT INTO private_lessons
         (id, instructor_id, student_id, date, start_time, end_time, bay, notes, source, external_ref)
-      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'webhook', ?)
-    `).bind(lessonId, instructorRow.id, date, startTime, endTime, bay, note, bookingId).run()
+      VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, 'webhook', ?)
+    `).bind(lessonId, instructorRow.id, date, startTime, endTime, bay, bookingId).run()
   } catch (err) {
     // Race condition: another concurrent webhook invocation slipped past the
     // pre-check and got here first. The unique index will reject. Treat as
