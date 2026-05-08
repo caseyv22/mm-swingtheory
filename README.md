@@ -1,7 +1,7 @@
 # Swing Theory Booking Platform
 ### Unified Platform Spec — v3.3
 **Last Updated:** May 2026
-**Status:** Phases 1–7 complete · Prod live at `sync.swingtheory.golf` · PWA + Staff Schedule + Registry Golf integration shipped · Program enrollment gating in progress (v3.3)
+**Status:** Phases 1–7 complete · Prod live at `sync.swingtheory.golf` · PWA + Staff Schedule + Registry Golf integration shipped · Program enrollment gating live (v3.3)
 
 ---
 
@@ -802,9 +802,9 @@ All via Resend. Sender: `info@swingtheory.golf`. Domain `swingtheory.golf` is ve
 - **v3.2:** Program Default Instructor on Create modal (was edit-only)
 - **v3.2:** Program Default Instructor backfill — fills empty future sessions silently; clearing to None unconditionally clears all future non-cancelled sessions
 - **v3.2:** Program Default Instructor bulk reassign — confirmation dialog when changing to a different instructor with conflicts ("Replace on all N" / "Only fill X empty" / Cancel)
+- **v3.3:** Program enrollment gating — `enrollments` table + admin Add Member program/instructor selectors + Member profile Enrollments section (add/edit/deactivate/reactivate with branded modals) + Members list "No program assigned" indicator + booking gate on `POST /bookings`, `GET /programs`, `GET /programs/:slug/sessions` (gated behind `ENROLLMENT_ENFORCEMENT` env var, deployed dark, then enabled). Cascade updated to remove enrollments on member delete. Improved empty state on ProgramSelector for unenrolled users.
 
-### In Progress (v3.3)
-- **Program enrollment gating** — `enrollments` table + admin UI on Add Member form (program/instructor selectors) + Member profile (Enrollments section) + booking gate on `POST /bookings` + frontend filtering on ProgramSelector / CalendarPage / ParentHome. Build order: schema → Worker endpoints → Add Member form → Member profile UI → backfill SQL → frontend gating.
+### In Progress / Polish
 - Mobile QA across all roles and flows
 - Edge case error states
 - Iconography pass (consistent lucide-react usage)
