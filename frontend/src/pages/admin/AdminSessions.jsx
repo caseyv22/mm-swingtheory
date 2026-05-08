@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import { api } from '../../lib/api'
 import TypeaheadSelect from '../../components/TypeaheadSelect'
+import ConfirmModal from '../../components/ConfirmModal'
 
 const BAYS = ['Chambers', 'Kapalua', 'Clearwater', 'Spanish']
 
@@ -181,6 +182,7 @@ function RosterPanel({ session, onClose, onUpdate }) {
   const [showCancelForm, setShowCancelForm] = useState(false)
   const [addingInstructor, setAddingInstructor] = useState(false)
   const [newInstructorId, setNewInstructorId] = useState('')
+  const [removeTarget, setRemoveTarget] = useState(null)  // { bookingId, displayName } when confirming removal
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -245,10 +247,16 @@ function RosterPanel({ session, onClose, onUpdate }) {
     finally { setSaving(false) }
   }
 
-  async function handleRemoveBooking(bookingId, displayName) {
-    if (!confirm(`Remove ${displayName} from this session? They will be notified by email.`)) return
+  function handleRemoveBooking(bookingId, displayName) {
+    setRemoveTarget({ bookingId, displayName })
+  }
+
+  async function confirmRemoveBooking() {
+    const target = removeTarget
+    setRemoveTarget(null)
+    if (!target) return
     try {
-      await api.delete(`/admin/bookings/${bookingId}`)
+      await api.delete(`/admin/bookings/${target.bookingId}`)
       // Refresh the roster
       loadRoster()
       onUpdate()
@@ -269,6 +277,7 @@ function RosterPanel({ session, onClose, onUpdate }) {
   const availableInstructors = allInstructors.filter(i => !assignedIds.has(i.id))
 
   return (
+    <>
     <div className="flex flex-col h-full bg-white border-r border-gray-100">
       {toast && <div className="absolute top-4 left-4 z-50 bg-[#064029] text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">{toast}</div>}
 
@@ -438,6 +447,20 @@ function RosterPanel({ session, onClose, onUpdate }) {
         </div>
       </div>
     </div>
+    {removeTarget && (
+      <ConfirmModal
+        title="REMOVE FROM SESSION"
+        subtitle={removeTarget.displayName}
+        confirmLabel="Remove"
+        confirmStyle="red"
+        iconType="warning"
+        onConfirm={confirmRemoveBooking}
+        onClose={() => setRemoveTarget(null)}
+      >
+        <p>Remove this person from the session? They will be notified by email.</p>
+      </ConfirmModal>
+    )}
+    </>
   )
 }
 
