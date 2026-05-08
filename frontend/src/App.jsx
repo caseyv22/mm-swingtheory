@@ -86,7 +86,7 @@ function RoleRouter() {
   if (role === 'parent' && firstLogin) return <Navigate to="/account?onboarding=true" replace />
   if (role === 'parent') return <Navigate to="/parent-home" replace />
   if (role === 'student') return <Navigate to="/programs" replace />
-  if (role === 'instructor') return <Navigate to="/instructor/sessions" replace />
+  if (role === 'instructor') return <Navigate to="/instructor/schedule" replace />
   if (role === 'swinger') return <Navigate to="/admin" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
   return <Navigate to="/programs" replace />
