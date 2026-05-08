@@ -328,7 +328,7 @@ function LessonCard({ lesson, onClick }) {
           <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
             <p className="text-xs font-semibold text-[#1D9E75] uppercase tracking-wider">Private Lesson</p>
             {isWebhookSourced && (
-              <span className="text-[9px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-1.5 py-0.5 rounded-full">Tee Time</span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-1.5 py-0.5 rounded-full">Registry</span>
             )}
           </div>
           <p className="text-sm font-semibold text-gray-900">{formatDateShort(lesson.date)}</p>
