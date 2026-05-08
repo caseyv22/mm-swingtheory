@@ -107,7 +107,7 @@ GitHub repo: `caseyv22/mm-swingtheory`
 - Can check in students on their assigned sessions
 - Can manually add and remove students on their assigned sessions
 - Cannot edit session capacity, cancel sessions, or change instructor assignments
-- Nav: Sessions → Students → Schedule → Account
+- Nav: Schedule → Students → Sessions → Account
 
 ### Parent
 - Books Mini Mulligans sessions for their child (one child per account)
@@ -572,7 +572,7 @@ frontend/src/
 - `parent` + first login + no child → `/account?onboarding=true`
 - `parent` → `/home` (ParentHome)
 - `student` → `/programs`
-- `instructor` → `/instructor/sessions`
+- `instructor` → `/instructor/schedule`
 - `swinger` → `/admin` (Sessions module)
 - `admin` → `/admin`
 - Any role with `must_change_password=1` → `/account?change-password=true`
@@ -592,7 +592,7 @@ The app is installable as a PWA on iOS and Android. Manifest at `/manifest.json`
 |---|---|
 | Parent | Home / Bookings / Account |
 | Student | Programs / Bookings / Account |
-| Instructor | Sessions / Students / Schedule / Account |
+| Instructor | Schedule / Students / Sessions / Account |
 | Swinger | Sessions / Schedule / Theory AI / Account |
 | Admin | (no bottom nav — sidebar persists in PWA too) |
 
@@ -803,6 +803,8 @@ All via Resend. Sender: `info@swingtheory.golf`. Domain `swingtheory.golf` is ve
 - **v3.2:** Program Default Instructor backfill — fills empty future sessions silently; clearing to None unconditionally clears all future non-cancelled sessions
 - **v3.2:** Program Default Instructor bulk reassign — confirmation dialog when changing to a different instructor with conflicts ("Replace on all N" / "Only fill X empty" / Cancel)
 - **v3.3:** Program enrollment gating — `enrollments` table + admin Add Member program/instructor selectors + Member profile Enrollments section (add/edit/deactivate/reactivate with branded modals) + Members list "No program assigned" indicator + booking gate on `POST /bookings`, `GET /programs`, `GET /programs/:slug/sessions` (gated behind `ENROLLMENT_ENFORCEMENT` env var, deployed dark, then enabled). Cascade updated to remove enrollments on member delete. Improved empty state on ProgramSelector for unenrolled users.
+- **v3.3:** AdminMembers stale-form bugfix — `MemberDetail` now resets `form` and transient UI flags in the `useEffect` keyed on `member.id`, fixing a bug where switching between members in the left list left the previously-selected member's data in the edit form (would have silently overwritten the wrong record on Save).
+- **v3.3:** Instructor nav reorder — Schedule → Students → Sessions → Account (was Sessions → Students → Schedule → Account); post-login landing changed from `/instructor/sessions` to `/instructor/schedule`. Updated in `NavBar.jsx`, `BottomNav.jsx`, and the RoleRouter in `App.jsx`. NavBar label "Calendar" renamed to "Schedule" to match the page title.
 
 ### In Progress / Polish
 - Mobile QA across all roles and flows
@@ -856,6 +858,8 @@ All via Resend. Sender: `info@swingtheory.golf`. Domain `swingtheory.golf` is ve
 | 31 | Webhook source tagging via `private_lessons.source` (`'manual'` \| `'webhook'`); idempotency via unique partial index on `external_ref`; email-mismatched webhooks silently dropped |
 | 32 | Promoting a user to `role='instructor'` via admin auto-creates the corresponding `instructors` row; demoting leaves the orphan row in place to preserve referenced data (private lessons, sessions) |
 | 33 | Member delete returns 500 with `failed_steps` array if the cascade can't complete and the `users` row still exists; no more silent success when deletes are blocked by FK constraints |
+| 34 | Registry webhook does NOT email the matched instructor — discovery is in-app via the amber "Unassigned" badge on the lesson detail page (avoids notification overload) |
+| 35 | Instructor nav order: Schedule → Students → Sessions → Account; post-login lands on `/instructor/schedule` (Schedule first because instructors live in their lesson calendar day-to-day) |
 
 ---
 
