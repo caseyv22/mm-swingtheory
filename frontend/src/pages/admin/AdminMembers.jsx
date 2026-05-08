@@ -371,12 +371,13 @@ function AssignInstructorModal({ student, currentAssignments, allInstructors, on
 // inactive enrollments, lets admin edit dates inline, deactivate, or remove.
 function EnrollmentsSection({ memberId, memberRole, enrollments, onRefresh, onAddClick, onToast }) {
   const [busyId, setBusyId] = useState(null)
+  const [confirmTarget, setConfirmTarget] = useState(null)  // { id, program_name } when confirming deactivate
 
-  async function deactivate(enrollmentId) {
-    if (!confirm('Deactivate this enrollment? The user will no longer be able to book this program. You can reactivate later.')) return
-    setBusyId(enrollmentId)
+  async function deactivate(enrollment) {
+    setBusyId(enrollment.id)
+    setConfirmTarget(null)
     try {
-      await api.delete(`/admin/enrollments/${enrollmentId}`)
+      await api.delete(`/admin/enrollments/${enrollment.id}`)
       onRefresh()
       onToast('Enrollment deactivated')
     } catch (e) {
@@ -404,6 +405,15 @@ function EnrollmentsSection({ memberId, memberRole, enrollments, onRefresh, onAd
 
   return (
     <div>
+      {confirmTarget && (
+        <ConfirmDeactivateEnrollmentModal
+          programName={confirmTarget.program_name}
+          loading={busyId === confirmTarget.id}
+          onClose={() => setConfirmTarget(null)}
+          onConfirm={() => deactivate(confirmTarget)}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
           Program Enrollments
@@ -430,7 +440,7 @@ function EnrollmentsSection({ memberId, memberRole, enrollments, onRefresh, onAd
               key={e.id}
               enrollment={e}
               busy={busyId === e.id}
-              onDeactivate={() => deactivate(e.id)}
+              onDeactivate={() => setConfirmTarget(e)}
               onUpdate={onRefresh}
               onToast={onToast}
             />
@@ -460,6 +470,39 @@ function EnrollmentsSection({ memberId, memberRole, enrollments, onRefresh, onAd
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Confirmation modal for deactivating an enrollment — matches ConfirmDeleteModal styling
+function ConfirmDeactivateEnrollmentModal({ programName, onClose, onConfirm, loading }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-display text-lg text-gray-900 tracking-wide">REMOVE ENROLLMENT</h3>
+              <p className="text-sm text-gray-500">{programName}</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            The user will no longer be able to book this program. Existing bookings stay intact — you'll need to cancel those separately if needed. You can reactivate this enrollment later.
+          </p>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Cancel</button>
+          <button onClick={onConfirm} disabled={loading}
+            className="px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
+            {loading ? 'Removing…' : 'Remove Enrollment'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
