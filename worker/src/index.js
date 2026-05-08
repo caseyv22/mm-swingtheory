@@ -388,15 +388,19 @@ app.post('/auth/forgot-password', async (c) => {
     { headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` } }
   )
   if (!lookupRes.ok) {
+    const lookupErr = await lookupRes.text()
+    console.error('[forgot-password] Clerk lookup failed:', lookupRes.status, lookupErr)
     // Don't reveal whether the email exists — return success either way
     return c.json({ ok: true })
   }
   const users = await lookupRes.json()
   if (!Array.isArray(users) || users.length === 0) {
+    console.warn('[forgot-password] No Clerk user found for', email)
     return c.json({ ok: true })
   }
 
   const clerkUserId = users[0].id
+  console.log('[forgot-password] Found Clerk user:', clerkUserId, 'for', email)
 
   // Generate password reset link
   const resetRes = await fetch(
@@ -412,12 +416,15 @@ app.post('/auth/forgot-password', async (c) => {
   )
 
   if (!resetRes.ok) {
-    console.error('Reset link generation failed')
+    // Log the FULL Clerk error so we can see what they want
+    const errText = await resetRes.text()
+    console.error('[forgot-password] Reset link generation failed:', resetRes.status, errText)
     return c.json({ ok: true })
   }
 
   const resetData = await resetRes.json()
   const resetUrl = resetData.url
+  console.log('[forgot-password] Reset URL generated successfully')
 
   // Look up user in D1 for full name
   const dbUser = await c.env.DB.prepare(
