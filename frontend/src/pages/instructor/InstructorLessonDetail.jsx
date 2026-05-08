@@ -224,7 +224,14 @@ export default function InstructorLessonDetail() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-2">
                 {isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>}
-                {isWebhookSourced && <span className="text-[10px] font-bold uppercase tracking-wider text-[#1D9E75] bg-[#E1F5EE] px-2 py-0.5 rounded-full">Tee Time Booking</span>}
+                {isWebhookSourced && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#1D9E75] bg-[#E1F5EE] px-2 py-0.5 rounded-full">
+                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.828 10.172a4 4 0 015.656 0l1 1a4 4 0 010 5.656l-3 3a4 4 0 01-5.656 0M10.172 13.828a4 4 0 01-5.656 0l-1-1a4 4 0 010-5.656l3-3a4 4 0 015.656 0" />
+                    </svg>
+                    Registry
+                  </span>
+                )}
                 {isUnassigned && !isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Unassigned</span>}
               </div>
               <h1 className="font-display text-2xl text-[#064029] tracking-wide leading-none">{formatDate(lesson.date).toUpperCase()}</h1>
