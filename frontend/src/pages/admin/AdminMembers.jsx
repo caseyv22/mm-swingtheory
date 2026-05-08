@@ -366,11 +366,362 @@ function AssignInstructorModal({ student, currentAssignments, allInstructors, on
   )
 }
 
+// ─── Enrollments Section (v3.3) ───────────────────────────────────────────────
+// Renders inside MemberDetail for parent/student roles. Lists active and
+// inactive enrollments, lets admin edit dates inline, deactivate, or remove.
+function EnrollmentsSection({ memberId, memberRole, enrollments, onRefresh, onAddClick, onToast }) {
+  const [busyId, setBusyId] = useState(null)
+
+  async function deactivate(enrollmentId) {
+    if (!confirm('Deactivate this enrollment? The user will no longer be able to book this program. You can reactivate later.')) return
+    setBusyId(enrollmentId)
+    try {
+      await api.delete(`/admin/enrollments/${enrollmentId}`)
+      onRefresh()
+      onToast('Enrollment deactivated')
+    } catch (e) {
+      onToast(e.message || 'Failed to deactivate')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function reactivate(enrollmentId) {
+    setBusyId(enrollmentId)
+    try {
+      await api.put(`/admin/enrollments/${enrollmentId}`, { is_active: true })
+      onRefresh()
+      onToast('Enrollment reactivated')
+    } catch (e) {
+      onToast(e.message || 'Failed to reactivate')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const active = enrollments.filter(e => e.is_active)
+  const inactive = enrollments.filter(e => !e.is_active)
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          Program Enrollments
+          {active.length > 0 && <span className="ml-1 text-gray-400 normal-case font-normal">({active.length})</span>}
+        </p>
+        <button onClick={onAddClick} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">
+          + Add Program
+        </button>
+      </div>
+
+      {active.length === 0 && inactive.length === 0 ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex gap-3">
+          <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <div className="text-xs text-amber-800 leading-relaxed">
+            Not enrolled in any programs. This {memberRole} won't be able to book any group sessions until you add at least one program.
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {active.map(e => (
+            <EnrollmentRow
+              key={e.id}
+              enrollment={e}
+              busy={busyId === e.id}
+              onDeactivate={() => deactivate(e.id)}
+              onUpdate={onRefresh}
+              onToast={onToast}
+            />
+          ))}
+          {inactive.length > 0 && (
+            <details className="mt-3">
+              <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 select-none">
+                {inactive.length} inactive enrollment{inactive.length !== 1 ? 's' : ''}
+              </summary>
+              <div className="mt-2 space-y-2">
+                {inactive.map(e => (
+                  <div key={e.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 opacity-75">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-700 truncate">{e.program_name}</p>
+                      <p className="text-[11px] text-gray-500">Inactive · last updated {new Date(e.updated_at + 'Z').toLocaleDateString()}</p>
+                    </div>
+                    <button
+                      onClick={() => reactivate(e.id)}
+                      disabled={busyId === e.id}
+                      className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029] disabled:opacity-50 flex-shrink-0 ml-3">
+                      Reactivate
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Single active enrollment row with inline date editor
+function EnrollmentRow({ enrollment, busy, onDeactivate, onUpdate, onToast }) {
+  const [editing, setEditing] = useState(false)
+  const [startDate, setStartDate] = useState(enrollment.start_date || '')
+  const [endDate, setEndDate] = useState(enrollment.end_date || '')
+  const [saving, setSaving] = useState(false)
+
+  async function saveDates() {
+    setSaving(true)
+    try {
+      await api.put(`/admin/enrollments/${enrollment.id}`, {
+        start_date: startDate || null,
+        end_date: endDate || null,
+      })
+      onUpdate()
+      onToast('Dates updated')
+      setEditing(false)
+    } catch (e) {
+      onToast(e.message || 'Failed to update')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function cancelEdit() {
+    setStartDate(enrollment.start_date || '')
+    setEndDate(enrollment.end_date || '')
+    setEditing(false)
+  }
+
+  // Format date for display: ISO yyyy-mm-dd → "May 8, 2026"
+  function fmt(dateStr) {
+    if (!dateStr) return null
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  const programInactive = !enrollment.program_active
+
+  return (
+    <div className={`border rounded-lg p-3 ${programInactive ? 'border-amber-200 bg-amber-50/50' : 'border-gray-200 bg-white'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-[#064029] truncate">{enrollment.program_name}</p>
+            {programInactive && (
+              <span className="text-[10px] uppercase tracking-wider font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">Program inactive</span>
+            )}
+          </div>
+          {!editing && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              {fmt(enrollment.start_date) ? `Starts ${fmt(enrollment.start_date)}` : 'No start date'}
+              <span className="mx-1.5 text-gray-300">·</span>
+              {fmt(enrollment.end_date) ? `Ends ${fmt(enrollment.end_date)}` : 'Ongoing'}
+            </p>
+          )}
+        </div>
+        {!editing && (
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <button
+              onClick={() => setEditing(true)}
+              className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]"
+            >
+              Edit
+            </button>
+            <button
+              onClick={onDeactivate}
+              disabled={busy}
+              className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+            >
+              Remove
+            </button>
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Start (optional)</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">End (optional)</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            Leave both empty for an ongoing enrollment with no date constraints. Set an end date for term-bound programs.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button onClick={cancelEdit} className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800">Cancel</button>
+            <button
+              onClick={saveDates}
+              disabled={saving}
+              className="px-3 py-1.5 bg-[#064029] text-white text-xs font-semibold rounded hover:bg-[#085041] disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save Dates'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Modal for adding a new enrollment to an existing member
+function AddEnrollmentModal({ memberId, existingEnrollments, memberRole, onClose, onSuccess }) {
+  const [programs, setPrograms] = useState([])
+  const [programId, setProgramId] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get('/admin/programs')
+      .then(d => setPrograms((d.programs || []).filter(p => p.is_active)))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  // Filter to programs the member's role can book, AND that they aren't already
+  // actively enrolled in. Inactive enrollments are still selectable — selecting
+  // one will reactivate it via the idempotent POST.
+  const activeProgramIds = new Set(existingEnrollments.filter(e => e.is_active).map(e => e.program_id))
+  const availablePrograms = programs.filter(p => {
+    if (activeProgramIds.has(p.id)) return false
+    if (memberRole === 'parent') return p.booker_type === 'parent'
+    if (memberRole === 'student') return p.booker_type === 'student'
+    return true
+  })
+
+  // Auto-fill end date from program's end_date if program has one
+  useEffect(() => {
+    if (!programId) { setEndDate(''); return }
+    const prog = programs.find(p => p.id === programId)
+    if (prog?.end_date) setEndDate(prog.end_date)
+    else setEndDate('')
+  }, [programId, programs])
+
+  async function handleSave() {
+    if (!programId) {
+      setError('Pick a program')
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      await api.post(`/admin/members/${memberId}/enrollments`, {
+        program_id: programId,
+        start_date: startDate || null,
+        end_date: endDate || null,
+      })
+      onSuccess()
+    } catch (e) {
+      setError(e.message || 'Failed to add enrollment')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="font-display text-xl text-[#064029] tracking-wide">ADD ENROLLMENT</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>
+          )}
+
+          {loading ? (
+            <p className="text-sm text-gray-500">Loading programs…</p>
+          ) : availablePrograms.length === 0 ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600">
+              No additional programs available — this {memberRole} is already enrolled in every active program for their role.
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Program</label>
+                <select
+                  value={programId}
+                  onChange={e => setProgramId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                >
+                  <option value="">— Select a program —</option>
+                  {availablePrograms.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Both dates are optional. Leave empty for an ongoing enrollment. Set an end date for term-bound programs (e.g., Summer Program ending in August).
+              </p>
+            </>
+          )}
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Cancel</button>
+          {availablePrograms.length > 0 && (
+            <button
+              onClick={handleSave}
+              disabled={saving || !programId}
+              className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Adding…' : 'Add Enrollment'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Member Detail Panel ───────────────────────────────────────────────────────
 function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
   const [bookings, setBookings] = useState([])
   const [assignedInstructors, setAssignedInstructors] = useState([])
   const [assignedStudents, setAssignedStudents] = useState([])
+  const [enrollments, setEnrollments] = useState([])
+  const [showAddEnrollment, setShowAddEnrollment] = useState(false)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ full_name: member.full_name, phone: member.phone || '', status: member.status, role: member.role })
   const [saving, setSaving] = useState(false)
@@ -386,12 +737,19 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
 
   useEffect(() => {
     api.get(`/admin/members/${member.id}/bookings`).then(d => setBookings(d.bookings || []))
-    if (member.role === 'student' || member.role === 'parent') fetchAssignedInstructors()
+    if (member.role === 'student' || member.role === 'parent') {
+      fetchAssignedInstructors()
+      fetchEnrollments()
+    }
     if (member.role === 'instructor') api.get(`/admin/members/${member.id}/instructor-students`).then(d => setAssignedStudents(d.students || []))
   }, [member.id])
 
   async function fetchAssignedInstructors() {
     try { const data = await api.get(`/admin/members/${member.id}/assigned-instructors`); setAssignedInstructors(data.instructors || []) } catch {}
+  }
+
+  async function fetchEnrollments() {
+    try { const data = await api.get(`/admin/members/${member.id}/enrollments`); setEnrollments(data.enrollments || []) } catch {}
   }
 
   async function handleSave() {
@@ -428,6 +786,14 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
         <AssignInstructorModal student={member} currentAssignments={assignedInstructors} allInstructors={allInstructors}
           onClose={() => setShowAssignInstructor(false)}
           onSuccess={() => { fetchAssignedInstructors(); setShowAssignInstructor(false); showToast('Instructor assignment updated') }} />
+      )}
+      {showAddEnrollment && (
+        <AddEnrollmentModal
+          memberId={member.id}
+          existingEnrollments={enrollments}
+          memberRole={member.role}
+          onClose={() => setShowAddEnrollment(false)}
+          onSuccess={() => { fetchEnrollments(); onRefresh(); setShowAddEnrollment(false); showToast('Enrollment added') }} />
       )}
 
       <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
@@ -555,6 +921,18 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
               </div>
             )}
           </div>
+        )}
+
+        {/* ─── Enrollments — parent or student only (v3.3) ──────────────────── */}
+        {(member.role === 'parent' || member.role === 'student') && (
+          <EnrollmentsSection
+            memberId={member.id}
+            memberRole={member.role}
+            enrollments={enrollments}
+            onRefresh={() => { fetchEnrollments(); onRefresh() }}
+            onAddClick={() => setShowAddEnrollment(true)}
+            onToast={showToast}
+          />
         )}
 
         <div>
