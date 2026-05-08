@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import ScheduleGrid, { buildRangeBounds, buildRangeLabel } from '../../components/ScheduleGrid'
 import ShiftModal from '../../components/ShiftModal'
+import ConfirmModal from '../../components/ConfirmModal'
 import { api } from '../../lib/api'
 
 /**
@@ -69,6 +70,16 @@ export default function AdminSchedule() {
   const [editingShift, setEditingShift] = useState(null)
   const [prefill, setPrefill] = useState(null)
 
+  // Confirm dialogs + toast
+  const [deleteShiftId, setDeleteShiftId] = useState(null)         // pending quick-delete confirm
+  const [showCopyConfirm, setShowCopyConfirm] = useState(false)    // pending copy-from-last-week confirm
+  const [toast, setToast] = useState('')                           // info messages (replaces alert())
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3500)
+  }
+
   // Load swingers once
   useEffect(() => {
     api.get('/admin/shifts/swingers')
@@ -133,8 +144,14 @@ export default function AdminSchedule() {
       return { error: e.message || 'Delete failed' }
     }
   }
-  async function quickDelete(shiftId) {
-    if (!confirm('Remove this shift?')) return
+  function quickDelete(shiftId) {
+    setDeleteShiftId(shiftId)
+  }
+
+  async function confirmQuickDelete() {
+    const shiftId = deleteShiftId
+    setDeleteShiftId(null)
+    if (!shiftId) return
     try {
       await api.delete(`/admin/shifts/${shiftId}`)
       loadShifts()
@@ -146,18 +163,16 @@ export default function AdminSchedule() {
   // Copy all shifts from last week into the current Weekly view's week.
   // Worker side skips any user-day that already has a shift, so this is safe to
   // re-run and won't create duplicates if the target week is partially populated.
-  async function copyFromLastWeek() {
+  function copyFromLastWeek() {
     // Only meaningful in the Weekly view — guard against accidental calls
     if (view !== 'weekly') return
+    setShowCopyConfirm(true)
+  }
+
+  async function confirmCopyFromLastWeek() {
+    setShowCopyConfirm(false)
     const target = buildRangeBounds('weekly', dateOffset)        // current visible week
     const source = buildRangeBounds('weekly', dateOffset - 1)    // week before it
-    const sourceLabel = buildRangeLabel('weekly', dateOffset - 1)
-    const targetLabel = buildRangeLabel('weekly', dateOffset)
-
-    if (!confirm(
-      `Copy all shifts from ${sourceLabel} into ${targetLabel}?\n\n` +
-      `Days that already have shifts in the target week will be left unchanged.`
-    )) return
 
     setCopyBusy(true)
     setError(null)
@@ -169,12 +184,12 @@ export default function AdminSchedule() {
       const created = res?.created || 0
       const skipped = res?.skipped || 0
       if (created === 0 && skipped === 0) {
-        alert('Nothing to copy — last week had no shifts.')
+        showToast('Nothing to copy — last week had no shifts.')
       } else if (created === 0) {
-        alert(`No new shifts created. ${skipped} already existed in the target week.`)
+        showToast(`No new shifts created. ${skipped} already existed in the target week.`)
       } else {
         const skipMsg = skipped > 0 ? ` (${skipped} skipped — already had shifts)` : ''
-        alert(`Copied ${created} shift${created === 1 ? '' : 's'} from last week${skipMsg}.`)
+        showToast(`Copied ${created} shift${created === 1 ? '' : 's'} from last week${skipMsg}.`)
       }
       loadShifts()
     } catch (e) {
@@ -183,6 +198,10 @@ export default function AdminSchedule() {
       setCopyBusy(false)
     }
   }
+
+  // Labels for the copy-confirm modal — computed only when modal is open
+  const copySourceLabel = showCopyConfirm ? buildRangeLabel('weekly', dateOffset - 1) : ''
+  const copyTargetLabel = showCopyConfirm ? buildRangeLabel('weekly', dateOffset) : ''
 
   return (
     <AdminLayout>
@@ -275,6 +294,45 @@ export default function AdminSchedule() {
         onSave={saveShift}
         onDelete={deleteShift}
       />
+
+      {/* Quick-delete (calendar cell ✕ button) confirm */}
+      {deleteShiftId && (
+        <ConfirmModal
+          title="REMOVE SHIFT"
+          confirmLabel="Remove Shift"
+          confirmStyle="red"
+          iconType="destructive"
+          onConfirm={confirmQuickDelete}
+          onClose={() => setDeleteShiftId(null)}
+        >
+          <p>This shift will be removed from the schedule.</p>
+        </ConfirmModal>
+      )}
+
+      {/* Copy-from-last-week confirm */}
+      {showCopyConfirm && (
+        <ConfirmModal
+          title="COPY LAST WEEK"
+          confirmLabel="Copy Shifts"
+          confirmStyle="green"
+          iconType="info"
+          onConfirm={confirmCopyFromLastWeek}
+          onClose={() => setShowCopyConfirm(false)}
+        >
+          <p>Copy all shifts from <strong>{copySourceLabel}</strong> into <strong>{copyTargetLabel}</strong>?</p>
+          <p className="text-gray-500 text-xs">
+            Days that already have shifts in the target week will be left unchanged.
+          </p>
+        </ConfirmModal>
+      )}
+
+      {/* Toast (replaces alert() for copy-week result messages) */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#064029] text-white text-sm font-semibold px-6 py-3 rounded-xl shadow-2xl flex items-center gap-2 max-w-md">
+          <svg className="w-4 h-4 text-[#1D9E75] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+          <span>{toast}</span>
+        </div>
+      )}
     </AdminLayout>
   )
 }
