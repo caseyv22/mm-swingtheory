@@ -87,7 +87,7 @@ function RoleRouter() {
   if (role === 'parent') return <Navigate to="/parent-home" replace />
   if (role === 'student') return <Navigate to="/programs" replace />
   if (role === 'instructor') return <Navigate to="/instructor/sessions" replace />
-  if (role === 'swinger') return <Navigate to="/admin/schedule" replace />
+  if (role === 'swinger') return <Navigate to="/admin" replace />
   if (role === 'admin') return <Navigate to="/admin" replace />
   return <Navigate to="/programs" replace />
 }
@@ -154,6 +154,9 @@ function LoginPage() {
   useEffect(() => { document.title = 'Sign In | Sync | Swing Theory' }, [])
 
   const [mode, setMode] = useState('signin') // 'signin' | 'forgot' | 'session'
+  const [forgotStep, setForgotStep] = useState('email') // 'email' | 'reset'
+  const [resetCode, setResetCode] = useState('')
+  const [newPassword, setNewPassword] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -196,24 +199,100 @@ function LoginPage() {
     }
   }
 
+  // ─── Forgot Password: Step 1 — Request reset code ───────────────────────────
+  // Uses Clerk's reset_password_email_code strategy. Clerk sends the OTP email
+  // directly (no backend involvement, no Resend). User receives a 6-digit code.
   async function handleForgotPassword(e) {
     e.preventDefault()
+    if (!isLoaded) return
     setLoading(true)
     setError('')
     setInfo('')
     try {
-      const res = await fetch(`${API_URL}/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+      await signIn.create({
+        strategy: 'reset_password_email_code',
+        identifier: email,
       })
-      // Always show generic success message — don't reveal if email exists
-      setInfo("If an account exists for that email, we've sent a password reset link.")
+      // Move to step 2 — code + new password entry
+      setForgotStep('reset')
+      setInfo('We sent a 6-digit code to your email. Check your inbox (and spam).')
     } catch (err) {
-      setError('Could not send reset email. Please try again later.')
+      console.error('Forgot password error:', err)
+      // We intentionally show the same generic message regardless of whether
+      // the account exists — protects against email enumeration.
+      const errCode = err?.errors?.[0]?.code
+      if (errCode === 'form_identifier_not_found') {
+        // Pretend it worked, push to step 2 — they'll just never get a code
+        setForgotStep('reset')
+        setInfo('If an account exists for that email, we sent a 6-digit code.')
+      } else {
+        const msg = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || 'Could not send reset code. Please try again later.'
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  // ─── Forgot Password: Step 2 — Verify code & set new password ───────────────
+  async function handleResetPassword(e) {
+    e.preventDefault()
+    if (!isLoaded) return
+    setLoading(true)
+    setError('')
+    setInfo('')
+    try {
+      const result = await signIn.attemptFirstFactor({
+        strategy: 'reset_password_email_code',
+        code: resetCode.trim(),
+        password: newPassword,
+      })
+      if (result.status === 'complete') {
+        // Clerk also signs the user in upon successful password reset.
+        await setActive({ session: result.createdSessionId })
+        // Reset our local UI state and redirect home
+        setForgotStep('email')
+        setResetCode('')
+        setNewPassword('')
+        window.location.href = '/home'
+      } else if (result.status === 'needs_new_password') {
+        // Code accepted but Clerk wants the new-password call separately —
+        // shouldn't normally happen since we're sending password in attemptFirstFactor,
+        // but log it for diagnostics.
+        console.error('Unexpected reset status: needs_new_password', result)
+        setError('Could not finish reset. Please try again.')
+      } else {
+        console.error('Unexpected reset status:', result.status, result)
+        setError(`Could not finish reset (status: ${result.status}).`)
+      }
+    } catch (err) {
+      console.error('Reset password error:', err)
+      const errCode = err?.errors?.[0]?.code
+      if (errCode === 'form_code_incorrect') {
+        setError('That code is incorrect. Double-check or request a new one.')
+      } else if (errCode === 'verification_expired') {
+        setError('That code expired. Request a new one and try again.')
+      } else if (errCode === 'form_password_pwned') {
+        setError('That password has appeared in a known data breach. Please choose a different one.')
+      } else if (errCode === 'form_password_length_too_short') {
+        setError('Password must be at least 8 characters.')
+      } else {
+        const msg = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || 'Could not reset password. Try again or request a new code.'
+        setError(msg)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Reset all forgot-password state when leaving the flow
+  function leaveForgotFlow() {
+    setMode('signin')
+    setForgotStep('email')
+    setResetCode('')
+    setNewPassword('')
+    setError('')
+    setInfo('')
   }
 
   async function handleContinueAsCurrent() {
@@ -282,47 +361,118 @@ function LoginPage() {
             <img src="/ST_Full_Logo_White.svg" alt="Swing Theory" className="h-12 w-auto" />
           </div>
           <div className="bg-white rounded-2xl shadow-2xl p-8">
-            <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">RESET PASSWORD</h1>
-            <p className="text-sm text-gray-500 mb-6">Enter your email to get a reset link</p>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
-                {error}
-              </div>
-            )}
-            {info && (
-              <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
-                {info}
-              </div>
+            {/* ─── Step 1: Email entry ──────────────────────────────────── */}
+            {forgotStep === 'email' && (
+              <>
+                <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">RESET PASSWORD</h1>
+                <p className="text-sm text-gray-500 mb-6">Enter your email to get a verification code</p>
+
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
+                    {error}
+                  </div>
+                )}
+
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      required
+                      autoFocus
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-[#064029] text-white font-semibold py-3 rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors text-sm"
+                  >
+                    {loading ? 'Sending…' : 'Send Code'}
+                  </button>
+                </form>
+              </>
             )}
 
-            <form onSubmit={handleForgotPassword} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  required
-                  autoFocus
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[#064029] text-white font-semibold py-3 rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors text-sm"
-              >
-                {loading ? 'Sending…' : 'Send Reset Link'}
-              </button>
-            </form>
+            {/* ─── Step 2: Code + new password ──────────────────────────── */}
+            {forgotStep === 'reset' && (
+              <>
+                <h1 className="font-display text-2xl text-[#064029] tracking-wide mb-1">ENTER CODE</h1>
+                <p className="text-sm text-gray-500 mb-6">
+                  Sent to <span className="font-semibold text-gray-700">{email}</span>
+                </p>
+
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
+                    {error}
+                  </div>
+                )}
+                {info && !error && (
+                  <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
+                    {info}
+                  </div>
+                )}
+
+                <form onSubmit={handleResetPassword} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                      6-Digit Code
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={resetCode}
+                      onChange={e => setResetCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="123456"
+                      required
+                      autoFocus
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-2xl font-mono tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                      New Password
+                    </label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      placeholder="At least 8 characters"
+                      minLength={8}
+                      required
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || resetCode.length !== 6 || newPassword.length < 8}
+                    className="w-full bg-[#064029] text-white font-semibold py-3 rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors text-sm"
+                  >
+                    {loading ? 'Resetting…' : 'Reset Password & Sign In'}
+                  </button>
+                </form>
+
+                <button
+                  type="button"
+                  onClick={() => { setForgotStep('email'); setResetCode(''); setNewPassword(''); setError(''); setInfo('') }}
+                  className="w-full mt-3 text-gray-500 text-xs font-medium py-2 hover:text-gray-700"
+                >
+                  Didn't get a code? Send again
+                </button>
+              </>
+            )}
 
             <button
               type="button"
-              onClick={() => { setMode('signin'); setError(''); setInfo('') }}
+              onClick={leaveForgotFlow}
               className="w-full mt-3 text-gray-500 text-sm font-medium py-2 hover:text-gray-700"
             >
               ← Back to sign in
@@ -372,7 +522,7 @@ function LoginPage() {
                 </label>
                 <button
                   type="button"
-                  onClick={() => { setMode('forgot'); setError(''); setInfo('') }}
+                  onClick={() => { setMode('forgot'); setForgotStep('email'); setError(''); setInfo('') }}
                   className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]"
                 >
                   Forgot?
