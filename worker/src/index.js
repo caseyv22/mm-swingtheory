@@ -1111,7 +1111,8 @@ app.get('/admin/members', requireAdminOrSwinger, async (c) => {
   let query = `
     SELECT u.*, 
       ch.first_name as child_name, ch.age as child_age,
-      i.id as instructor_record_id, i.bio as instructor_bio
+      i.id as instructor_record_id, i.bio as instructor_bio,
+      (SELECT COUNT(*) FROM enrollments e WHERE e.user_id = u.id AND e.is_active = 1) AS enrollment_count
     FROM users u
     LEFT JOIN children ch ON ch.parent_id = u.id
     LEFT JOIN instructors i ON i.user_id = u.id
