@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import ConfirmModal from './ConfirmModal'
 
 /**
  * ShiftModal — admin-only modal for creating, editing, and deleting shifts.
@@ -59,6 +60,7 @@ export default function ShiftModal({ open, shift, swingers, prefill, onClose, on
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false)
 
   const isEditing = !!shift
 
@@ -120,9 +122,13 @@ export default function ShiftModal({ open, shift, swingers, prefill, onClose, on
     }
   }
 
-  async function handleDelete() {
+  function requestDelete() {
     if (!isEditing) return
-    if (!confirm('Delete this shift?')) return
+    setShowConfirmDelete(true)
+  }
+
+  async function confirmDelete() {
+    setShowConfirmDelete(false)
     setDeleting(true)
     try {
       const result = await onDelete()
@@ -140,6 +146,7 @@ export default function ShiftModal({ open, shift, swingers, prefill, onClose, on
   if (!open) return null
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
         className="bg-white rounded-2xl border border-gray-100 shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
@@ -258,7 +265,7 @@ export default function ShiftModal({ open, shift, swingers, prefill, onClose, on
             </button>
             {isEditing && (
               <button
-                onClick={handleDelete}
+                onClick={requestDelete}
                 disabled={saving || deleting}
                 className="border border-red-200 text-red-500 text-sm font-semibold py-3 px-4 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50"
               >
@@ -269,5 +276,19 @@ export default function ShiftModal({ open, shift, swingers, prefill, onClose, on
         </div>
       </div>
     </div>
+    {showConfirmDelete && (
+      <ConfirmModal
+        title="DELETE SHIFT"
+        confirmLabel="Delete Shift"
+        confirmStyle="red"
+        iconType="destructive"
+        zIndex={60}
+        onConfirm={confirmDelete}
+        onClose={() => setShowConfirmDelete(false)}
+      >
+        <p>This shift will be permanently removed from the schedule.</p>
+      </ConfirmModal>
+    )}
+    </>
   )
 }
