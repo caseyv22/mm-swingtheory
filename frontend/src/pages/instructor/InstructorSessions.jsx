@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import NavBar from '../../components/NavBar'
 import { api } from '../../lib/api'
+import ConfirmModal from '../../components/ConfirmModal'
 
 function formatDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -31,6 +32,7 @@ function RosterDrawer({ session, onClose }) {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
+  const [removeTarget, setRemoveTarget] = useState(null)
 
   function showToast(msg) {
     setToast(msg)
@@ -57,11 +59,17 @@ function RosterDrawer({ session, onClose }) {
     }
   }
 
-  async function handleRemoveBooking(bookingId, displayName) {
-    if (!confirm(`Remove ${displayName} from this session? They will be notified.`)) return
+  function handleRemoveBooking(bookingId, displayName) {
+    setRemoveTarget({ bookingId, displayName })
+  }
+
+  async function confirmRemoveBooking() {
+    const target = removeTarget
+    setRemoveTarget(null)
+    if (!target) return
     try {
-      await api.delete(`/instructor/bookings/${bookingId}`)
-      setBookings(prev => prev.filter(b => b.id !== bookingId))
+      await api.delete(`/instructor/bookings/${target.bookingId}`)
+      setBookings(prev => prev.filter(b => b.id !== target.bookingId))
       showToast('Removed from session')
     } catch (e) {
       showToast(e.message || 'Failed to remove')
@@ -106,6 +114,7 @@ function RosterDrawer({ session, onClose }) {
   const checkedInCount = bookings.filter(b => b.checked_in).length
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4">
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md flex flex-col max-h-[85vh]">
 
@@ -250,6 +259,20 @@ function RosterDrawer({ session, onClose }) {
         </div>
       </div>
     </div>
+    {removeTarget && (
+      <ConfirmModal
+        title="REMOVE FROM SESSION"
+        subtitle={removeTarget.displayName}
+        confirmLabel="Remove"
+        confirmStyle="red"
+        iconType="warning"
+        onConfirm={confirmRemoveBooking}
+        onClose={() => setRemoveTarget(null)}
+      >
+        <p>Remove this person from the session? They will be notified.</p>
+      </ConfirmModal>
+    )}
+    </>
   )
 }
 
