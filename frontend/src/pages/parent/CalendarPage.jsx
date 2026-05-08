@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/clerk-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api.js'
 import NavBar from '../../components/NavBar.jsx'
+import ConfirmDialog from '../../components/ConfirmModal.jsx'
 
 function formatDate(dateStr) {
   const date = new Date(dateStr + 'T00:00:00')
@@ -189,6 +190,7 @@ export default function CalendarPage() {
   const [successMessage, setSuccessMessage] = useState(null)
   const [user, setUser] = useState(null)
   const [child, setChild] = useState(null)
+  const [cancelTarget, setCancelTarget] = useState(null)  // session being cancelled, gates confirm modal
 
   useEffect(() => { loadData() }, [slug])
 
@@ -240,7 +242,14 @@ export default function CalendarPage() {
   }
 
   async function handleCancel(session) {
-    if (!confirm(`Cancel your booking for ${formatDate(session.date)}?`)) return
+    // Open the confirm modal — actual cancellation happens in confirmCancel()
+    setCancelTarget(session)
+  }
+
+  async function confirmCancel() {
+    const session = cancelTarget
+    setCancelTarget(null)
+    if (!session) return
     try {
       const token = await getToken()
       const data = await api.getMyBookings(token)
@@ -354,6 +363,22 @@ export default function CalendarPage() {
 
       {selectedSession && (
         <ConfirmModal session={selectedSession} program={program} onConfirm={handleConfirmBook} onClose={() => setSelectedSession(null)} loading={bookingLoading} user={user} child={child} />
+      )}
+
+      {cancelTarget && (
+        <ConfirmDialog
+          title="CANCEL BOOKING"
+          confirmLabel="Cancel Booking"
+          confirmStyle="red"
+          iconType="warning"
+          onConfirm={confirmCancel}
+          onClose={() => setCancelTarget(null)}
+        >
+          <p>Cancel your booking for {formatDate(cancelTarget.date)}?</p>
+          <p className="text-gray-500 text-xs">
+            The spot will be released and you won't receive a reminder for this session.
+          </p>
+        </ConfirmDialog>
       )}
     </div>
   )
