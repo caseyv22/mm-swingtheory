@@ -488,6 +488,29 @@ app.post('/admin/members/:id/resend-temp-password', requireAdmin, async (c) => {
 
 // GET /programs — list active programs (used by parent/student program selector)
 app.get('/programs', requireAuth, async (c) => {
+  const clerkId = c.get('clerkId')
+
+  // Default: list all active programs (existing behavior).
+  // When ENROLLMENT_ENFORCEMENT=on, parents/students only see programs they're
+  // enrolled in. Admin/instructor/swinger always see everything.
+  if (c.env.ENROLLMENT_ENFORCEMENT === 'on') {
+    const user = await c.env.DB.prepare(
+      'SELECT id, role FROM users WHERE clerk_id = ?'
+    ).bind(clerkId).first()
+
+    if (user && (user.role === 'parent' || user.role === 'student')) {
+      const programs = await c.env.DB.prepare(`
+        SELECT p.* FROM programs p
+        JOIN enrollments e ON e.program_id = p.id
+        WHERE p.is_active = 1
+          AND e.user_id = ?
+          AND e.is_active = 1
+        ORDER BY p.created_at ASC
+      `).bind(user.id).all()
+      return c.json({ programs: programs.results })
+    }
+  }
+
   const programs = await c.env.DB.prepare(
     'SELECT * FROM programs WHERE is_active = 1 ORDER BY created_at ASC'
   ).all()
@@ -507,6 +530,21 @@ app.get('/programs/:slug/sessions', requireAuth, async (c) => {
   const user = await c.env.DB.prepare(
     'SELECT * FROM users WHERE clerk_id = ?'
   ).bind(clerkId).first()
+
+  // ─── Enrollment gate (v3.3) ─────────────────────────────────────────────────
+  // When flag is on, parent/student users must be enrolled to view the calendar.
+  // Other roles (admin, instructor, swinger) bypass this.
+  if (c.env.ENROLLMENT_ENFORCEMENT === 'on' && user && (user.role === 'parent' || user.role === 'student')) {
+    const enrollment = await c.env.DB.prepare(`
+      SELECT id FROM enrollments
+      WHERE user_id = ? AND program_id = ? AND is_active = 1
+    `).bind(user.id, program.id).first()
+    if (!enrollment) {
+      return c.json({
+        error: 'You are not enrolled in this program. Please contact your admin to be added.',
+      }, 403)
+    }
+  }
 
   const weeks = program.forward_view_enabled ? (program.forward_view_weeks || 2) : 0
   const today = new Date().toISOString().split('T')[0]
@@ -558,6 +596,29 @@ app.post('/bookings', requireAuth, async (c) => {
   }
   if (session.booker_type === 'student' && user.role !== 'student') {
     return c.json({ error: 'This program can only be booked by a student' }, 403)
+  }
+
+  // ─── Enrollment gate (v3.3) ─────────────────────────────────────────────────
+  // Gated behind ENROLLMENT_ENFORCEMENT env var so we can deploy the code dark
+  // and flip on after backfill is verified. Set to 'on' in Cloudflare → Workers
+  // → mm-api-prod → Settings → Variables and Secrets to enable.
+  // Admin/Swinger/Instructor manual booking endpoints bypass this entirely.
+  if (c.env.ENROLLMENT_ENFORCEMENT === 'on') {
+    const enrollment = await c.env.DB.prepare(`
+      SELECT e.id FROM enrollments e
+      JOIN programs p ON e.program_id = p.id
+      WHERE e.user_id = ?
+        AND e.program_id = ?
+        AND e.is_active = 1
+        AND p.is_active = 1
+        AND (e.start_date IS NULL OR e.start_date <= ?)
+        AND (e.end_date IS NULL OR e.end_date >= ?)
+    `).bind(user.id, session.program_id, session.date, session.date).first()
+    if (!enrollment) {
+      return c.json({
+        error: 'You are not enrolled in this program. Please contact your admin to be added.',
+      }, 403)
+    }
   }
 
   const now = new Date()
@@ -1077,7 +1138,11 @@ app.get('/admin/members', requireAdminOrSwinger, async (c) => {
 // POST /admin/members — create Clerk user with temp password + send credentials email
 app.post('/admin/members', requireAdmin, async (c) => {
   const body = await c.req.json()
-  const { full_name, email, role, phone, child_first_name, child_age } = body
+  const {
+    full_name, email, role, phone, child_first_name, child_age,
+    program_ids,    // optional array of program IDs to enroll user into (parent/student)
+    instructor_id,  // optional instructor ID to assign student to (student only)
+  } = body
 
   if (!full_name || !email || !role) {
     return c.json({ error: 'full_name, email, and role are required' }, 400)
@@ -1133,20 +1198,81 @@ app.post('/admin/members', requireAdmin, async (c) => {
     return c.json({ error: 'Could not create user record: ' + e.message }, 500)
   }
 
+  // Track non-fatal warnings — these surface to admin but don't fail the call.
+  const warnings = []
+
   // Create child record if parent
   if (role === 'parent' && child_first_name) {
     const childId = 'child_' + uid()
-    await c.env.DB.prepare(
-      'INSERT INTO children (id, parent_id, first_name, age) VALUES (?, ?, ?, ?)'
-    ).bind(childId, userId, child_first_name, child_age || null).run()
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO children (id, parent_id, first_name, age) VALUES (?, ?, ?, ?)'
+      ).bind(childId, userId, child_first_name, child_age || null).run()
+    } catch (e) {
+      console.error('Child insert failed:', e.message)
+      warnings.push({ step: 'children', error: e.message })
+    }
   }
 
   // Create instructors record if instructor
   if (role === 'instructor') {
     const instrId = 'instr_' + uid()
-    await c.env.DB.prepare(
-      'INSERT INTO instructors (id, user_id) VALUES (?, ?)'
-    ).bind(instrId, userId).run()
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO instructors (id, user_id) VALUES (?, ?)'
+      ).bind(instrId, userId).run()
+    } catch (e) {
+      console.error('Instructors insert failed:', e.message)
+      warnings.push({ step: 'instructors', error: e.message })
+    }
+  }
+
+  // ─── Enrollments (v3.3) ─────────────────────────────────────────────────────
+  // For parent/student roles, optionally enroll into one or more group programs.
+  // Failures are non-fatal — admin can retry from the member profile.
+  if ((role === 'parent' || role === 'student') && Array.isArray(program_ids) && program_ids.length > 0) {
+    for (const programId of program_ids) {
+      if (!programId || typeof programId !== 'string') continue
+      try {
+        // Verify program exists and is active before enrolling
+        const program = await c.env.DB.prepare(
+          'SELECT id FROM programs WHERE id = ? AND is_active = 1'
+        ).bind(programId).first()
+        if (!program) {
+          warnings.push({ step: 'enrollments', error: `Program not found or inactive: ${programId}` })
+          continue
+        }
+        const enrollmentId = 'enr_' + uid()
+        await c.env.DB.prepare(
+          'INSERT INTO enrollments (id, user_id, program_id, is_active) VALUES (?, ?, ?, 1)'
+        ).bind(enrollmentId, userId, programId).run()
+      } catch (e) {
+        console.error('Enrollment insert failed:', programId, e.message)
+        warnings.push({ step: 'enrollments', error: `${programId}: ${e.message}` })
+      }
+    }
+  }
+
+  // ─── Instructor assignment (v3.3) ───────────────────────────────────────────
+  // Student only. Creates a student_instructors row linking student to instructor.
+  if (role === 'student' && instructor_id && typeof instructor_id === 'string') {
+    try {
+      // Verify instructor exists
+      const instr = await c.env.DB.prepare(
+        'SELECT id FROM instructors WHERE id = ?'
+      ).bind(instructor_id).first()
+      if (!instr) {
+        warnings.push({ step: 'student_instructors', error: `Instructor not found: ${instructor_id}` })
+      } else {
+        const linkId = 'si_' + uid()
+        await c.env.DB.prepare(
+          'INSERT INTO student_instructors (id, student_id, instructor_id) VALUES (?, ?, ?)'
+        ).bind(linkId, userId, instructor_id).run()
+      }
+    } catch (e) {
+      console.error('Student-instructor insert failed:', e.message)
+      warnings.push({ step: 'student_instructors', error: e.message })
+    }
   }
 
   // Step 3: Send welcome email with email + temp password
@@ -1160,9 +1286,12 @@ app.post('/admin/members', requireAdmin, async (c) => {
     await sendEmail(c.env, { to: email, subject: ws, html: wh })
   } catch (e) {
     console.error('Welcome email failed:', e.message)
+    warnings.push({ step: 'welcome_email', error: e.message })
   }
 
-  return c.json({ ok: true, user_id: userId, temp_password: tempPassword })
+  const response = { ok: true, user_id: userId, temp_password: tempPassword }
+  if (warnings.length > 0) response.warnings = warnings
+  return c.json(response)
 })
 
 // PUT /admin/members/:id
@@ -1353,6 +1482,11 @@ app.delete('/admin/members/:id', requireAdmin, async (c) => {
       [instructorId]])
   }
 
+  // 5b. Enrollments (added v3.3) — must run before users delete because of FK
+  steps.push(['enrollments_by_user',
+    'DELETE FROM enrollments WHERE user_id = ?',
+    [id]])
+
   // 6. Finally the instructor row, then the user row
   if (instructorId) {
     steps.push(['instructors_by_user',
@@ -1512,6 +1646,170 @@ app.delete('/admin/members/:studentId/assign-instructor/:instrId', requireAdmin,
     'DELETE FROM student_instructors WHERE student_id = ? AND instructor_id = ?'
   ).bind(studentId, instrId).run()
   return c.json({ ok: true })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ENROLLMENTS (v3.3) — admin-only CRUD on the enrollments table.
+// Booking-time enforcement of these enrollments is gated by the
+// ENROLLMENT_ENFORCEMENT env var. The CRUD itself always works regardless of
+// the flag — admins can manage enrollments before, during, or after rollout.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /admin/members/:id/enrollments — list enrollments for a user
+app.get('/admin/members/:id/enrollments', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const enrollments = await c.env.DB.prepare(`
+    SELECT e.id, e.program_id, e.start_date, e.end_date, e.is_active,
+           e.created_at, e.updated_at,
+           p.name AS program_name, p.slug AS program_slug, p.is_active AS program_active
+    FROM enrollments e
+    JOIN programs p ON e.program_id = p.id
+    WHERE e.user_id = ?
+    ORDER BY e.created_at DESC
+  `).bind(id).all()
+  return c.json({ enrollments: enrollments.results })
+})
+
+// POST /admin/members/:id/enrollments — create or reactivate an enrollment
+//
+// Body: { program_id, start_date?, end_date? }
+//
+// Idempotent: if an enrollment row already exists for (user_id, program_id),
+// reactivates it (sets is_active=1, updates dates, updates updated_at) instead
+// of failing on the unique constraint.
+app.post('/admin/members/:id/enrollments', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const { program_id, start_date, end_date } = await c.req.json()
+
+  if (!program_id) return c.json({ error: 'program_id required' }, 400)
+
+  // Verify user exists
+  const user = await c.env.DB.prepare('SELECT id, role FROM users WHERE id = ?').bind(id).first()
+  if (!user) return c.json({ error: 'User not found' }, 404)
+
+  // Verify program exists and is active
+  const program = await c.env.DB.prepare(
+    'SELECT id, is_active FROM programs WHERE id = ?'
+  ).bind(program_id).first()
+  if (!program) return c.json({ error: 'Program not found' }, 404)
+  if (!program.is_active) return c.json({ error: 'Program is inactive — cannot enroll' }, 400)
+
+  // Check for existing row (active or soft-deleted)
+  const existing = await c.env.DB.prepare(
+    'SELECT id, is_active FROM enrollments WHERE user_id = ? AND program_id = ?'
+  ).bind(id, program_id).first()
+
+  if (existing) {
+    // Reactivate / update dates
+    await c.env.DB.prepare(`
+      UPDATE enrollments
+      SET is_active = 1,
+          start_date = ?,
+          end_date = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(start_date || null, end_date || null, existing.id).run()
+    return c.json({ ok: true, enrollment_id: existing.id, reactivated: existing.is_active === 0 })
+  }
+
+  // Create new
+  const enrollmentId = 'enr_' + uid()
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO enrollments (id, user_id, program_id, start_date, end_date, is_active)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).bind(enrollmentId, id, program_id, start_date || null, end_date || null).run()
+  } catch (e) {
+    if (e.message?.includes('UNIQUE')) {
+      return c.json({ error: 'Already enrolled in this program' }, 400)
+    }
+    throw e
+  }
+
+  return c.json({ ok: true, enrollment_id: enrollmentId })
+})
+
+// PUT /admin/enrollments/:enrollmentId — update dates / is_active
+//
+// Body: { start_date?, end_date?, is_active? }
+//
+// Any field omitted is left unchanged. Pass `null` (not omitted) to clear a date.
+app.put('/admin/enrollments/:enrollmentId', requireAdmin, async (c) => {
+  const { enrollmentId } = c.req.param()
+  const body = await c.req.json()
+
+  const existing = await c.env.DB.prepare(
+    'SELECT * FROM enrollments WHERE id = ?'
+  ).bind(enrollmentId).first()
+  if (!existing) return c.json({ error: 'Enrollment not found' }, 404)
+
+  // Build SET clause from provided fields only
+  const updates = []
+  const params = []
+
+  if ('start_date' in body) {
+    updates.push('start_date = ?')
+    params.push(body.start_date || null)
+  }
+  if ('end_date' in body) {
+    updates.push('end_date = ?')
+    params.push(body.end_date || null)
+  }
+  if ('is_active' in body) {
+    updates.push('is_active = ?')
+    params.push(body.is_active ? 1 : 0)
+  }
+
+  if (updates.length === 0) {
+    return c.json({ error: 'No fields to update' }, 400)
+  }
+
+  updates.push("updated_at = datetime('now')")
+  params.push(enrollmentId)
+
+  await c.env.DB.prepare(
+    `UPDATE enrollments SET ${updates.join(', ')} WHERE id = ?`
+  ).bind(...params).run()
+
+  return c.json({ ok: true })
+})
+
+// DELETE /admin/enrollments/:enrollmentId — soft-delete by default, hard-delete with ?hard=true
+app.delete('/admin/enrollments/:enrollmentId', requireAdmin, async (c) => {
+  const { enrollmentId } = c.req.param()
+  const hard = c.req.query('hard') === 'true'
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM enrollments WHERE id = ?'
+  ).bind(enrollmentId).first()
+  if (!existing) return c.json({ error: 'Enrollment not found' }, 404)
+
+  if (hard) {
+    await c.env.DB.prepare('DELETE FROM enrollments WHERE id = ?').bind(enrollmentId).run()
+  } else {
+    await c.env.DB.prepare(
+      "UPDATE enrollments SET is_active = 0, updated_at = datetime('now') WHERE id = ?"
+    ).bind(enrollmentId).run()
+  }
+
+  return c.json({ ok: true, hard_deleted: hard })
+})
+
+// GET /admin/programs/:id/enrollments — list active enrollments for a program
+// Used for the "who's enrolled in this program" view.
+app.get('/admin/programs/:id/enrollments', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const enrollments = await c.env.DB.prepare(`
+    SELECT e.id, e.user_id, e.start_date, e.end_date, e.is_active,
+           e.created_at, e.updated_at,
+           u.email, u.full_name, u.role, u.status
+    FROM enrollments e
+    JOIN users u ON e.user_id = u.id
+    WHERE e.program_id = ?
+      AND e.is_active = 1
+    ORDER BY u.full_name ASC
+  `).bind(id).all()
+  return c.json({ enrollments: enrollments.results })
 })
 
 // GET /admin/programs
