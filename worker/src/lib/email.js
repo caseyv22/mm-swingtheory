@@ -395,3 +395,51 @@ export function passwordResetEmail({ recipientName, resetUrl }) {
 
   return { subject, html }
 }
+
+// ─── 9. Registry Tee Time Booked (instructor — needs student assignment) ─────
+// Sent when the Registry Golf webhook creates a private_lessons row with
+// student_id = NULL. Prompts the instructor to open the lesson in Sync and
+// assign a student so coaching notes and Theory AI uploads can be tracked.
+export function registryTeeTimeBookedEmail({ recipientName, customerName, customerEmail, date, startTime, endTime, bay, lessonId }) {
+  const subject = `New tee time booked — ${formatDate(date)} at ${formatTime(startTime)}`
+  const lessonUrl = `${APP_URL}/instructor/lessons/${lessonId}`
+
+  const html = baseLayout({
+    preheader: `${customerName || customerEmail} booked a tee time on ${formatDate(date)}. Assign a student in Sync.`,
+    headerRight: `
+      <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.7)">New Tee Time</div>
+      <div style="font-size:13px;color:#ffffff;margin-top:4px">${formatDate(date)}</div>`,
+    body: `
+  <tr>
+    <td style="padding:32px 32px 8px">
+      <div style="font-size:22px;font-weight:700;color:#064029;margin-bottom:8px">Hi ${recipientName},</div>
+      <p style="font-size:14px;color:#555555;line-height:1.6;margin:0">
+        A new tee time was booked through Registry Golf. Open the lesson in Sync to assign a student so you can track coaching notes and Theory AI data.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:16px 32px 24px">
+      <div style="background:#f7faf8;border:1px solid #d8e8dc;border-radius:12px;padding:20px 24px">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          ${infoRow('Date', formatDate(date))}
+          ${infoRow('Time', `${formatTime(startTime)} – ${formatTime(endTime)}`)}
+          ${bay ? infoRow('Bay', bay) : ''}
+          ${customerName ? infoRow('Customer', customerName) : ''}
+          ${customerEmail ? infoRow('Email', customerEmail) : ''}
+        </table>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:0 32px 8px">
+      <p style="font-size:13px;color:#888888;line-height:1.6;margin:0">
+        This lesson is currently <strong style="color:#b45309">unassigned</strong>. Tap the button below to link it to a student.
+      </p>
+    </td>
+  </tr>
+  ${ctaButton('Assign Student', lessonUrl)}`,
+  })
+
+  return { subject, html }
+}
