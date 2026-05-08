@@ -377,73 +377,11 @@ app.put('/users/me/password', requireAuth, async (c) => {
   return c.json({ ok: true })
 })
 
-// POST /auth/forgot-password — public, triggers Clerk password reset email
-app.post('/auth/forgot-password', async (c) => {
-  const { email } = await c.req.json()
-  if (!email) return c.json({ error: 'Email is required' }, 400)
-
-  // Look up user in Clerk by email
-  const lookupRes = await fetch(
-    `https://api.clerk.com/v1/users?email_address=${encodeURIComponent(email)}`,
-    { headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` } }
-  )
-  if (!lookupRes.ok) {
-    const lookupErr = await lookupRes.text()
-    console.error('[forgot-password] Clerk lookup failed:', lookupRes.status, lookupErr)
-    // Don't reveal whether the email exists — return success either way
-    return c.json({ ok: true })
-  }
-  const users = await lookupRes.json()
-  if (!Array.isArray(users) || users.length === 0) {
-    console.warn('[forgot-password] No Clerk user found for', email)
-    return c.json({ ok: true })
-  }
-
-  const clerkUserId = users[0].id
-  console.log('[forgot-password] Found Clerk user:', clerkUserId, 'for', email)
-
-  // Generate password reset link
-  const resetRes = await fetch(
-    `https://api.clerk.com/v1/users/${clerkUserId}/password_reset_links`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    }
-  )
-
-  if (!resetRes.ok) {
-    // Log the FULL Clerk error so we can see what they want
-    const errText = await resetRes.text()
-    console.error('[forgot-password] Reset link generation failed:', resetRes.status, errText)
-    return c.json({ ok: true })
-  }
-
-  const resetData = await resetRes.json()
-  const resetUrl = resetData.url
-  console.log('[forgot-password] Reset URL generated successfully')
-
-  // Look up user in D1 for full name
-  const dbUser = await c.env.DB.prepare(
-    'SELECT full_name FROM users WHERE clerk_id = ?'
-  ).bind(clerkUserId).first()
-
-  // Send password reset email via our own template
-  try {
-    const { subject, html } = passwordResetEmail({
-      recipientName: dbUser?.full_name || 'there',
-      resetUrl,
-    })
-    await sendEmail(c.env, { to: email, subject, html })
-  } catch (e) {
-    console.error('Password reset email failed:', e.message)
-  }
-
-  return c.json({ ok: true })
-})
+// NOTE: POST /auth/forgot-password was removed in v3.4. The frontend now uses
+// Clerk's reset_password_email_code strategy directly via the SDK — Clerk
+// emails the OTP code itself, no backend involvement needed. The previous
+// implementation called Clerk's /password_reset_links endpoint which doesn't
+// exist (returns 404).
 
 // POST /admin/members/:id/resend-temp-password — admin regenerates temp password and resends welcome email
 app.post('/admin/members/:id/resend-temp-password', requireAdmin, async (c) => {
@@ -1540,7 +1478,14 @@ app.delete('/admin/members/:id', requireAdmin, async (c) => {
 })
 
 // ─── POST /admin/members/:id/reset-password ───────────────────────────────────
-// Triggers Clerk password reset email
+// Admin-triggered password reset. Generates a new temp password, updates Clerk,
+// emails the user via Resend, and flips must_change_password=1 so they're forced
+// to change it on next login.
+//
+// Note: previously this endpoint called Clerk's non-existent password_reset_links
+// API and returned a magic link. Switched in v3.4 to the temp-password approach
+// (same as resend-temp-password) since Clerk doesn't actually expose the
+// reset-link endpoint we were trying to hit.
 app.post('/admin/members/:id/reset-password', requireAdmin, async (c) => {
   const { id } = c.req.param()
 
@@ -1551,23 +1496,46 @@ app.post('/admin/members/:id/reset-password', requireAdmin, async (c) => {
     return c.json({ error: 'User has not completed account setup yet — no Clerk account to reset' }, 400)
   }
 
-  // Clerk: create a password reset link
-  const clerkRes = await fetch(`https://api.clerk.com/v1/users/${user.clerk_id}/password_reset_links`, {
-    method: 'POST',
+  const tempPassword = 'swing-' + Math.floor(1000 + Math.random() * 9000)
+
+  // Update password in Clerk
+  const updateRes = await fetch(`https://api.clerk.com/v1/users/${user.clerk_id}`, {
+    method: 'PATCH',
     headers: {
       'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ password: tempPassword, skip_password_checks: true }),
   })
 
-  if (!clerkRes.ok) {
-    const err = await clerkRes.json()
-    return c.json({ error: 'Clerk password reset failed', detail: err }, 500)
+  if (!updateRes.ok) {
+    const err = await updateRes.json().catch(() => ({}))
+    const msg = err?.errors?.[0]?.long_message || err?.errors?.[0]?.message || 'Failed to update password'
+    console.error('[admin reset-password] Clerk update failed:', updateRes.status, msg)
+    return c.json({ error: msg }, 500)
   }
 
-  const data = await clerkRes.json()
-  return c.json({ ok: true, reset_link: data.url })
+  // Force the user to change the password on their next login
+  await c.env.DB.prepare(
+    'UPDATE users SET must_change_password = 1 WHERE id = ?'
+  ).bind(id).run()
+
+  // Send the welcome email with the new temp password (same template as account creation)
+  let emailSent = true
+  try {
+    const { subject, html } = welcomeEmail({
+      recipientName: user.full_name,
+      role: user.role,
+      email: user.email,
+      tempPassword,
+    })
+    await sendEmail(c.env, { to: user.email, subject, html })
+  } catch (e) {
+    console.error('[admin reset-password] Email send failed:', e.message)
+    emailSent = false
+  }
+
+  return c.json({ ok: true, temp_password: tempPassword, email_sent: emailSent })
 })
 
 // GET /admin/members/:id/bookings
