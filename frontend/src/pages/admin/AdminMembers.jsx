@@ -794,6 +794,23 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
   useEffect(() => {
+    // Re-sync per-member state when navigating to a different member.
+    // Without this, `form` keeps the previously-selected member's values
+    // (useState's initializer only runs once), which silently overwrites
+    // the wrong record on Save. Also reset transient UI flags so the new
+    // detail view starts clean.
+    setForm({
+      full_name: member.full_name,
+      phone: member.phone || '',
+      status: member.status,
+      role: member.role,
+    })
+    setEditing(false)
+    setResetResult(null)
+    setShowDelete(false)
+    setShowAssignInstructor(false)
+    setShowAddEnrollment(false)
+
     api.get(`/admin/members/${member.id}/bookings`).then(d => setBookings(d.bookings || []))
     if (member.role === 'student' || member.role === 'parent') {
       fetchAssignedInstructors()
