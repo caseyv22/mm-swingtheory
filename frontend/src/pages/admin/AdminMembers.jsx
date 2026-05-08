@@ -32,10 +32,48 @@ function StatusDot({ status }) {
 function AddMemberModal({ onClose, onSuccess }) {
   const [form, setForm] = useState({
     full_name: '', email: '', role: 'student', phone: '',
-    child_first_name: '', child_age: ''
+    child_first_name: '', child_age: '',
+    program_ids: [],   // checked program IDs (for parent/student)
+    instructor_id: '', // selected instructor ID (for student only)
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [programs, setPrograms] = useState([])
+  const [instructors, setInstructors] = useState([])
+
+  // Load programs and instructors once on mount.
+  useEffect(() => {
+    api.get('/admin/programs')
+      .then(d => setPrograms((d.programs || []).filter(p => p.is_active)))
+      .catch(() => {})
+    api.get('/admin/instructors')
+      .then(d => setInstructors(d.instructors || []))
+      .catch(() => {})
+  }, [])
+
+  // When role changes, clear fields that don't apply to the new role so we
+  // don't accidentally send program_ids for an instructor account etc.
+  useEffect(() => {
+    setForm(f => ({
+      ...f,
+      program_ids: (f.role === 'parent' || f.role === 'student') ? f.program_ids : [],
+      instructor_id: f.role === 'student' ? f.instructor_id : '',
+    }))
+  }, [form.role])
+
+  function toggleProgram(programId) {
+    setForm(f => ({
+      ...f,
+      program_ids: f.program_ids.includes(programId)
+        ? f.program_ids.filter(p => p !== programId)
+        : [...f.program_ids, programId],
+    }))
+  }
+
+  // Show the no-program warning when role needs an enrollment but none picked.
+  const showNoProgramWarning =
+    (form.role === 'parent' && form.program_ids.length === 0) ||
+    (form.role === 'student' && form.program_ids.length === 0 && !form.instructor_id)
 
   async function handleSubmit() {
     if (!form.full_name || !form.email) {
@@ -45,10 +83,21 @@ function AddMemberModal({ onClose, onSuccess }) {
     setLoading(true)
     setError('')
     try {
-      await api.post('/admin/members', {
-        ...form,
+      const payload = {
+        full_name: form.full_name,
+        email: form.email,
+        role: form.role,
+        phone: form.phone,
+        child_first_name: form.child_first_name,
         child_age: form.child_age ? parseInt(form.child_age) : null,
-      })
+      }
+      if (form.role === 'parent' || form.role === 'student') {
+        payload.program_ids = form.program_ids
+      }
+      if (form.role === 'student' && form.instructor_id) {
+        payload.instructor_id = form.instructor_id
+      }
+      await api.post('/admin/members', payload)
       onSuccess()
     } catch (e) {
       setError(e.message || 'Failed to create member')
@@ -59,12 +108,12 @@ function AddMemberModal({ onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-display text-xl text-[#064029] tracking-wide">ADD MEMBER</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>
           )}
@@ -109,8 +158,79 @@ function AddMemberModal({ onClose, onSuccess }) {
               </div>
             </div>
           )}
+
+          {/* ─── Program selector — parent or student only ─────────────────── */}
+          {(form.role === 'parent' || form.role === 'student') && programs.length > 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
+              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                Program Enrollment
+                <span className="ml-1 text-gray-400 font-normal normal-case tracking-normal">(optional)</span>
+              </p>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Select which group programs this {form.role} can book. They won't be able to book a program they're not enrolled in.
+              </p>
+              <div className="space-y-1.5 pt-1">
+                {programs
+                  .filter(p => {
+                    // Surface only programs that match the role's booker_type, plus any
+                    // group programs (forward-compat for cases where booker_type changes).
+                    if (form.role === 'parent') return p.booker_type === 'parent'
+                    if (form.role === 'student') return p.booker_type === 'student'
+                    return true
+                  })
+                  .map(p => (
+                    <label key={p.id} className="flex items-center gap-2.5 cursor-pointer hover:bg-white rounded px-2 py-1.5 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={form.program_ids.includes(p.id)}
+                        onChange={() => toggleProgram(p.id)}
+                        className="w-4 h-4 text-[#1D9E75] focus:ring-[#1D9E75] border-gray-300 rounded"
+                      />
+                      <span className="text-sm text-gray-700 font-medium">{p.name}</span>
+                    </label>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Instructor selector — student only ────────────────────────── */}
+          {form.role === 'student' && instructors.length > 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
+              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                Assigned Instructor
+                <span className="ml-1 text-gray-400 font-normal normal-case tracking-normal">(optional)</span>
+              </p>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Link this student to an instructor for private lessons. Can be changed or added later.
+              </p>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                value={form.instructor_id}
+                onChange={e => setForm(f => ({ ...f, instructor_id: e.target.value }))}
+              >
+                <option value="">— None —</option>
+                {instructors.map(i => (
+                  <option key={i.id} value={i.id}>{i.full_name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* ─── No-program warning ────────────────────────────────────────── */}
+          {showNoProgramWarning && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex gap-3">
+              <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <div className="text-xs text-amber-800 leading-relaxed">
+                {form.role === 'parent'
+                  ? <>No program assigned. This parent <strong>won't be able to book Mini Mulligans</strong> until you enroll them. You can add a program now or later from their member profile.</>
+                  : <>No program or instructor assigned. This student <strong>won't have anything to book or attend</strong> until you assign one. You can add either now or later from their member profile.</>}
+              </div>
+            </div>
+          )}
         </div>
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Cancel</button>
           <button onClick={handleSubmit} disabled={loading}
             className="px-5 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] disabled:opacity-50 transition-colors">
@@ -557,24 +677,37 @@ export default function AdminMembers() {
               ) : filtered.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-sm text-gray-500">No members found</div>
               ) : (
-                filtered.map(m => (
-                  <button key={m.id} onClick={() => navigate(`/admin/members/${m.id}`)}
-                    className={`w-full text-left px-6 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedId === m.id ? 'bg-[#E1F5EE] border-l-4 border-l-[#1D9E75]' : ''}`}>
-                    <div className="flex items-start justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${m.status === 'active' ? 'bg-[#1D9E75]' : 'bg-gray-300'}`} />
-                          <p className="text-sm font-semibold text-gray-900 truncate">{m.full_name}</p>
+                filtered.map(m => {
+                  // Show a small amber warning when a parent/student has zero
+                  // active enrollments — they can't book anything until enrolled.
+                  const needsEnrollment = (m.role === 'parent' || m.role === 'student') && (m.enrollment_count || 0) === 0
+                  return (
+                    <button key={m.id} onClick={() => navigate(`/admin/members/${m.id}`)}
+                      className={`w-full text-left px-6 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedId === m.id ? 'bg-[#E1F5EE] border-l-4 border-l-[#1D9E75]' : ''}`}>
+                      <div className="flex items-start justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${m.status === 'active' ? 'bg-[#1D9E75]' : 'bg-gray-300'}`} />
+                            <p className="text-sm font-semibold text-gray-900 truncate">{m.full_name}</p>
+                          </div>
+                          <p className="text-xs text-gray-500 truncate pl-4">{m.email}</p>
+                          {m.role === 'parent' && m.child_name && (
+                            <p className="text-xs text-[#1D9E75] mt-0.5 pl-4">Child: {m.child_name}</p>
+                          )}
+                          {needsEnrollment && (
+                            <p className="text-[11px] text-amber-700 mt-1 pl-4 flex items-center gap-1">
+                              <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                              </svg>
+                              No program assigned
+                            </p>
+                          )}
                         </div>
-                        <p className="text-xs text-gray-500 truncate pl-4">{m.email}</p>
-                        {m.role === 'parent' && m.child_name && (
-                          <p className="text-xs text-[#1D9E75] mt-0.5 pl-4">Child: {m.child_name}</p>
-                        )}
+                        <RoleBadge role={m.role} />
                       </div>
-                      <RoleBadge role={m.role} />
-                    </div>
-                  </button>
-                ))
+                    </button>
+                  )
+                })
               )}
             </div>
 
