@@ -132,8 +132,17 @@ export default function ProgramSelector() {
 
         {visiblePrograms.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
-            <p className="font-display text-2xl text-[#064029] tracking-widest">NO PROGRAMS AVAILABLE</p>
-            <p className="text-gray-500 text-sm mt-2">Check back soon.</p>
+            <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="font-display text-2xl text-[#064029] tracking-widest">NOTHING TO BOOK YET</p>
+            <p className="text-gray-500 text-sm mt-2 max-w-sm mx-auto leading-relaxed">
+              You're not currently enrolled in any programs. Reach out to{' '}
+              <a href="mailto:info@swingtheory.golf" className="text-[#1D9E75] font-semibold hover:underline">
+                info@swingtheory.golf
+              </a>{' '}
+              to get started.
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
