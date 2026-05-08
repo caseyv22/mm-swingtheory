@@ -276,21 +276,36 @@ function ConfirmDeleteModal({ member, onClose, onConfirm, loading }) {
 }
 
 // ─── Password Reset Modal ─────────────────────────────────────────────────────
-function ResetLinkModal({ link, onClose }) {
+function NewTempPasswordModal({ tempPassword, emailSent, userEmail, onClose }) {
   const [copied, setCopied] = useState(false)
-  function copy() { navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000) }
+  function copy() { navigator.clipboard.writeText(tempPassword); setCopied(true); setTimeout(() => setCopied(false), 2000) }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="font-display text-xl text-[#064029] tracking-wide">PASSWORD RESET LINK</h2>
+          <h2 className="font-display text-xl text-[#064029] tracking-wide">PASSWORD RESET</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          <p className="text-sm text-gray-600">Share this link with the user. It expires after one use.</p>
-          <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs text-gray-700 break-all">{link}</div>
+          {emailSent ? (
+            <p className="text-sm text-gray-600">
+              A new temp password has been emailed to <strong>{userEmail}</strong>. They'll be required to change it on next login.
+            </p>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5">
+              ⚠ Email send failed. Share the temp password manually below.
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+              Temp Password (in case the email doesn't arrive)
+            </p>
+            <div className="bg-gray-50 rounded-lg p-3 font-mono text-sm text-gray-700 break-all">{tempPassword}</div>
+          </div>
+
           <button onClick={copy} className="w-full py-2.5 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors">
-            {copied ? '✓ Copied!' : 'Copy Link'}
+            {copied ? '✓ Copied!' : 'Copy Password'}
           </button>
         </div>
       </div>
@@ -770,7 +785,7 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
   const [saving, setSaving] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [resetLink, setResetLink] = useState(null)
+  const [resetResult, setResetResult] = useState(null)  // { tempPassword, emailSent } when reset succeeds
   const [resetting, setResetting] = useState(false)
   const [showAssignInstructor, setShowAssignInstructor] = useState(false)
   const [toast, setToast] = useState('')
@@ -809,8 +824,14 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
 
   async function handleResetPassword() {
     setResetting(true)
-    try { const data = await api.post(`/admin/members/${member.id}/reset-password`, {}); setResetLink(data.reset_link) }
-    catch (e) { showToast(e.message || 'Reset failed') } finally { setResetting(false) }
+    try {
+      const data = await api.post(`/admin/members/${member.id}/reset-password`, {})
+      setResetResult({ tempPassword: data.temp_password, emailSent: data.email_sent })
+    } catch (e) {
+      showToast(e.message || 'Reset failed')
+    } finally {
+      setResetting(false)
+    }
   }
 
   const isPending = member.clerk_id?.startsWith('pending_')
@@ -824,7 +845,14 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
         </div>
       )}
       {showDelete && <ConfirmDeleteModal member={member} onClose={() => setShowDelete(false)} onConfirm={handleDelete} loading={deleting} />}
-      {resetLink && <ResetLinkModal link={resetLink} onClose={() => setResetLink(null)} />}
+      {resetResult && (
+        <NewTempPasswordModal
+          tempPassword={resetResult.tempPassword}
+          emailSent={resetResult.emailSent}
+          userEmail={member.email}
+          onClose={() => setResetResult(null)}
+        />
+      )}
       {showAssignInstructor && (
         <AssignInstructorModal student={member} currentAssignments={assignedInstructors} allInstructors={allInstructors}
           onClose={() => setShowAssignInstructor(false)}
