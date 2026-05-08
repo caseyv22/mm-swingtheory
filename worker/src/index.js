@@ -12,7 +12,6 @@ import {
   reminderEmail,
   welcomeEmail,
   passwordResetEmail,
-  registryTeeTimeBookedEmail,
 } from './lib/email.js'
 import {
   leaguePointsForPlacement,
@@ -278,34 +277,6 @@ app.post('/webhooks/registry', async (c) => {
   }
 
   console.log(`[webhook/registry] created lesson=${lessonId} email=${emailNorm} id=${bookingId}`)
-
-  // ── 7. Notify instructor (best-effort; failure must not break the webhook) ─
-  // Registry expects a 200 within ~1s. Email send is wrapped so a Resend
-  // hiccup never causes Registry to retry the booking. We only get here on
-  // a freshly-created (non-duplicate) lesson, so the instructor receives at
-  // most one notification per Registry booking.
-  try {
-    const instructorUser = await c.env.DB.prepare(
-      'SELECT email, full_name FROM users WHERE id = ?'
-    ).bind(matchedUser.id).first()
-
-    if (instructorUser?.email) {
-      const { subject, html } = registryTeeTimeBookedEmail({
-        recipientName: (instructorUser.full_name || '').split(' ')[0] || 'there',
-        customerName: customerName,
-        customerEmail: customerEmail,
-        date,
-        startTime,
-        endTime,
-        bay,
-        lessonId,
-      })
-      await sendEmail(c.env, { to: instructorUser.email, subject, html })
-    }
-  } catch (e) {
-    console.error(`[webhook/registry] email_send_failed lesson=${lessonId}: ${e.message || e}`)
-  }
-
   return c.json({ ok: true, action: 'created', lesson_id: lessonId })
 })
 
