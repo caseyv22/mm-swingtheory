@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AdminLayout from '../../components/AdminLayout'
+import ConfirmModal from '../../components/ConfirmModal'
 import { api } from '../../lib/api'
 
 // ─── Constants (mirror worker/src/lib/tournamentPoints.js) ──────────────────
@@ -1083,29 +1084,76 @@ function ManageTab({ league, teams, seasons, onChange, onLeagueDeleted }) {
   const [editingSeason, setEditingSeason] = useState(null)
   const [editingLeague, setEditingLeague] = useState(false)
 
+  // Confirm modal targets — when set, the corresponding modal renders
+  const [deleteTeamTarget, setDeleteTeamTarget] = useState(null)
+  const [deleteSeasonTarget, setDeleteSeasonTarget] = useState(null)
+  const [showDeleteLeague, setShowDeleteLeague] = useState(false)
+
+  // Toast for non-blocking error/info messages (replaces alert())
+  const [toast, setToast] = useState('')
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3500)
+  }
+
   const activeTeamCount = teams.filter(t => t.active).length
 
-  async function deleteTeam(team) {
-    if (!confirm(`Delete team "${team.name}"? Their results will also be deleted.`)) return
-    try { await api.delete(`/admin/tournaments/teams/${team.id}`); onChange() } catch (e) { alert(e.message || 'Failed to delete') }
+  // Team actions
+  function deleteTeam(team) {
+    setDeleteTeamTarget(team)
+  }
+  async function confirmDeleteTeam() {
+    const team = deleteTeamTarget
+    setDeleteTeamTarget(null)
+    if (!team) return
+    try {
+      await api.delete(`/admin/tournaments/teams/${team.id}`)
+      onChange()
+    } catch (e) {
+      showToast(e.message || 'Failed to delete')
+    }
   }
   async function archiveTeam(team) {
-    try { await api.put(`/admin/tournaments/teams/${team.id}`, { active: 0 }); onChange() } catch (e) { alert(e.message || 'Failed to archive') }
+    try { await api.put(`/admin/tournaments/teams/${team.id}`, { active: 0 }); onChange() }
+    catch (e) { showToast(e.message || 'Failed to archive') }
   }
   async function unarchiveTeam(team) {
     if (activeTeamCount >= MAX_TEAMS) {
-      alert(`Max ${MAX_TEAMS} active teams per league. Archive another team first.`); return
+      showToast(`Max ${MAX_TEAMS} active teams per league. Archive another team first.`)
+      return
     }
-    try { await api.put(`/admin/tournaments/teams/${team.id}`, { active: 1 }); onChange() } catch (e) { alert(e.message || 'Failed to unarchive') }
+    try { await api.put(`/admin/tournaments/teams/${team.id}`, { active: 1 }); onChange() }
+    catch (e) { showToast(e.message || 'Failed to unarchive') }
   }
-  async function deleteSeason(season) {
-    if (!confirm(`Delete "${season.name}"? All weekly placements in this season will be erased.`)) return
-    try { await api.delete(`/admin/tournaments/seasons/${season.id}`); onChange() } catch (e) { alert(e.message || 'Failed to delete') }
+
+  // Season actions
+  function deleteSeason(season) {
+    setDeleteSeasonTarget(season)
   }
-  async function deleteLeague() {
-    if (!confirm(`Delete league "${league.name}"? This will erase ALL teams, seasons, and results in this league.`)) return
-    if (!confirm('This cannot be undone. Are you absolutely sure?')) return
-    try { await api.delete(`/admin/tournaments/leagues/${league.id}`); onLeagueDeleted() } catch (e) { alert(e.message || 'Failed to delete') }
+  async function confirmDeleteSeason() {
+    const season = deleteSeasonTarget
+    setDeleteSeasonTarget(null)
+    if (!season) return
+    try {
+      await api.delete(`/admin/tournaments/seasons/${season.id}`)
+      onChange()
+    } catch (e) {
+      showToast(e.message || 'Failed to delete')
+    }
+  }
+
+  // League delete — guarded by checkbox in the modal (replaces double-confirm)
+  function deleteLeague() {
+    setShowDeleteLeague(true)
+  }
+  async function confirmDeleteLeague() {
+    setShowDeleteLeague(false)
+    try {
+      await api.delete(`/admin/tournaments/leagues/${league.id}`)
+      onLeagueDeleted()
+    } catch (e) {
+      showToast(e.message || 'Failed to delete')
+    }
   }
 
   return (
@@ -1238,6 +1286,63 @@ function ManageTab({ league, teams, seasons, onChange, onLeagueDeleted }) {
           onClose={() => setEditingLeague(false)}
           onSuccess={() => { setEditingLeague(false); onChange() }}
         />
+      )}
+
+      {/* Confirm: delete team */}
+      {deleteTeamTarget && (
+        <ConfirmModal
+          title="DELETE TEAM"
+          subtitle={deleteTeamTarget.name}
+          confirmLabel="Delete Team"
+          confirmStyle="red"
+          iconType="destructive"
+          onConfirm={confirmDeleteTeam}
+          onClose={() => setDeleteTeamTarget(null)}
+        >
+          <p>This will permanently remove the team and all of their results across every season.</p>
+        </ConfirmModal>
+      )}
+
+      {/* Confirm: delete season */}
+      {deleteSeasonTarget && (
+        <ConfirmModal
+          title="DELETE SEASON"
+          subtitle={deleteSeasonTarget.name}
+          confirmLabel="Delete Season"
+          confirmStyle="red"
+          iconType="destructive"
+          onConfirm={confirmDeleteSeason}
+          onClose={() => setDeleteSeasonTarget(null)}
+        >
+          <p>All weekly placements in this season will be erased.</p>
+        </ConfirmModal>
+      )}
+
+      {/* Confirm: delete league — uses checkbox guardrail (replaces double-confirm) */}
+      {showDeleteLeague && (
+        <ConfirmModal
+          title="DELETE LEAGUE"
+          subtitle={league.name}
+          confirmLabel="Delete League"
+          confirmStyle="red"
+          iconType="destructive"
+          requireCheckbox="I understand this cannot be undone"
+          onConfirm={confirmDeleteLeague}
+          onClose={() => setShowDeleteLeague(false)}
+        >
+          <p>This will erase <strong>ALL</strong> teams, seasons, and results in this league.</p>
+          <p className="text-gray-500 text-xs">
+            Tick the box below to confirm you understand this action is permanent.
+          </p>
+        </ConfirmModal>
+      )}
+
+      {/* Toast for non-blocking error/info messages */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#064029] text-white text-sm font-semibold px-6 py-3 rounded-xl shadow-2xl flex items-center gap-2 max-w-md">
+          <svg className="w-4 h-4 text-[#1D9E75] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+          <span>{toast}</span>
+        </div>
       )}
     </div>
   )
@@ -1531,15 +1636,27 @@ function EditSeasonModal({ season, onClose, onSuccess }) {
   const [startedAt, setStartedAt] = useState(season.started_at || '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showPruneConfirm, setShowPruneConfirm] = useState(false)
 
   const newWeeks = parseInt(weeks, 10)
   const willPrune = Number.isInteger(newWeeks) && newWeeks < season.weeks
 
-  async function submit() {
+  function submit() {
     if (!name.trim()) { setError('Name required'); return }
     if (!Number.isInteger(newWeeks) || newWeeks < 1 || newWeeks > 52) { setError('Weeks must be 1–52'); return }
-    if (willPrune && !confirm(`Reducing weeks from ${season.weeks} to ${newWeeks} will erase any results AND week details in weeks ${newWeeks + 1}–${season.weeks}. Continue?`)) return
-    setLoading(true); setError('')
+    setError('')
+    // If this would erase data, surface a confirm modal first.
+    if (willPrune) {
+      setShowPruneConfirm(true)
+      return
+    }
+    actuallySave()
+  }
+
+  async function actuallySave() {
+    setShowPruneConfirm(false)
+    setLoading(true)
+    setError('')
     try {
       await api.put(`/admin/tournaments/seasons/${season.id}`, {
         name: name.trim(), weeks: newWeeks, status, started_at: startedAt || null,
@@ -1549,6 +1666,7 @@ function EditSeasonModal({ season, onClose, onSuccess }) {
   }
 
   return (
+    <>
     <ModalShell title="EDIT SEASON" onClose={onClose}>
       {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
       <div><FieldLabel required>Name</FieldLabel><input className={INPUT_CLS} value={name} onChange={e => setName(e.target.value)} /></div>
@@ -1576,5 +1694,22 @@ function EditSeasonModal({ season, onClose, onSuccess }) {
         </button>
       </div>
     </ModalShell>
+
+    {/* Stacked above EditSeasonModal at z-60 */}
+    {showPruneConfirm && (
+      <ConfirmModal
+        title="REDUCE SEASON WEEKS"
+        confirmLabel="Erase & Save"
+        confirmStyle="amber"
+        iconType="warning"
+        zIndex={60}
+        onConfirm={actuallySave}
+        onClose={() => setShowPruneConfirm(false)}
+      >
+        <p>Reducing weeks from <strong>{season.weeks}</strong> to <strong>{newWeeks}</strong> will erase any results AND week details in weeks <strong>{newWeeks + 1}–{season.weeks}</strong>.</p>
+        <p className="text-gray-500 text-xs">This cannot be undone.</p>
+      </ConfirmModal>
+    )}
+    </>
   )
 }
