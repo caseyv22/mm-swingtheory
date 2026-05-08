@@ -27,9 +27,9 @@ const STUDENT_TABS = [
 ]
 
 const INSTRUCTOR_TABS = [
-  { label: 'Sessions', href: '/instructor/sessions', Icon: Calendar },
-  { label: 'Students', href: '/instructor/students', Icon: Users },
   { label: 'Schedule', href: '/instructor/schedule', Icon: Clock },
+  { label: 'Students', href: '/instructor/students', Icon: Users },
+  { label: 'Sessions', href: '/instructor/sessions', Icon: Calendar },
   { label: 'Account',  href: '/account',              Icon: User },
 ]
 
