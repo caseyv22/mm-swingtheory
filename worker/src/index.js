@@ -1556,6 +1556,35 @@ app.get('/admin/members/:id/bookings', requireAdmin, async (c) => {
   return c.json({ bookings: bookings.results })
 })
 
+// ─── GET /admin/members/:id/last-login ────────────────────────────────────────
+// Fetches Clerk's last_sign_in_at for the user. Returns null if the user has
+// never signed in or if the Clerk lookup fails (we don't want a Clerk hiccup
+// to break the admin panel — the field is informational, not load-bearing).
+app.get('/admin/members/:id/last-login', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const user = await c.env.DB.prepare(
+    'SELECT clerk_id FROM users WHERE id = ?'
+  ).bind(id).first()
+  if (!user?.clerk_id) return c.json({ last_sign_in_at: null })
+
+  try {
+    const res = await fetch(`https://api.clerk.com/v1/users/${user.clerk_id}`, {
+      headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` },
+    })
+    if (!res.ok) {
+      console.warn(`[last-login] clerk fetch failed status=${res.status} user=${id}`)
+      return c.json({ last_sign_in_at: null })
+    }
+    const data = await res.json()
+    // Clerk returns last_sign_in_at as ms epoch (or null)
+    const ts = data?.last_sign_in_at
+    return c.json({ last_sign_in_at: ts ? new Date(ts).toISOString() : null })
+  } catch (e) {
+    console.warn(`[last-login] error user=${id}: ${e.message || e}`)
+    return c.json({ last_sign_in_at: null })
+  }
+})
+
 // ─── GET /admin/members/:id/instructor-students ───────────────────────────────
 // Returns students assigned to an instructor (for member detail panel)
 app.get('/admin/members/:id/instructor-students', requireAdmin, async (c) => {
