@@ -19,6 +19,34 @@ function isFuture(dateStr) {
   return new Date(dateStr + 'T23:59:59') >= new Date()
 }
 
+// ─── Date / time select options (Decision #18: predefined dropdowns, not native pickers) ─
+function generateDates(daysAhead = 365) {
+  const dates = []
+  const today = new Date()
+  for (let i = 0; i <= daysAhead; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
+    const val = d.toISOString().split('T')[0]
+    const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    dates.push({ val, label })
+  }
+  return dates
+}
+function generateTimes() {
+  const times = []
+  for (let h = 6; h < 22; h++) {
+    for (const m of [0, 30]) {
+      const val = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      const hour12 = h % 12 || 12
+      const ampm = h < 12 ? 'AM' : 'PM'
+      times.push({ val, label: `${hour12}:${String(m).padStart(2, '0')} ${ampm}` })
+    }
+  }
+  return times
+}
+const DATE_OPTIONS = generateDates(365)
+const TIME_OPTIONS = generateTimes()
+
 export default function InstructorLessonDetail() {
   const { lessonId } = useParams()
   const navigate = useNavigate()
@@ -224,6 +252,7 @@ export default function InstructorLessonDetail() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-2">
                 {isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>}
+                {isUnassigned && !isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Unassigned</span>}
                 {isWebhookSourced && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#1D9E75] bg-[#E1F5EE] px-2 py-0.5 rounded-full">
                     <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -232,7 +261,6 @@ export default function InstructorLessonDetail() {
                     Registry
                   </span>
                 )}
-                {isUnassigned && !isCancelled && <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Unassigned</span>}
               </div>
               <h1 className="font-display text-2xl text-[#064029] tracking-wide leading-none">{formatDate(lesson.date).toUpperCase()}</h1>
               <p className="text-sm text-gray-500 mt-1">{formatTime(lesson.start_time)} – {formatTime(lesson.end_time)}{lesson.bay ? ` · ${lesson.bay}` : ''}</p>
@@ -255,19 +283,28 @@ export default function InstructorLessonDetail() {
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Date</label>
-                <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                  value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+                <select className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                  value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}>
+                  <option value="">Select…</option>
+                  {DATE_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Start</label>
-                  <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                    value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+                  <select className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                    value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}>
+                    <option value="">Select…</option>
+                    {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">End</label>
-                  <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-                    value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+                  <select className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-sans bg-white focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                    value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}>
+                    <option value="">Select…</option>
+                    {TIME_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                  </select>
                 </div>
               </div>
               <div>
