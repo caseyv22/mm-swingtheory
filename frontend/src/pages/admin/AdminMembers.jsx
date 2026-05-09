@@ -28,6 +28,30 @@ function StatusDot({ status }) {
   )
 }
 
+// Formats an ISO timestamp as a human-readable last-login string.
+// undefined → '' (still loading; render nothing)
+// null      → 'Never'  (loaded, user has never signed in)
+// string    → 'Today' | 'Yesterday' | 'N days ago' | 'Mon D' | 'Mon D, YYYY'
+function formatLastLogin(iso) {
+  if (iso === undefined) return ''
+  if (iso === null) return 'Never'
+  const then = new Date(iso)
+  if (isNaN(then.getTime())) return 'Never'
+  const now = new Date()
+  // Compare by calendar day, not by 24-hour buckets, so "Today" and "Yesterday"
+  // match the user's intuition rather than "23 hours ago = yesterday".
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfThen = new Date(then.getFullYear(), then.getMonth(), then.getDate())
+  const dayDiff = Math.round((startOfToday - startOfThen) / 86_400_000)
+  if (dayDiff <= 0) return 'Today'
+  if (dayDiff === 1) return 'Yesterday'
+  if (dayDiff < 7) return `${dayDiff} days ago`
+  const sameYear = then.getFullYear() === now.getFullYear()
+  return then.toLocaleDateString('en-US', sameYear
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 // ─── Add Member Modal ─────────────────────────────────────────────────────────
 function AddMemberModal({ onClose, onSuccess }) {
   const [form, setForm] = useState({
@@ -789,6 +813,9 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
   const [resetting, setResetting] = useState(false)
   const [showAssignInstructor, setShowAssignInstructor] = useState(false)
   const [toast, setToast] = useState('')
+  // last_sign_in_at from Clerk. `undefined` = not yet loaded, `null` = loaded but
+  // user has never signed in, ISO string = loaded with a real timestamp.
+  const [lastLogin, setLastLogin] = useState(undefined)
   const navigate = useNavigate()
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
@@ -810,8 +837,12 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
     setShowDelete(false)
     setShowAssignInstructor(false)
     setShowAddEnrollment(false)
+    setLastLogin(undefined)
 
     api.get(`/admin/members/${member.id}/bookings`).then(d => setBookings(d.bookings || []))
+    api.get(`/admin/members/${member.id}/last-login`)
+      .then(d => setLastLogin(d.last_sign_in_at))
+      .catch(() => setLastLogin(null))
     if (member.role === 'student' || member.role === 'parent') {
       fetchAssignedInstructors()
       fetchEnrollments()
@@ -895,6 +926,11 @@ function MemberDetail({ member, onClose, onRefresh, allInstructors }) {
             <RoleBadge role={member.role} />
             {isPending && <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded font-medium">Invite Pending</span>}
           </div>
+          {lastLogin !== undefined && (
+            <p className={`text-xs mt-2 ${lastLogin === null ? 'text-amber-700 font-medium' : 'text-gray-500'}`}>
+              Last login: {formatLastLogin(lastLogin)}
+            </p>
+          )}
         </div>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-600 text-2xl leading-none mt-1">&times;</button>
       </div>
