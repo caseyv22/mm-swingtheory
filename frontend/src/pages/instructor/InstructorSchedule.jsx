@@ -504,7 +504,7 @@ export default function InstructorSchedule() {
                 <p className="text-sm text-gray-500 mt-0.5">{upcomingCount} upcoming lesson{upcomingCount !== 1 ? 's' : ''}</p>
               </div>
               <button
-                onClick={() => { setPrefilledDate(null); setShowAddLesson(true) }}
+                onClick={() => selectedDate ? handleAddFromDate(selectedDate) : (setPrefilledDate(null), setShowAddLesson(true))}
                 className="flex items-center gap-1.5 px-4 py-2 bg-[#064029] text-white text-sm font-semibold rounded-lg hover:bg-[#085041] transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -535,11 +535,7 @@ export default function InstructorSchedule() {
             {selectedDate && (
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-gray-700">{formatDate(selectedDate)}</p>
-                <div className="flex gap-2">
-                  <button onClick={() => handleAddFromDate(selectedDate)} className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]">+ Add lesson this day</button>
-                  <span className="text-gray-500">|</span>
-                  <button onClick={() => setSelectedDate(null)} className="text-xs font-semibold text-gray-500 hover:text-gray-600">← Show all</button>
-                </div>
+                <button onClick={() => setSelectedDate(null)} className="text-xs font-semibold text-gray-500 hover:text-gray-600">← Show all</button>
               </div>
             )}
           </div>
@@ -590,14 +586,6 @@ export default function InstructorSchedule() {
                 currentMonth={calendarMonth}
                 onMonthChange={handleMonthChange}
               />
-              {selectedDate && (
-                <button
-                  onClick={() => handleAddFromDate(selectedDate)}
-                  className="mt-3 w-full py-2.5 text-sm font-semibold text-[#1D9E75] border border-[#1D9E75]/30 rounded-lg hover:bg-[#E1F5EE] transition-colors"
-                >
-                  + Add lesson on {formatDateShort(selectedDate)}
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -624,12 +612,6 @@ export default function InstructorSchedule() {
                   </div>
                 ))
               )}
-              <button
-                onClick={() => handleAddFromDate(selectedDate)}
-                className="mt-3 w-full py-2 text-xs font-semibold text-[#1D9E75] border border-[#1D9E75]/30 rounded-lg hover:bg-[#E1F5EE] transition-colors"
-              >
-                + Add lesson on this day
-              </button>
             </div>
           )}
         </div>
