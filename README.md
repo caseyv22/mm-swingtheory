@@ -1,7 +1,7 @@
 # Swing Theory Booking Platform
-### Unified Platform Spec — v3.3
+### Unified Platform Spec — v3.4
 **Last Updated:** May 2026
-**Status:** Phases 1–7 complete · Prod live at `sync.swingtheory.golf` · PWA + Staff Schedule + Registry Golf integration shipped · Program enrollment gating live (v3.3)
+**Status:** Phases 1–7 complete · Prod live at `sync.swingtheory.golf` · PWA + Staff Schedule + Registry Golf integration shipped · Program enrollment gating live (v3.3) · Admin Add Student to session + session-day orphan cleanup (v3.4)
 
 ---
 
@@ -408,14 +408,15 @@ CREATE TABLE config (
 - `GET /admin/sessions` — sessions for a week (`?week=YYYY-MM-DD`)
 - `GET /admin/sessions/range` — sessions for a date range (`?start=&end=`)
 - `POST /admin/sessions` — create one-off session
-- `PUT /admin/sessions/:id` — update session (capacity, cancel, instructor)
+- `PUT /admin/sessions/:id` — update session (capacity, cancel, instructor). On `is_cancelled` 0→1 for a future-or-today session, cascades to bookings: every confirmed booking becomes `status='cancelled'` with `cancelled_at=now()`, and the existing session-cancelled email is sent to each affected user. Past sessions (`date < today`) get the flag flipped only — no booking cascade, no emails — so admin can clean up historical records without confusing users. Restoring a session (1→0) does NOT auto-restore bookings.
 - `GET /admin/sessions/:id/roster` — full roster for a session
 - `POST /admin/sessions/:id/instructors` — add instructor to session
 - `DELETE /admin/sessions/:id/instructors/:instructorId` — remove instructor from session
-- `POST /admin/bookings` — manual booking (bypasses capacity + window)
+- `POST /admin/bookings` — manual booking. Body `{session_id, user_id, auto_enroll?}` (auto_enroll defaults to true). Bypasses capacity, cancellation window, weekly limits, and the enrollment gate. **Reactivate-or-insert**: if a cancelled booking row exists for the same (session, user), reactivates it instead of inserting a new row (the bookings UNIQUE constraint covers all statuses, so a fresh INSERT would fail after a prior removal). **Auto-enrollment** (v3.4): if `auto_enroll` is true and the user is a parent/student with no active enrollment for the session's program, creates or reactivates an enrollment row after the booking succeeds. Sends booking confirmation email to the user + admin notification email. Returns `{ok, booking_id, enrolled}`.
 - `DELETE /admin/bookings/:id` — admin/swinger removes a person from a session (sends email)
 - `POST /admin/bookings/:id/checkin` — toggle check-in
 - `GET /admin/members` — list all users (`?q=search&status=active`)
+- `GET /admin/searchable-members` — search active parent/student users for the admin Add Student modal. Params: `q` (LIKE match on name/email), optional `program_id` (annotates each result with `is_enrolled`), optional `session_id` (annotates each result with `already_booked`). Limit 25. Mirrors the instructor-side equivalent but filtered to parents+students only.
 - `GET /admin/instructors` — list all instructors
 
 ### Admin only (use `requireAdmin` middleware)
@@ -434,8 +435,9 @@ CREATE TABLE config (
 - `PUT /admin/enrollments/:enrollmentId` — update enrollment dates / `is_active` flag
 - `DELETE /admin/enrollments/:enrollmentId` — soft-delete (sets `is_active = 0`); use `?hard=true` for hard delete
 - `GET /admin/programs` — list all programs
-- `PUT /admin/programs/:id` — update program settings (incl. `default_instructor_id`); accepts optional `existing_sessions_action: 'overwrite' | 'fill_empty_only'` for instructor-change behavior on existing sessions
+- `PUT /admin/programs/:id` — update program settings (incl. `default_instructor_id`). Accepts optional `existing_sessions_action: 'overwrite' | 'fill_empty_only'` for instructor-change behavior, and optional `session_days_action: 'skip' | 'delete_orphans'` (v3.4, defaults to `skip`) for removed-day cleanup. When `delete_orphans` is set, empty future sessions on removed days are deleted (with their `session_instructors` rows), and future sessions on removed days that have bookings are cancelled with the bookings cascading to `status='cancelled'` and users emailed. Past sessions and already-cancelled sessions are never touched. Returns counts: `{ok, sessions_updated, sessions_cleared, sessions_orphan_deleted, sessions_orphan_cancelled, bookings_orphan_cancelled}`.
 - `GET /admin/programs/:id/session-instructor-stats` — count of empty future sessions and existing assignments grouped by instructor; used by frontend to know whether to show the bulk-reassign confirmation dialog
+- `GET /admin/programs/:id/orphan-days-preview?session_days=mon,wed` — given a proposed new `session_days`, returns per-day counts of empty vs booked future sessions that would become orphans. Used by AdminPrograms before save to show a confirmation modal with real numbers. Response: `{removed_days, empty_count, bookings_count, affected_users, per_day: [{day, empty, with_bookings, total_bookings}]}`.
 - `GET /admin/programs/:id/enrollments` — list active enrollments for a program (joined with user name + email); used for program roster view
 - `POST /admin/programs` — create new program
 - `POST /admin/programs/:id/generate-sessions` — backfill sessions for a program
@@ -805,11 +807,19 @@ All via Resend. Sender: `info@swingtheory.golf`. Domain `swingtheory.golf` is ve
 - **v3.3:** Program enrollment gating — `enrollments` table + admin Add Member program/instructor selectors + Member profile Enrollments section (add/edit/deactivate/reactivate with branded modals) + Members list "No program assigned" indicator + booking gate on `POST /bookings`, `GET /programs`, `GET /programs/:slug/sessions` (gated behind `ENROLLMENT_ENFORCEMENT` env var, deployed dark, then enabled). Cascade updated to remove enrollments on member delete. Improved empty state on ProgramSelector for unenrolled users.
 - **v3.3:** AdminMembers stale-form bugfix — `MemberDetail` now resets `form` and transient UI flags in the `useEffect` keyed on `member.id`, fixing a bug where switching between members in the left list left the previously-selected member's data in the edit form (would have silently overwritten the wrong record on Save).
 - **v3.3:** Instructor nav reorder — Schedule → Students → Sessions → Account (was Sessions → Students → Schedule → Account); post-login landing changed from `/instructor/sessions` to `/instructor/schedule`. Updated in `NavBar.jsx`, `BottomNav.jsx`, and the RoleRouter in `App.jsx`. NavBar label "Calendar" renamed to "Schedule" to match the page title.
+- **v3.4:** Admin Add Student to session — new modal on AdminSessions roster panel lets admin/swinger add a parent or student to any specific session, bypassing capacity / window / weekly limits / enrollment gate. New endpoint `GET /admin/searchable-members` returns active parents+students annotated with `is_enrolled` and `already_booked` flags. `POST /admin/bookings` extended with `auto_enroll: boolean` (default true) — if user is a parent/student without an active enrollment for the session's program, creates/reactivates one in the same call. Modal shows an amber "Not enrolled — will be added on confirm" hint for unenrolled users; greys out and labels "Booked" for users already on the roster. Booking confirmation email + admin notification email are sent on success.
+- **v3.4:** Manual booking reactivate-or-insert — `POST /admin/bookings` no longer fails with "Already booked" when re-adding a previously-removed user. Mirrors the parent self-book pattern: confirmed-row → 400, cancelled-row → UPDATE back to confirmed (clears `cancelled_at`, refreshes `booked_at`, updates `child_id`), no row → INSERT. Bookings table `UNIQUE(session_id, user_id)` covers all statuses, so the blind-INSERT approach blocked admin from re-adding anyone who had ever been removed from a given session.
+- **v3.4:** Session cancel cascades to bookings — `PUT /admin/sessions/:id` with `is_cancelled: 1` on a future-or-today session now ALSO sets all confirmed bookings on that session to `status='cancelled'` with `cancelled_at=now()` (in addition to the existing email-send). Snapshots the user list before the UPDATE so emails go out to the same set regardless of UPDATE timing. **Past sessions** (`date < today`): no booking cascade, no emails — treated as admin record-correction only. **Restoring a cancelled session** (1→0): does NOT auto-restore bookings, by design — once admin emails users the session is off, those families have moved on; admin re-adds anyone who confirms they're still coming via the Add Student modal.
+- **v3.4:** session_days orphan cleanup on program edit — removing a day from a program's `session_days` would previously leave future sessions on that day stranded in the DB (the bug behind the May 2026 Wednesday Women's Clinic cleanup). Now: AdminPrograms calls a new `GET /admin/programs/:id/orphan-days-preview` before save; if any future sessions exist on a removed day, shows a confirmation modal with the count of empty sessions to delete and the count of sessions-with-bookings to cancel (with affected user count). On confirm, the PUT carries `session_days_action: 'delete_orphans'` and the worker: deletes empty future orphan sessions (plus their `session_instructors` rows), cancels future orphan sessions with bookings (cascade to bookings + session-cancelled emails). Default action remains `skip` so existing PUT callers are unaffected. Past sessions and already-cancelled sessions are never touched.
+- **v3.4:** DB cleanup — Wednesday Women's Clinic had 3 orphan Friday sessions (created May 2 when the program briefly had Fri in session_days, then never cleaned up after the days were corrected). Cleaned up via D1 console: cancelled and deleted Tram Nguyen's stale booking (`bkg_cde04ad3386a4d4cadfb`), deleted 3 `session_instructors` rows for Rafael Gomez on those sessions, then deleted the 3 orphan sessions (`sess_c266a4437a5f473ead84`, `sess_9d876971227e411b88cd`, `sess_f9c309d4bd20473ca121`). Verified cross-program orphan scan now returns zero rows.
 
 ### In Progress / Polish
 - Mobile QA across all roles and flows
 - Edge case error states
 - Iconography pass (consistent lucide-react usage)
+
+### Known scaling limits
+- `PUT /admin/programs/:id` with `session_days_action: 'delete_orphans'` sends emails synchronously inside the request. At extreme scale (removing a day from a multi-month program with hundreds of bookings), the email loop could approach Cloudflare Workers' 30s wall-time limit. Not a concern at current user volume. Mitigation when needed: move emails to `ctx.waitUntil()` so the response returns immediately and emails fire in the background.
 
 ### Not Started (v2 candidates)
 - Square / Stripe payment integration
