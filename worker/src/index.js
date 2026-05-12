@@ -1114,14 +1114,42 @@ app.post('/admin/bookings', requireAdminOrSwinger, async (c) => {
 
   // Create the booking first — primary intent. If this fails, we don't want
   // an orphan enrollment side-effect.
-  const id = 'bkg_' + uid()
-  try {
+  //
+  // Reactivate-or-insert pattern (mirrors POST /bookings parent self-book):
+  // The bookings UNIQUE(session_id, user_id) constraint covers ALL rows
+  // regardless of status, so we can't blindly INSERT for a user who was
+  // previously removed from this session. Check for an existing row first:
+  //   - status='confirmed' → return 400 "Already booked" (true duplicate)
+  //   - status='cancelled' → UPDATE that row back to confirmed (reactivate)
+  //   - no row → INSERT fresh
+  let id
+  const existingConfirmed = await c.env.DB.prepare(
+    "SELECT id FROM bookings WHERE session_id = ? AND user_id = ? AND status = 'confirmed'"
+  ).bind(session_id, user_id).first()
+  if (existingConfirmed) return c.json({ error: 'Already booked' }, 400)
+
+  const existingCancelled = await c.env.DB.prepare(
+    "SELECT id FROM bookings WHERE session_id = ? AND user_id = ? AND status = 'cancelled'"
+  ).bind(session_id, user_id).first()
+
+  if (existingCancelled) {
+    // Reactivate the cancelled booking
     await c.env.DB.prepare(
-      'INSERT INTO bookings (id, session_id, user_id, child_id, status) VALUES (?, ?, ?, ?, ?)'
-    ).bind(id, session_id, user_id, child_id, 'confirmed').run()
-  } catch (e) {
-    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already booked' }, 400)
-    throw e
+      "UPDATE bookings SET status = 'confirmed', cancelled_at = NULL, booked_at = datetime('now'), child_id = ? WHERE id = ?"
+    ).bind(child_id, existingCancelled.id).run()
+    id = existingCancelled.id
+  } else {
+    id = 'bkg_' + uid()
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO bookings (id, session_id, user_id, child_id, status) VALUES (?, ?, ?, ?, ?)'
+      ).bind(id, session_id, user_id, child_id, 'confirmed').run()
+    } catch (e) {
+      // Defensive: a race could insert between our SELECTs and this INSERT.
+      // Surface as "Already booked" so the UI behaves consistently.
+      if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already booked' }, 400)
+      throw e
+    }
   }
 
   // Auto-enroll AFTER booking succeeds. Best-effort: if this fails, log but
