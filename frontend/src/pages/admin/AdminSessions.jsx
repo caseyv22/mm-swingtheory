@@ -127,11 +127,14 @@ function MetricCard({ label, value, sub }) {
 function SessionCard({ session, isSelected, onClick }) {
   const pct = session.capacity > 0 ? Math.round((session.booked_count / session.capacity) * 100) : 0
   const isFull = session.booked_count >= session.capacity
+  // program_is_active is 0/1 from the worker; missing → treated as active (safe fallback)
+  const isInactiveProgram = session.program_is_active === 0
 
   return (
     <button onClick={onClick} className={`w-full text-left rounded-xl border px-4 py-3.5 transition-all hover:shadow-md ${
       isSelected ? 'border-[#1D9E75] bg-[#E1F5EE] shadow-md'
       : session.is_cancelled ? 'border-red-100 bg-red-50 opacity-70'
+      : isInactiveProgram ? 'border-amber-200 bg-amber-50/40'
       : 'border-gray-100 bg-white hover:border-gray-200'
     }`}>
       <div className="flex items-start justify-between mb-2">
@@ -140,13 +143,16 @@ function SessionCard({ session, isSelected, onClick }) {
           <p className="text-sm font-semibold text-gray-900 mt-0.5">{formatDateShort(session.date)}</p>
           <p className="text-xs text-gray-500">{formatTime(session.start_time)} – {formatTime(session.end_time)}</p>
         </div>
-        <div className="text-right">
+        <div className="text-right flex flex-col items-end gap-1">
           {!!session.is_cancelled ? (
             <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Cancelled</span>
           ) : (
             <span className={`text-xs font-semibold ${isFull ? 'text-red-500' : 'text-gray-600'}`}>
               {session.booked_count}/{session.capacity}
             </span>
+          )}
+          {isInactiveProgram && !session.is_cancelled && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Inactive</span>
           )}
         </div>
       </div>
@@ -426,6 +432,12 @@ function RosterPanel({ session, onClose, onUpdate }) {
           <div className="mt-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
             <p className="text-xs font-semibold text-red-600">CANCELLED</p>
             {session.cancel_reason && <p className="text-xs text-red-500 mt-0.5">{session.cancel_reason}</p>}
+          </div>
+        )}
+        {session.program_is_active === 0 && !session.is_cancelled && (
+          <div className="mt-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            <p className="text-xs font-semibold text-amber-700">INACTIVE PROGRAM</p>
+            <p className="text-xs text-amber-600 mt-0.5">This session is from a program that's been marked inactive. It's still shown because it has bookings.</p>
           </div>
         )}
       </div>
