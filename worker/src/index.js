@@ -880,30 +880,68 @@ app.put('/admin/sessions/:id', requireAdminOrSwinger, async (c) => {
     id
   ).run()
 
-  // If session was just cancelled, email all booked users
+  // If session was just cancelled, cancel all confirmed bookings (future only)
+  // and email all booked users.
+  //
+  // Rule (v3.4): Cancelling a future session cascades to bookings (status → 'cancelled')
+  // so admin doesn't have to remove people one-by-one and the DB doesn't accumulate stale
+  // 'confirmed' rows on cancelled sessions. Past sessions are treated as record-correction
+  // only — no booking cascade, no emails — because emailing people about a session that
+  // already happened would confuse them.
+  //
+  // Restoring a session (is_cancelled 1→0) deliberately does NOT restore the bookings.
+  // Once admin has emailed users that the session is off, those families have made other
+  // plans; admin should manually re-add anyone who confirms they're still coming.
   if (body.is_cancelled === 1 && !session.is_cancelled) {
-    try {
-      const bookedUsers = await c.env.DB.prepare(`
-        SELECT b.*, u.email, u.full_name, u.role, ch.first_name as child_name
-        FROM bookings b
-        JOIN users u ON b.user_id = u.id
-        LEFT JOIN children ch ON b.child_id = ch.id
-        WHERE b.session_id = ? AND b.status = 'confirmed'
-      `).bind(id).all()
-      const prog = await c.env.DB.prepare('SELECT name FROM programs WHERE id = ?').bind(session.program_id).first()
-      for (const booking of bookedUsers.results) {
-        const { subject: ss, html: sh } = sessionCancelledEmail({
-          recipientName: booking.full_name,
-          programName: prog?.name || 'Session',
-          date: session.date,
-          startTime: session.start_time,
-          cancelReason: body.cancel_reason,
-        })
-        await sendEmail(c.env, { to: booking.email, subject: ss, html: sh })
+    const todayStr = new Date().toISOString().split('T')[0]
+    const isFutureOrToday = session.date >= todayStr
+
+    if (isFutureOrToday) {
+      // 1. Snapshot the affected users BEFORE we update — so the email list is
+      //    independent of the UPDATE.
+      let bookedUsers = { results: [] }
+      let prog = null
+      try {
+        bookedUsers = await c.env.DB.prepare(`
+          SELECT b.id as booking_id, u.email, u.full_name, u.role, ch.first_name as child_name
+          FROM bookings b
+          JOIN users u ON b.user_id = u.id
+          LEFT JOIN children ch ON b.child_id = ch.id
+          WHERE b.session_id = ? AND b.status = 'confirmed'
+        `).bind(id).all()
+        prog = await c.env.DB.prepare('SELECT name FROM programs WHERE id = ?').bind(session.program_id).first()
+      } catch (e) {
+        console.error('Failed to fetch booked users before cancel cascade:', e.message)
       }
-    } catch (e) {
-      console.error('Session cancel emails failed:', e.message)
+
+      // 2. Cancel the bookings.
+      try {
+        await c.env.DB.prepare(`
+          UPDATE bookings
+          SET status = 'cancelled', cancelled_at = datetime('now')
+          WHERE session_id = ? AND status = 'confirmed'
+        `).bind(id).run()
+      } catch (e) {
+        console.error('Booking cascade-cancel failed:', e.message)
+      }
+
+      // 3. Send emails (non-blocking).
+      try {
+        for (const booking of bookedUsers.results) {
+          const { subject: ss, html: sh } = sessionCancelledEmail({
+            recipientName: booking.full_name,
+            programName: prog?.name || 'Session',
+            date: session.date,
+            startTime: session.start_time,
+            cancelReason: body.cancel_reason,
+          })
+          await sendEmail(c.env, { to: booking.email, subject: ss, html: sh })
+        }
+      } catch (e) {
+        console.error('Session cancel emails failed:', e.message)
+      }
     }
+    // Past sessions: no booking cascade, no emails. Just the is_cancelled flag flip.
   }
 
   return c.json({ ok: true })
@@ -2072,6 +2110,105 @@ app.get('/admin/programs/:id/session-instructor-stats', requireAdmin, async (c) 
   })
 })
 
+// GET /admin/programs/:id/orphan-days-preview?session_days=mon,wed
+//
+// Given a proposed new session_days for this program, returns a per-day
+// breakdown of future, non-cancelled sessions that would become "orphans"
+// (i.e. sessions on days that are no longer in session_days).
+//
+// Used by the frontend before saving a program edit to confirm what cleanup
+// will happen. Frontend then passes `session_days_action: 'delete_orphans'`
+// in PUT to actually perform the cleanup.
+//
+// Response:
+//   {
+//     removed_days: ['friday'],     // days dropped from session_days
+//     empty_count: 4,               // total empty future sessions on removed days
+//     bookings_count: 2,            // total future sessions with bookings on removed days
+//     affected_users: 5,            // total confirmed bookings across those sessions
+//     per_day: [
+//       { day: 'friday', empty: 4, with_bookings: 2, total_bookings: 5 }
+//     ]
+//   }
+//
+// If `session_days` query param is omitted or matches the current value
+// exactly, returns zeroed counts.
+app.get('/admin/programs/:id/orphan-days-preview', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const proposedRaw = c.req.query('session_days')
+
+  const program = await c.env.DB.prepare(
+    'SELECT id, session_days FROM programs WHERE id = ?'
+  ).bind(id).first()
+  if (!program) return c.json({ error: 'Program not found' }, 404)
+
+  const currentDays = new Set(
+    (program.session_days || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
+  )
+  const proposedDays = new Set(
+    (proposedRaw || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
+  )
+
+  // If frontend didn't supply a proposal, fall back to current — net result is empty.
+  const proposed = proposedRaw === undefined ? currentDays : proposedDays
+
+  const removedDays = [...currentDays].filter(d => !proposed.has(d))
+
+  if (removedDays.length === 0) {
+    return c.json({
+      removed_days: [],
+      empty_count: 0,
+      bookings_count: 0,
+      affected_users: 0,
+      per_day: [],
+    })
+  }
+
+  // For each removed day, count future non-cancelled sessions and their bookings.
+  // We do this in one pass per day to keep the query simple and bound to the
+  // number of days (at most 7).
+  const perDay = []
+  let totalEmpty = 0
+  let totalWithBookings = 0
+  let totalUsers = 0
+
+  for (const day of removedDays) {
+    const result = await c.env.DB.prepare(`
+      SELECT
+        s.id,
+        (SELECT COUNT(*) FROM bookings b
+         WHERE b.session_id = s.id AND b.status = 'confirmed') AS confirmed_count
+      FROM sessions s
+      WHERE s.program_id = ?
+        AND s.day_of_week = ?
+        AND s.date >= date('now')
+        AND (s.is_cancelled IS NULL OR s.is_cancelled = 0)
+    `).bind(id, day).all()
+
+    const rows = result.results || []
+    let empty = 0
+    let withBookings = 0
+    let totalBookings = 0
+    for (const r of rows) {
+      const n = r.confirmed_count || 0
+      if (n === 0) empty++
+      else { withBookings++; totalBookings += n }
+    }
+    perDay.push({ day, empty, with_bookings: withBookings, total_bookings: totalBookings })
+    totalEmpty += empty
+    totalWithBookings += withBookings
+    totalUsers += totalBookings
+  }
+
+  return c.json({
+    removed_days: removedDays,
+    empty_count: totalEmpty,
+    bookings_count: totalWithBookings,
+    affected_users: totalUsers,
+    per_day: perDay,
+  })
+})
+
 // PUT /admin/programs/:id
 //
 // Updates the program record, then propagates Default Instructor changes to
@@ -2236,10 +2373,131 @@ app.put('/admin/programs/:id', requireAdmin, async (c) => {
     }
   }
 
+  // ── session_days orphan cleanup (v3.4) ───────────────────────────────────
+  // If admin removed a day from session_days AND opted in via
+  // `session_days_action: 'delete_orphans'`, clean up future sessions on the
+  // removed days:
+  //   - Empty future sessions on removed days → DELETE (and their session_instructors rows)
+  //   - Future sessions on removed days WITH bookings → cancel the session
+  //     (is_cancelled = 1), cancel the bookings (status = 'cancelled'), and
+  //     email the affected users.
+  //
+  // This mirrors the Default Instructor opt-in pattern: frontend hits the
+  // preview endpoint first, shows admin the count, and only sends this action
+  // flag after explicit admin confirmation.
+  let sessionsOrphanDeleted = 0
+  let sessionsOrphanCancelled = 0
+  let bookingsOrphanCancelled = 0
+
+  const sessionDaysAction = body.session_days_action || 'skip'
+  if (sessionDaysAction === 'delete_orphans' && body.session_days !== undefined) {
+    const oldDays = new Set(
+      (program.session_days || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
+    )
+    const newDays = new Set(
+      (body.session_days || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean)
+    )
+    const removedDays = [...oldDays].filter(d => !newDays.has(d))
+
+    if (removedDays.length > 0) {
+      // Pull every future non-cancelled session on a removed day, with booking count
+      const orphanSessionsResult = await c.env.DB.prepare(`
+        SELECT
+          s.id, s.date, s.start_time, s.day_of_week,
+          (SELECT COUNT(*) FROM bookings b
+           WHERE b.session_id = s.id AND b.status = 'confirmed') AS confirmed_count
+        FROM sessions s
+        WHERE s.program_id = ?
+          AND s.day_of_week IN (${removedDays.map(() => '?').join(',')})
+          AND s.date >= date('now')
+          AND (s.is_cancelled IS NULL OR s.is_cancelled = 0)
+      `).bind(id, ...removedDays).all()
+
+      const orphans = orphanSessionsResult.results || []
+      const emptyIds = orphans.filter(s => (s.confirmed_count || 0) === 0).map(s => s.id)
+      const bookedSessions = orphans.filter(s => (s.confirmed_count || 0) > 0)
+
+      // ── 1. Delete empty orphans (and their session_instructors rows) ──
+      if (emptyIds.length > 0) {
+        const ph = '(' + emptyIds.map(() => '?').join(',') + ')'
+        try {
+          // Delete session_instructors first (FK constraint)
+          await c.env.DB.prepare(
+            `DELETE FROM session_instructors WHERE session_id IN ${ph}`
+          ).bind(...emptyIds).run()
+          // Then delete sessions
+          await c.env.DB.prepare(
+            `DELETE FROM sessions WHERE id IN ${ph}`
+          ).bind(...emptyIds).run()
+          sessionsOrphanDeleted = emptyIds.length
+        } catch (e) {
+          console.error('Orphan empty-session delete failed:', e.message)
+        }
+      }
+
+      // ── 2. Cancel orphans with bookings + cancel their bookings + email ──
+      for (const sess of bookedSessions) {
+        // Snapshot booked users BEFORE the update, so emails go out with
+        // names/emails captured at this moment.
+        let bookedUsers = { results: [] }
+        try {
+          bookedUsers = await c.env.DB.prepare(`
+            SELECT b.id as booking_id, u.email, u.full_name, ch.first_name as child_name
+            FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            LEFT JOIN children ch ON b.child_id = ch.id
+            WHERE b.session_id = ? AND b.status = 'confirmed'
+          `).bind(sess.id).all()
+        } catch (e) {
+          console.error('Failed to fetch booked users for orphan session', sess.id, e.message)
+          continue
+        }
+
+        // Cancel session + cancel bookings
+        try {
+          await c.env.DB.prepare(`
+            UPDATE sessions SET is_cancelled = 1, cancel_reason = ?
+            WHERE id = ?
+          `).bind('Program schedule changed', sess.id).run()
+          await c.env.DB.prepare(`
+            UPDATE bookings
+            SET status = 'cancelled', cancelled_at = datetime('now')
+            WHERE session_id = ? AND status = 'confirmed'
+          `).bind(sess.id).run()
+          sessionsOrphanCancelled++
+          bookingsOrphanCancelled += bookedUsers.results.length
+        } catch (e) {
+          console.error('Orphan booked-session cancel failed for', sess.id, e.message)
+          continue
+        }
+
+        // Email users (non-blocking)
+        try {
+          const updatedProg = await c.env.DB.prepare('SELECT name FROM programs WHERE id = ?').bind(id).first()
+          for (const booking of bookedUsers.results) {
+            const { subject: ss, html: sh } = sessionCancelledEmail({
+              recipientName: booking.full_name,
+              programName: updatedProg?.name || 'Session',
+              date: sess.date,
+              startTime: sess.start_time,
+              cancelReason: 'Program schedule changed',
+            })
+            await sendEmail(c.env, { to: booking.email, subject: ss, html: sh })
+          }
+        } catch (e) {
+          console.error('Orphan cancel emails failed for session', sess.id, e.message)
+        }
+      }
+    }
+  }
+
   return c.json({
     ok: true,
     sessions_updated: sessionsUpdated,
     sessions_cleared: sessionsCleared,
+    sessions_orphan_deleted: sessionsOrphanDeleted,
+    sessions_orphan_cancelled: sessionsOrphanCancelled,
+    bookings_orphan_cancelled: bookingsOrphanCancelled,
   })
 })
 
