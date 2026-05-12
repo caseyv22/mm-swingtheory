@@ -798,6 +798,15 @@ app.get('/student/lessons', requireAuth, async (c) => {
 // ─── ADMIN ROUTES ─────────────────────────────────────────────────────────────
 
 // GET /admin/sessions?week=YYYY-MM-DD
+//
+// Returns sessions for the requested Sun–Sat week.
+//
+// Inactive-program filter (v3.4): sessions belonging to inactive programs are
+// hidden UNLESS the session has at least one confirmed booking. This lets admin
+// mark a program "done" without immediately abandoning the parents still booked
+// on its remaining sessions — those sessions stay visible so admin can cancel
+// them through the normal flow (which emails affected users). The `program_is_active`
+// flag on each row tells the frontend to render an "Inactive" badge.
 app.get('/admin/sessions', requireAdminOrSwinger, async (c) => {
   const week = c.req.query('week') || new Date().toISOString().split('T')[0]
   const weekStart = new Date(week)
@@ -808,7 +817,7 @@ app.get('/admin/sessions', requireAdminOrSwinger, async (c) => {
 
   const sessions = await c.env.DB.prepare(`
     SELECT s.*,
-      p.name as program_name, p.slug as program_slug,
+      p.name as program_name, p.slug as program_slug, p.is_active as program_is_active,
       i.id as instr_id, u.full_name as instructor_name,
       (SELECT COUNT(*) FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed') as booked_count
     FROM sessions s
@@ -816,6 +825,10 @@ app.get('/admin/sessions', requireAdminOrSwinger, async (c) => {
     LEFT JOIN instructors i ON s.instructor_id = i.id
     LEFT JOIN users u ON i.user_id = u.id
     WHERE s.date >= ? AND s.date <= ?
+      AND (
+        p.is_active = 1
+        OR EXISTS (SELECT 1 FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed')
+      )
     ORDER BY s.date ASC, s.start_time ASC
   `).bind(weekStart.toISOString().split('T')[0], weekEnd.toISOString().split('T')[0]).all()
 
@@ -823,15 +836,22 @@ app.get('/admin/sessions', requireAdminOrSwinger, async (c) => {
 })
 
 // GET /admin/sessions/range?start=&end=
+//
+// Same inactive-program rule as GET /admin/sessions: hidden unless the session
+// has confirmed bookings.
 app.get('/admin/sessions/range', requireAdminOrSwinger, async (c) => {
   const { start, end } = c.req.query()
   const sessions = await c.env.DB.prepare(`
     SELECT s.*,
-      p.name as program_name, p.slug as program_slug,
+      p.name as program_name, p.slug as program_slug, p.is_active as program_is_active,
       (SELECT COUNT(*) FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed') as booked_count
     FROM sessions s
     JOIN programs p ON s.program_id = p.id
     WHERE s.date >= ? AND s.date <= ?
+      AND (
+        p.is_active = 1
+        OR EXISTS (SELECT 1 FROM bookings b WHERE b.session_id = s.id AND b.status = 'confirmed')
+      )
     ORDER BY s.date ASC
   `).bind(start, end).all()
   return c.json({ sessions: sessions.results })
