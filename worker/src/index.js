@@ -980,19 +980,102 @@ app.delete('/admin/sessions/:id/instructors/:instructor_id', requireAdminOrSwing
   return c.json({ ok: true })
 })
 
+// GET /admin/searchable-members — for the admin manual-add modal on AdminSessions
+//
+// Returns active parent + student users, optionally filtered by `q` (name/email LIKE),
+// and optionally annotated with enrollment status for a given `program_id` and an
+// `already_booked` flag for a given `session_id`. The frontend uses this to:
+//   1. Hide users already on the roster for the selected session
+//   2. Show an "Enrollment will be created" warning for unenrolled users (Option A flow)
+app.get('/admin/searchable-members', requireAdminOrSwinger, async (c) => {
+  const q = c.req.query('q') || ''
+  const programId = c.req.query('program_id') || null
+  const sessionId = c.req.query('session_id') || null
+
+  const result = await c.env.DB.prepare(`
+    SELECT u.id, u.full_name, u.email, u.role, ch.first_name as child_name
+    FROM users u
+    LEFT JOIN children ch ON ch.parent_id = u.id
+    WHERE u.status = 'active'
+      AND u.role IN ('parent', 'student')
+      AND (u.full_name LIKE ? OR u.email LIKE ?)
+    ORDER BY u.full_name ASC
+    LIMIT 25
+  `).bind(`%${q}%`, `%${q}%`).all()
+
+  const members = result.results || []
+  if (members.length === 0) return c.json({ members: [] })
+
+  // Build the enrolled-user-id set for this program (if program_id supplied)
+  let enrolledIds = new Set()
+  if (programId) {
+    const enr = await c.env.DB.prepare(`
+      SELECT user_id FROM enrollments
+      WHERE program_id = ? AND is_active = 1
+    `).bind(programId).all()
+    enrolledIds = new Set((enr.results || []).map(r => r.user_id))
+  }
+
+  // Build the already-booked-user-id set for this session (if session_id supplied)
+  let bookedIds = new Set()
+  if (sessionId) {
+    const bks = await c.env.DB.prepare(`
+      SELECT user_id FROM bookings
+      WHERE session_id = ? AND status = 'confirmed'
+    `).bind(sessionId).all()
+    bookedIds = new Set((bks.results || []).map(r => r.user_id))
+  }
+
+  const annotated = members.map(m => ({
+    ...m,
+    is_enrolled: programId ? enrolledIds.has(m.id) : null,
+    already_booked: sessionId ? bookedIds.has(m.id) : false,
+  }))
+
+  return c.json({ members: annotated })
+})
+
 // POST /admin/bookings — manual booking bypasses all rules
+//
+// Body: { session_id, user_id, auto_enroll? }
+//
+// Behavior:
+// - Bypasses capacity, cancellation window, weekly booking limits, and enrollment gate.
+// - If `auto_enroll` is true (default) AND the user has no active enrollment for the
+//   session's program, creates an enrollment row (no start/end dates → ongoing).
+//   This is idempotent: reactivates a soft-disabled row if one exists.
+// - Sends booking confirmation email to the user (matches the parent self-book flow).
+// - Sends admin notification email to config.admin_email.
+//
+// Returns: { ok, booking_id, enrolled }  where `enrolled` is true if this call
+// created or reactivated an enrollment row.
 app.post('/admin/bookings', requireAdminOrSwinger, async (c) => {
-  const { session_id, user_id } = await c.req.json()
+  const { session_id, user_id, auto_enroll = true } = await c.req.json()
 
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user_id).first()
   if (!user) return c.json({ error: 'User not found' }, 404)
 
+  // Fetch session + program info up-front (needed for enrollment + emails)
+  const session = await c.env.DB.prepare(`
+    SELECT s.*, p.name as program_name, p.id as program_id,
+      u2.full_name as instructor_name
+    FROM sessions s
+    JOIN programs p ON s.program_id = p.id
+    LEFT JOIN instructors i ON s.instructor_id = i.id
+    LEFT JOIN users u2 ON i.user_id = u2.id
+    WHERE s.id = ?
+  `).bind(session_id).first()
+  if (!session) return c.json({ error: 'Session not found' }, 404)
+
+  // Resolve child_id for parent bookers
   let child_id = null
   if (user.role === 'parent') {
     const child = await c.env.DB.prepare('SELECT id FROM children WHERE parent_id = ?').bind(user_id).first()
     if (child) child_id = child.id
   }
 
+  // Create the booking first — primary intent. If this fails, we don't want
+  // an orphan enrollment side-effect.
   const id = 'bkg_' + uid()
   try {
     await c.env.DB.prepare(
@@ -1003,7 +1086,77 @@ app.post('/admin/bookings', requireAdminOrSwinger, async (c) => {
     throw e
   }
 
-  return c.json({ ok: true, booking_id: id })
+  // Auto-enroll AFTER booking succeeds. Best-effort: if this fails, log but
+  // still return success — booking is already saved and admin can manually
+  // add the enrollment later from the Member profile. (Matches the
+  // POST /admin/members enrollment-warning pattern.)
+  let enrolled = false
+  if (auto_enroll && (user.role === 'parent' || user.role === 'student')) {
+    try {
+      const existing = await c.env.DB.prepare(
+        'SELECT id, is_active FROM enrollments WHERE user_id = ? AND program_id = ?'
+      ).bind(user_id, session.program_id).first()
+
+      if (!existing) {
+        const enrollmentId = 'enr_' + uid()
+        try {
+          await c.env.DB.prepare(`
+            INSERT INTO enrollments (id, user_id, program_id, start_date, end_date, is_active)
+            VALUES (?, ?, ?, NULL, NULL, 1)
+          `).bind(enrollmentId, user_id, session.program_id).run()
+          enrolled = true
+        } catch (e) {
+          // Unique-constraint race-condition fallback: treat as already enrolled
+          if (!e.message?.includes('UNIQUE')) throw e
+        }
+      } else if (existing.is_active === 0) {
+        await c.env.DB.prepare(`
+          UPDATE enrollments
+          SET is_active = 1, updated_at = datetime('now')
+          WHERE id = ?
+        `).bind(existing.id).run()
+        enrolled = true
+      }
+    } catch (e) {
+      console.error('Auto-enroll failed after booking insert:', e.message)
+    }
+  }
+
+  // Send confirmation emails (non-blocking — booking is already saved)
+  try {
+    const child2 = child_id
+      ? await c.env.DB.prepare('SELECT first_name FROM children WHERE id = ?').bind(child_id).first()
+      : null
+    const config = await c.env.DB.prepare('SELECT admin_email FROM config WHERE id = 1').first()
+    const adminEmail = config?.admin_email || 'info@swingtheory.golf'
+
+    const { subject, html } = bookingConfirmedEmail({
+      recipientName: user.full_name,
+      programName: session.program_name,
+      date: session.date,
+      startTime: session.start_time,
+      endTime: session.end_time,
+      bay: session.bay,
+      instructorName: session.instructor_name,
+      bookerType: user.role,
+      childName: child2?.first_name,
+    })
+    await sendEmail(c.env, { to: user.email, subject, html })
+
+    const { subject: aSubj, html: aHtml } = bookingConfirmedAdminEmail({
+      recipientName: user.full_name,
+      recipientEmail: user.email,
+      programName: session.program_name,
+      date: session.date,
+      startTime: session.start_time,
+      childName: child2?.first_name,
+    })
+    await sendEmail(c.env, { to: adminEmail, subject: aSubj, html: aHtml })
+  } catch (e) {
+    console.error('Manual-booking email send failed:', e.message)
+  }
+
+  return c.json({ ok: true, booking_id: id, enrolled })
 })
 
 // DELETE /admin/bookings/:id — admin/swinger removes a person from a session (bypasses cancellation window)
