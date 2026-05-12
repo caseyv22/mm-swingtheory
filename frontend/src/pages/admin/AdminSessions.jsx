@@ -168,6 +168,137 @@ function SessionCard({ session, isSelected, onClick }) {
   )
 }
 
+// ─── Add Student Modal ────────────────────────────────────────────────────────
+// Lets admin/swinger add a parent or student to a specific session. Bypasses
+// capacity / cancellation window / weekly limits. Auto-enrolls the user in the
+// program if they aren't already enrolled.
+function AddStudentModal({ session, onClose, onAdded }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(null)  // user_id being added
+  const [error, setError] = useState('')
+
+  // Debounced search — fetches enrollment status + already-booked flag from API
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          q: query,
+          program_id: session.program_id,
+          session_id: session.id,
+        })
+        const data = await api.get(`/admin/searchable-members?${params.toString()}`)
+        if (!cancelled) setResults(data.members || [])
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Search failed')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }, 200)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, session.id, session.program_id])
+
+  async function handleAdd(member) {
+    setAdding(member.id)
+    setError('')
+    try {
+      const res = await api.post('/admin/bookings', {
+        session_id: session.id,
+        user_id: member.id,
+        auto_enroll: true,
+      })
+      onAdded({
+        message: res.enrolled
+          ? `Added & enrolled ${member.child_name || member.full_name}`
+          : `Added ${member.child_name || member.full_name}`,
+      })
+    } catch (e) {
+      setError(e.message || 'Could not add')
+      setAdding(null)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="font-display text-xl text-[#064029] tracking-wide">ADD STUDENT</h2>
+            <p className="text-sm text-gray-500 mt-0.5">{session.program_name} — {formatDateShort(session.date)}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+
+        <div className="px-6 py-4 shrink-0">
+          <input
+            type="text"
+            autoFocus
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search by name or email…"
+            className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#1D9E75] focus:ring-1 focus:ring-[#1D9E75]"
+          />
+          {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 pb-4">
+          {loading && results.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">Searching…</p>
+          ) : results.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6 italic">No matches</p>
+          ) : (
+            <div className="space-y-1.5">
+              {results.map(m => {
+                const isBooked = m.already_booked
+                const isAdding = adding === m.id
+                const needsEnroll = m.is_enrolled === false
+                return (
+                  <div
+                    key={m.id}
+                    className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border ${
+                      isBooked ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200 hover:border-[#1D9E75]'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {m.child_name || m.full_name}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {m.child_name ? `Parent: ${m.full_name}` : m.email}
+                      </p>
+                      {needsEnroll && !isBooked && (
+                        <p className="text-[11px] text-amber-700 font-medium mt-0.5">
+                          ⚠ Not enrolled — will be added on confirm
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleAdd(m)}
+                      disabled={isBooked || isAdding}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 ${
+                        isBooked
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : isAdding
+                            ? 'bg-[#1D9E75] text-white opacity-60'
+                            : 'bg-[#064029] text-white hover:bg-[#085041]'
+                      }`}
+                    >
+                      {isBooked ? 'Booked' : isAdding ? 'Adding…' : 'Add'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Roster Panel ─────────────────────────────────────────────────────────────
 function RosterPanel({ session, onClose, onUpdate }) {
   const [roster, setRoster] = useState(null)
@@ -183,6 +314,7 @@ function RosterPanel({ session, onClose, onUpdate }) {
   const [addingInstructor, setAddingInstructor] = useState(false)
   const [newInstructorId, setNewInstructorId] = useState('')
   const [removeTarget, setRemoveTarget] = useState(null)  // { bookingId, displayName } when confirming removal
+  const [showAddStudent, setShowAddStudent] = useState(false)
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -404,9 +536,22 @@ function RosterPanel({ session, onClose, onUpdate }) {
         </div>
 
         <div>
-          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-3">
-            Roster {roster && `(${roster.bookings?.length || 0}/${session.capacity})`}
-          </p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+              Roster {roster && `(${roster.bookings?.length || 0}/${session.capacity})`}
+            </p>
+            {!session.is_cancelled && (
+              <button
+                onClick={() => setShowAddStudent(true)}
+                className="flex items-center gap-1 text-xs font-bold text-[#1D9E75] hover:text-[#064029] uppercase tracking-wider transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Student
+              </button>
+            )}
+          </div>
           {loading ? (
             <div className="text-center py-6 text-sm text-gray-500">Loading roster…</div>
           ) : !roster || roster.bookings?.length === 0 ? (
@@ -459,6 +604,18 @@ function RosterPanel({ session, onClose, onUpdate }) {
       >
         <p>Remove this person from the session? They will be notified by email.</p>
       </ConfirmModal>
+    )}
+    {showAddStudent && (
+      <AddStudentModal
+        session={{ ...session, program_name: roster?.session?.program_name || session.program_name }}
+        onClose={() => setShowAddStudent(false)}
+        onAdded={({ message }) => {
+          setShowAddStudent(false)
+          showToast(message)
+          loadRoster()
+          onUpdate()
+        }}
+      />
     )}
     </>
   )
