@@ -546,12 +546,13 @@ function ConfirmDeactivateEnrollmentModal({ programName, onClose, onConfirm, loa
   )
 }
 
-// Single active enrollment row with inline date editor
+// Single active enrollment row with inline date editor + payment-status toggle (v3.5)
 function EnrollmentRow({ enrollment, busy, onDeactivate, onUpdate, onToast }) {
   const [editing, setEditing] = useState(false)
   const [startDate, setStartDate] = useState(enrollment.start_date || '')
   const [endDate, setEndDate] = useState(enrollment.end_date || '')
   const [saving, setSaving] = useState(false)
+  const [paymentBusy, setPaymentBusy] = useState(false)
 
   async function saveDates() {
     setSaving(true)
@@ -570,6 +571,30 @@ function EnrollmentRow({ enrollment, busy, onDeactivate, onUpdate, onToast }) {
     }
   }
 
+  // Flip payment_status. Worker auto-clears payment_date when status moves
+  // off 'paid', and stamps today's date when moving TO 'paid' (we pass it
+  // explicitly to keep the source of truth client-side and visible).
+  async function togglePayment(nextStatus) {
+    setPaymentBusy(true)
+    try {
+      const body = { payment_status: nextStatus }
+      if (nextStatus === 'paid') {
+        body.payment_date = new Date().toISOString().slice(0, 10)
+      }
+      await api.put(`/admin/enrollments/${enrollment.id}`, body)
+      onUpdate()
+      onToast(
+        nextStatus === 'paid' ? 'Marked paid' :
+        nextStatus === 'unpaid' ? 'Marked unpaid' :
+        'Payment status cleared'
+      )
+    } catch (e) {
+      onToast(e.message || 'Failed to update payment')
+    } finally {
+      setPaymentBusy(false)
+    }
+  }
+
   function cancelEdit() {
     setStartDate(enrollment.start_date || '')
     setEndDate(enrollment.end_date || '')
@@ -583,30 +608,64 @@ function EnrollmentRow({ enrollment, busy, onDeactivate, onUpdate, onToast }) {
   }
 
   const programInactive = !enrollment.program_active
+  const paymentStatus = enrollment.payment_status // 'paid' | 'unpaid' | null
+
+  // Left-edge color bar — green / amber / gray depending on payment state.
+  // Inactive program overrides to amber so the warning still reads first.
+  const leftBarColor =
+    programInactive ? '#EF9F27' :
+    paymentStatus === 'paid' ? '#1D9E75' :
+    paymentStatus === 'unpaid' ? '#EF9F27' :
+    '#D3D1C7'
 
   return (
-    <div className={`border rounded-lg p-3 ${programInactive ? 'border-amber-200 bg-amber-50/50' : 'border-gray-200 bg-white'}`}>
+    <div
+      className={`bg-white border border-gray-200 rounded-r-lg p-3 ${programInactive ? 'bg-amber-50/50' : ''}`}
+      style={{ borderLeft: `3px solid ${leftBarColor}`, borderRadius: '0 0.5rem 0.5rem 0' }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold text-[#064029] truncate">{enrollment.program_name}</p>
             {programInactive && (
               <span className="text-[10px] uppercase tracking-wider font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">Program inactive</span>
             )}
           </div>
           {!editing && (
-            <p className="text-xs text-gray-500 mt-0.5">
-              {fmt(enrollment.start_date) ? `Starts ${fmt(enrollment.start_date)}` : 'No start date'}
-              <span className="mx-1.5 text-gray-300">·</span>
-              {fmt(enrollment.end_date) ? `Ends ${fmt(enrollment.end_date)}` : 'Ongoing'}
-            </p>
+            <>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {fmt(enrollment.start_date) ? `Starts ${fmt(enrollment.start_date)}` : 'No start date'}
+                <span className="mx-1.5 text-gray-300">·</span>
+                {fmt(enrollment.end_date) ? `Ends ${fmt(enrollment.end_date)}` : 'Ongoing'}
+              </p>
+              {/* Payment status line — green/amber/gray to match the left bar */}
+              <PaymentStatusLine status={paymentStatus} paymentDate={enrollment.payment_date} fmt={fmt} />
+            </>
           )}
         </div>
         {!editing && (
           <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Payment toggle: "Mark paid" when unpaid/untracked, "Mark unpaid" when paid */}
+            {paymentStatus === 'paid' ? (
+              <button
+                onClick={() => togglePayment('unpaid')}
+                disabled={paymentBusy || busy}
+                className="text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50"
+              >
+                Mark unpaid
+              </button>
+            ) : (
+              <button
+                onClick={() => togglePayment('paid')}
+                disabled={paymentBusy || busy}
+                className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029] disabled:opacity-50"
+              >
+                Mark paid
+              </button>
+            )}
             <button
               onClick={() => setEditing(true)}
-              className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029]"
+              className="text-xs font-semibold text-gray-600 hover:text-gray-800"
             >
               Edit
             </button>
@@ -658,6 +717,42 @@ function EnrollmentRow({ enrollment, busy, onDeactivate, onUpdate, onToast }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Small inline status line — green check for paid, amber alert for unpaid,
+// gray dash for untracked. Lives under the date line on each enrollment row.
+function PaymentStatusLine({ status, paymentDate, fmt }) {
+  if (status === 'paid') {
+    return (
+      <div className="flex items-center gap-1.5 mt-1.5">
+        <svg className="w-3.5 h-3.5 text-[#1D9E75] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span className="text-xs font-medium text-[#085041]">
+          Paid{paymentDate ? ` · ${fmt(paymentDate)}` : ''}
+        </span>
+      </div>
+    )
+  }
+  if (status === 'unpaid') {
+    return (
+      <div className="flex items-center gap-1.5 mt-1.5">
+        <svg className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <span className="text-xs font-medium text-amber-800">Payment due</span>
+      </div>
+    )
+  }
+  // null / undefined — not tracked
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5">
+      <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+      </svg>
+      <span className="text-xs font-medium text-gray-500">Payment not tracked</span>
     </div>
   )
 }
