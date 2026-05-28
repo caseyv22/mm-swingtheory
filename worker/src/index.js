@@ -1186,9 +1186,12 @@ app.post('/admin/bookings', requireAdminOrSwinger, async (c) => {
       if (!existing) {
         const enrollmentId = 'enr_' + uid()
         try {
+          // v3.5: New auto-created enrollments default to payment_status='unpaid'
+          // so they surface in the admin UI as a reminder to collect payment.
+          // Admin can flip to 'paid' from the member profile once payment lands.
           await c.env.DB.prepare(`
-            INSERT INTO enrollments (id, user_id, program_id, start_date, end_date, is_active)
-            VALUES (?, ?, ?, NULL, NULL, 1)
+            INSERT INTO enrollments (id, user_id, program_id, start_date, end_date, payment_status, is_active)
+            VALUES (?, ?, ?, NULL, NULL, 'unpaid', 1)
           `).bind(enrollmentId, user_id, session.program_id).run()
           enrolled = true
         } catch (e) {
@@ -1431,8 +1434,10 @@ app.post('/admin/members', requireAdmin, async (c) => {
           continue
         }
         const enrollmentId = 'enr_' + uid()
+        // v3.5: Default new-member enrollments to payment_status='unpaid'.
+        // Surfaces in the member profile as a reminder to collect payment.
         await c.env.DB.prepare(
-          'INSERT INTO enrollments (id, user_id, program_id, is_active) VALUES (?, ?, ?, 1)'
+          "INSERT INTO enrollments (id, user_id, program_id, payment_status, is_active) VALUES (?, ?, ?, 'unpaid', 1)"
         ).bind(enrollmentId, userId, programId).run()
       } catch (e) {
         console.error('Enrollment insert failed:', programId, e.message)
@@ -1907,6 +1912,7 @@ app.get('/admin/members/:id/enrollments', requireAdmin, async (c) => {
   const { id } = c.req.param()
   const enrollments = await c.env.DB.prepare(`
     SELECT e.id, e.program_id, e.start_date, e.end_date, e.is_active,
+           e.payment_status, e.payment_date,
            e.created_at, e.updated_at,
            p.name AS program_name, p.slug AS program_slug, p.is_active AS program_active
     FROM enrollments e
@@ -1926,9 +1932,18 @@ app.get('/admin/members/:id/enrollments', requireAdmin, async (c) => {
 // of failing on the unique constraint.
 app.post('/admin/members/:id/enrollments', requireAdmin, async (c) => {
   const { id } = c.req.param()
-  const { program_id, start_date, end_date } = await c.req.json()
+  const { program_id, start_date, end_date, payment_status, payment_date } = await c.req.json()
 
   if (!program_id) return c.json({ error: 'program_id required' }, 400)
+
+  // Validate payment_status if provided. NULL / undefined are fine (not tracked).
+  if (payment_status !== undefined && payment_status !== null
+      && payment_status !== 'paid' && payment_status !== 'unpaid') {
+    return c.json({ error: "payment_status must be 'paid', 'unpaid', or null" }, 400)
+  }
+  // payment_date only makes sense when status === 'paid'. Silently clear it
+  // otherwise so a stray date never sits on an unpaid row.
+  const effectivePaymentDate = payment_status === 'paid' ? (payment_date || null) : null
 
   // Verify user exists
   const user = await c.env.DB.prepare('SELECT id, role FROM users WHERE id = ?').bind(id).first()
@@ -1947,15 +1962,23 @@ app.post('/admin/members/:id/enrollments', requireAdmin, async (c) => {
   ).bind(id, program_id).first()
 
   if (existing) {
-    // Reactivate / update dates
+    // Reactivate / update dates + payment
     await c.env.DB.prepare(`
       UPDATE enrollments
       SET is_active = 1,
           start_date = ?,
           end_date = ?,
+          payment_status = ?,
+          payment_date = ?,
           updated_at = datetime('now')
       WHERE id = ?
-    `).bind(start_date || null, end_date || null, existing.id).run()
+    `).bind(
+      start_date || null,
+      end_date || null,
+      payment_status || null,
+      effectivePaymentDate,
+      existing.id
+    ).run()
     return c.json({ ok: true, enrollment_id: existing.id, reactivated: existing.is_active === 0 })
   }
 
@@ -1963,9 +1986,15 @@ app.post('/admin/members/:id/enrollments', requireAdmin, async (c) => {
   const enrollmentId = 'enr_' + uid()
   try {
     await c.env.DB.prepare(`
-      INSERT INTO enrollments (id, user_id, program_id, start_date, end_date, is_active)
-      VALUES (?, ?, ?, ?, ?, 1)
-    `).bind(enrollmentId, id, program_id, start_date || null, end_date || null).run()
+      INSERT INTO enrollments (id, user_id, program_id, start_date, end_date, payment_status, payment_date, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    `).bind(
+      enrollmentId, id, program_id,
+      start_date || null,
+      end_date || null,
+      payment_status || null,
+      effectivePaymentDate,
+    ).run()
   } catch (e) {
     if (e.message?.includes('UNIQUE')) {
       return c.json({ error: 'Already enrolled in this program' }, 400)
@@ -2006,6 +2035,28 @@ app.put('/admin/enrollments/:enrollmentId', requireAdmin, async (c) => {
     updates.push('is_active = ?')
     params.push(body.is_active ? 1 : 0)
   }
+  // ── Payment tracking (v3.5) ─────────────────────────────────────────────
+  // payment_status: 'paid' | 'unpaid' | null (null = not tracked)
+  // payment_date:   ISO yyyy-mm-dd | null (cleared automatically when
+  //                 status flips away from 'paid' unless caller passes a
+  //                 value explicitly).
+  if ('payment_status' in body) {
+    const ps = body.payment_status
+    if (ps !== null && ps !== 'paid' && ps !== 'unpaid') {
+      return c.json({ error: "payment_status must be 'paid', 'unpaid', or null" }, 400)
+    }
+    updates.push('payment_status = ?')
+    params.push(ps || null)
+    // Auto-clear payment_date when status moves off 'paid' and caller didn't
+    // override it. Keeps the date field honest — no orphan "paid on" labels.
+    if (ps !== 'paid' && !('payment_date' in body)) {
+      updates.push('payment_date = NULL')
+    }
+  }
+  if ('payment_date' in body) {
+    updates.push('payment_date = ?')
+    params.push(body.payment_date || null)
+  }
 
   if (updates.length === 0) {
     return c.json({ error: 'No fields to update' }, 400)
@@ -2043,11 +2094,14 @@ app.delete('/admin/enrollments/:enrollmentId', requireAdmin, async (c) => {
 })
 
 // GET /admin/programs/:id/enrollments — list active enrollments for a program
-// Used for the "who's enrolled in this program" view.
+// Used for the "who's enrolled in this program" view. Returns each enrollment
+// row joined with the enrolled user, plus a tally so the frontend can render
+// a "X of Y paid" summary without a second query.
 app.get('/admin/programs/:id/enrollments', requireAdmin, async (c) => {
   const { id } = c.req.param()
   const enrollments = await c.env.DB.prepare(`
     SELECT e.id, e.user_id, e.start_date, e.end_date, e.is_active,
+           e.payment_status, e.payment_date,
            e.created_at, e.updated_at,
            u.email, u.full_name, u.role, u.status
     FROM enrollments e
@@ -2056,7 +2110,23 @@ app.get('/admin/programs/:id/enrollments', requireAdmin, async (c) => {
       AND e.is_active = 1
     ORDER BY u.full_name ASC
   `).bind(id).all()
-  return c.json({ enrollments: enrollments.results })
+
+  // Tally paid / unpaid / untracked across the active enrollments only.
+  // Avoids the frontend having to .filter() three times.
+  let paid = 0, unpaid = 0, untracked = 0
+  for (const e of enrollments.results) {
+    if (e.payment_status === 'paid') paid++
+    else if (e.payment_status === 'unpaid') unpaid++
+    else untracked++
+  }
+
+  return c.json({
+    enrollments: enrollments.results,
+    summary: {
+      total: enrollments.results.length,
+      paid, unpaid, untracked,
+    },
+  })
 })
 
 // GET /admin/programs
