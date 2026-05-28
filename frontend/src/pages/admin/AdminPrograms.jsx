@@ -759,12 +759,237 @@ function ProgramEditor({ program, onSave, showToast }) {
   )
 }
 
+// ─── Program Enrollments Modal (v3.5) ────────────────────────────────────────
+// Lists every active enrollee in a given program with their payment status.
+// Lets admin mark each row paid / unpaid inline. Shows a summary count at top.
+function ProgramEnrollmentsModal({ program, onClose, showToast }) {
+  const [loading, setLoading] = useState(true)
+  const [enrollments, setEnrollments] = useState([])
+  const [summary, setSummary] = useState({ total: 0, paid: 0, unpaid: 0, untracked: 0 })
+  const [filter, setFilter] = useState('all') // 'all' | 'paid' | 'unpaid' | 'untracked'
+  const [busyId, setBusyId] = useState(null)
+  const [query, setQuery] = useState('')
+
+  async function fetchEnrollments() {
+    setLoading(true)
+    try {
+      const data = await api.get(`/admin/programs/${program.id}/enrollments`)
+      setEnrollments(data.enrollments || [])
+      setSummary(data.summary || { total: 0, paid: 0, unpaid: 0, untracked: 0 })
+    } catch (e) {
+      showToast(e.message || 'Failed to load enrollments')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchEnrollments() }, [program.id])
+
+  // Flip an individual enrollment's payment status. Server stamps payment_date.
+  async function togglePayment(enrollment, nextStatus) {
+    setBusyId(enrollment.id)
+    try {
+      const body = { payment_status: nextStatus }
+      if (nextStatus === 'paid') {
+        body.payment_date = new Date().toISOString().slice(0, 10)
+      }
+      await api.put(`/admin/enrollments/${enrollment.id}`, body)
+      await fetchEnrollments()
+      showToast(nextStatus === 'paid' ? 'Marked paid' : 'Marked unpaid')
+    } catch (e) {
+      showToast(e.message || 'Failed to update payment')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // Filter + search applied client-side. Roster is bounded (≤ ~hundred per
+  // program in current scope) so this is fine without backend pagination.
+  const visible = enrollments.filter(e => {
+    if (filter === 'paid' && e.payment_status !== 'paid') return false
+    if (filter === 'unpaid' && e.payment_status !== 'unpaid') return false
+    if (filter === 'untracked' && e.payment_status) return false
+    if (query.trim()) {
+      const q = query.toLowerCase()
+      if (!(e.full_name || '').toLowerCase().includes(q) &&
+          !(e.email || '').toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
+  function fmt(dateStr) {
+    if (!dateStr) return null
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="font-display text-xl text-[#064029] tracking-wide truncate">
+              {program.name.toUpperCase()} · ENROLLMENTS
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              {summary.total} enrolled · {summary.paid} paid · {summary.unpaid} unpaid
+              {summary.untracked > 0 ? ` · ${summary.untracked} not tracked` : ''}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+
+        {/* Filters */}
+        <div className="px-6 py-3 border-b border-gray-100 flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 flex-wrap">
+            {[
+              ['all', `All (${summary.total})`],
+              ['paid', `Paid (${summary.paid})`],
+              ['unpaid', `Unpaid (${summary.unpaid})`],
+              ['untracked', `Not tracked (${summary.untracked})`],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${
+                  filter === key
+                    ? 'bg-[#064029] text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search name or email…"
+            className="flex-1 min-w-[140px] border border-gray-200 rounded-lg px-3 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+          />
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {loading ? (
+            <div className="text-center py-12 text-gray-500 text-sm">Loading…</div>
+          ) : visible.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 text-sm">
+              {summary.total === 0 ? 'No active enrollments for this program.' : 'No enrollments match these filters.'}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {visible.map(e => {
+                const status = e.payment_status
+                const leftBar =
+                  status === 'paid' ? '#1D9E75' :
+                  status === 'unpaid' ? '#EF9F27' :
+                  '#D3D1C7'
+                return (
+                  <div
+                    key={e.id}
+                    className="bg-white border border-gray-200 p-3"
+                    style={{ borderLeft: `3px solid ${leftBar}`, borderRadius: '0 0.5rem 0.5rem 0' }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-[#064029] truncate">{e.full_name}</span>
+                          <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                            {e.role}
+                          </span>
+                          {e.status !== 'active' && (
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                              {e.status}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">{e.email}</p>
+                        <PaymentStatusLineStandalone status={status} paymentDate={e.payment_date} fmt={fmt} />
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {status === 'paid' ? (
+                          <button
+                            onClick={() => togglePayment(e, 'unpaid')}
+                            disabled={busyId === e.id}
+                            className="text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50"
+                          >
+                            Mark unpaid
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => togglePayment(e, 'paid')}
+                            disabled={busyId === e.id}
+                            className="text-xs font-semibold text-[#1D9E75] hover:text-[#064029] disabled:opacity-50"
+                          >
+                            Mark paid
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Standalone copy of PaymentStatusLine for use inside the program modal —
+// kept local to avoid coupling AdminPrograms to internals of AdminMembers.
+function PaymentStatusLineStandalone({ status, paymentDate, fmt }) {
+  if (status === 'paid') {
+    return (
+      <div className="flex items-center gap-1.5 mt-1.5">
+        <svg className="w-3.5 h-3.5 text-[#1D9E75] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span className="text-xs font-medium text-[#085041]">
+          Paid{paymentDate ? ` · ${fmt(paymentDate)}` : ''}
+        </span>
+      </div>
+    )
+  }
+  if (status === 'unpaid') {
+    return (
+      <div className="flex items-center gap-1.5 mt-1.5">
+        <svg className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <span className="text-xs font-medium text-amber-800">Payment due</span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5">
+      <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+      </svg>
+      <span className="text-xs font-medium text-gray-500">Payment not tracked</span>
+    </div>
+  )
+}
+
 // ─── Main AdminPrograms Page ──────────────────────────────────────────────────
 export default function AdminPrograms() {
   const [programs, setPrograms] = useState([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
+  // v3.5: which program's enrollment roster modal is open (or null)
+  const [enrollmentsFor, setEnrollmentsFor] = useState(null)
   const [toast, setToast] = useState('')
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
@@ -780,6 +1005,13 @@ export default function AdminPrograms() {
     <AdminLayout>
       {showCreate && (
         <CreateProgramModal onClose={() => setShowCreate(false)} onSuccess={() => { setShowCreate(false); fetchPrograms(); showToast('Program created successfully') }} />
+      )}
+      {enrollmentsFor && (
+        <ProgramEnrollmentsModal
+          program={enrollmentsFor}
+          onClose={() => setEnrollmentsFor(null)}
+          showToast={showToast}
+        />
       )}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#064029] text-white text-sm font-semibold px-6 py-3 rounded-xl shadow-2xl flex items-center gap-2">
@@ -818,40 +1050,54 @@ export default function AdminPrograms() {
               <div className="divide-y divide-gray-100">
                 {programs.map(p => (
                   <div key={p.id}>
-                    <button className="w-full text-left px-6 py-5 hover:bg-gray-50 transition-colors"
-                      onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-1">
-                            <h2 className="font-display text-xl text-[#064029] tracking-wide">{p.name.toUpperCase()}</h2>
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${p.is_active ? 'bg-[#E1F5EE] text-[#064029]' : 'bg-gray-100 text-gray-500'}`}>
-                              {p.is_active ? 'Active' : 'Inactive'}
-                            </span>
+                    <div className="relative">
+                      <button className="w-full text-left px-6 py-5 hover:bg-gray-50 transition-colors"
+                        onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 mb-1">
+                              <h2 className="font-display text-xl text-[#064029] tracking-wide">{p.name.toUpperCase()}</h2>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${p.is_active ? 'bg-[#E1F5EE] text-[#064029]' : 'bg-gray-100 text-gray-500'}`}>
+                                {p.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+                            {p.description && <p className="text-sm text-gray-500 mb-2">{p.description}</p>}
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                              <span className="flex items-center gap-1">
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                {formatDays(p.session_days)}
+                              </span>
+                              <span>{formatTime(p.start_time)} – {formatTime(p.end_time)}</span>
+                              <span>{p.default_capacity} spots</span>
+                              {p.price_display && <span className="font-medium text-[#1D9E75]">{p.price_display}</span>}
+                            </div>
+                            <div className="mt-3 flex gap-4 text-xs text-gray-500">
+                              <div>Cancel window: <span className="font-medium text-gray-600">{p.cancellation_hours}h</span></div>
+                              <div>Max/week: <span className="font-medium text-gray-600">{p.max_bookings_per_week}</span></div>
+                              <div className="capitalize">Booker: <span className="font-medium text-gray-600">{p.booker_type}</span></div>
+                            </div>
                           </div>
-                          {p.description && <p className="text-sm text-gray-500 mb-2">{p.description}</p>}
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                            <span className="flex items-center gap-1">
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                              {formatDays(p.session_days)}
-                            </span>
-                            <span>{formatTime(p.start_time)} – {formatTime(p.end_time)}</span>
-                            <span>{p.default_capacity} spots</span>
-                            {p.price_display && <span className="font-medium text-[#1D9E75]">{p.price_display}</span>}
-                          </div>
-                          <div className="mt-3 flex gap-4 text-xs text-gray-500">
-                            <div>Cancel window: <span className="font-medium text-gray-600">{p.cancellation_hours}h</span></div>
-                            <div>Max/week: <span className="font-medium text-gray-600">{p.max_bookings_per_week}</span></div>
-                            <div className="capitalize">Booker: <span className="font-medium text-gray-600">{p.booker_type}</span></div>
-                          </div>
+                          <svg className={`w-5 h-5 text-gray-500 transition-transform ml-4 flex-shrink-0 ${expanded === p.id ? 'rotate-180' : ''}`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
                         </div>
-                        <svg className={`w-5 h-5 text-gray-500 transition-transform ml-4 flex-shrink-0 ${expanded === p.id ? 'rotate-180' : ''}`}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </button>
+                      {/* v3.5: View Enrollments button — absolute-positioned over the row
+                          so it doesn't trigger the expand toggle. Stops propagation explicitly. */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEnrollmentsFor(p) }}
+                        className="absolute top-5 right-14 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#064029] bg-[#E1F5EE] rounded-lg hover:bg-[#1D9E75] hover:text-white transition-colors"
+                        title="View enrolled members and payment status"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
-                      </div>
-                    </button>
+                        Enrollments
+                      </button>
+                    </div>
                     {expanded === p.id && <ProgramEditor program={p} onSave={fetchPrograms} showToast={showToast} />}
                   </div>
                 ))}
