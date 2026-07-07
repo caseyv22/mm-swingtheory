@@ -7,13 +7,25 @@ const BOOKER_TYPES = ['student', 'parent']
 const BOOKING_TYPES = ['group', 'private']
 
 // ─── Date / time select options ──────────────────────────────────────────────
+// The `val` (what we store) MUST come from the same clock as the `label`
+// (what the admin sees). Previously we mixed the two: label used
+// toLocaleDateString (local time) while val used toISOString (UTC), so any
+// evening save from Pacific time silently shipped a date 1 day forward and
+// every downstream cron/session-gen ran against the wrong dates. Compute
+// both from the same local Date instance to keep them in lockstep.
+function toLocalYmd(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 function generateDates(daysAhead = 365) {
   const dates = []
   const today = new Date()
   for (let i = 0; i <= daysAhead; i++) {
     const d = new Date(today)
     d.setDate(today.getDate() + i)
-    const val = d.toISOString().split('T')[0]
+    const val = toLocalYmd(d)
     const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
     dates.push({ val, label })
   }
