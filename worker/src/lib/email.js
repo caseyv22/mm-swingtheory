@@ -368,6 +368,54 @@ export function welcomeEmail({ recipientName, role, email, tempPassword }) {
   return { subject, html }
 }
 
+// ─── 7b. Invite (invitation-based account creation) ──────────────────────────
+// Used by POST /admin/members and POST /admin/members/:id/resend-invite when
+// creating a member via the Clerk Invitations flow (Phase 2, July 2026). The
+// admin never sets a password — the invitee clicks the CTA, lands on
+// /accept-invitation, and picks their own password.
+//
+// inviteUrl is the raw Clerk-generated ticket URL (from POST /v1/invitations).
+// The `redirect_url` embedded in it points at /accept-invitation on
+// sync.swingtheory.golf; Clerk appends `__clerk_ticket=…` when the invitee
+// clicks the button.
+export function inviteEmail({ recipientName, role, email, inviteUrl }) {
+  const subject = "You're invited to Swing Theory"
+  const roleDisplay = role ? role.charAt(0).toUpperCase() + role.slice(1) : ''
+
+  const html = baseLayout({
+    preheader: 'Set up your Swing Theory account — click the button below to pick a password.',
+    body: `
+  <tr>
+    <td style="padding:32px 32px 8px">
+      <div style="font-size:22px;font-weight:700;color:#064029;margin-bottom:8px">Welcome, ${recipientName}!</div>
+      <p style="font-size:14px;color:#555555;line-height:1.6;margin:0">
+        You've been invited to Swing Theory. Click the button below to finish setting up your account — you'll pick your own password, then land right in the app.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:16px 32px 8px">
+      <div style="background:#f7faf8;border:1px solid #d8e8dc;border-radius:12px;padding:20px 24px">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          ${infoRow('Email', email || '')}
+          ${roleDisplay ? infoRow('Role', roleDisplay) : ''}
+        </table>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:8px 32px 16px">
+      <p style="font-size:13px;color:#888888;line-height:1.6;margin:0">
+        This invite link is single-use and will expire in 30 days. If it stops working, ask your admin to resend it. If you didn't expect this email, feel free to ignore it.
+      </p>
+    </td>
+  </tr>
+  ${ctaButton('Set Up Your Account', inviteUrl)}`,
+  })
+
+  return { subject, html }
+}
+
 // ─── 8. Password reset (user-triggered "forgot password") ────────────────────
 export function passwordResetEmail({ recipientName, resetUrl }) {
   const subject = 'Reset Your Swing Theory Password'

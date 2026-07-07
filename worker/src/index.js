@@ -11,6 +11,7 @@ import {
   sessionCancelledEmail,
   reminderEmail,
   welcomeEmail,
+  inviteEmail,
   passwordResetEmail,
 } from './lib/email.js'
 import {
@@ -111,6 +112,25 @@ async function requireSwinger(c, next) {
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function uid() {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 20)
+}
+
+// Split "First Last" for the invitation redirect URL so /accept-invitation
+// can prefill the name fields. Falls back to duplicating the single token as
+// both first + last so downstream Clerk validation (which requires both)
+// doesn't reject one-word names.
+function splitName(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/)
+  return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || parts[0] || '' }
+}
+
+// Where Clerk sends the invitee after they click the invite email button.
+// Clerk appends `__clerk_ticket=…` (single-use ticket) to whatever query
+// string we set here. fn/ln let the accept-invitation page skip re-asking for
+// the name the admin already typed in when creating the member.
+function inviteRedirectUrl(fullName) {
+  const { firstName, lastName } = splitName(fullName)
+  const params = new URLSearchParams({ fn: firstName, ln: lastName })
+  return `https://sync.swingtheory.golf/accept-invitation?${params.toString()}`
 }
 
 // ─── PUBLIC WEBHOOKS ─────────────────────────────────────────────────────────
@@ -386,6 +406,47 @@ app.put('/users/me/password', requireAuth, async (c) => {
 // implementation called Clerk's /password_reset_links endpoint which doesn't
 // exist (returns 404).
 
+// POST /users/complete-invitation — called by /accept-invitation right after
+// the invitee finishes the Clerk ticket signup (they now have a live Clerk
+// session), to swap the D1 row's `pending_<uid>` placeholder for the real
+// clerk_id. Deliberately NOT behind requireAuth: that middleware looks up D1
+// by clerk_id, which won't match yet for a brand-new account. The email used
+// for lookup comes from Clerk's own record for this clerk_id (never trust a
+// client-supplied email for this).
+app.post('/users/complete-invitation', async (c) => {
+  const payload = await verifyAuth(c.req.raw, c.env)
+  if (!payload) return c.json({ error: 'Unauthorized' }, 401)
+  const clerkId = payload.sub
+
+  // Idempotent — repeat calls (e.g. the invitee reloads /accept-invitation
+  // after we already linked) should be a no-op, not an error.
+  const already = await c.env.DB.prepare(
+    'SELECT id FROM users WHERE clerk_id = ?'
+  ).bind(clerkId).first()
+  if (already) return c.json({ ok: true })
+
+  const clerkRes = await fetch(`https://api.clerk.com/v1/users/${clerkId}`, {
+    headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` },
+  })
+  if (!clerkRes.ok) return c.json({ error: 'Could not verify Clerk account' }, 500)
+  const clerkUser = await clerkRes.json()
+  const emailObj = clerkUser.email_addresses?.find(e => e.id === clerkUser.primary_email_address_id)
+  const email = emailObj?.email_address
+  if (!email) return c.json({ error: 'No verified email on account' }, 400)
+
+  // Case-insensitive match: Clerk may normalize email casing differently than
+  // however the admin typed it into POST /admin/members.
+  const pending = await c.env.DB.prepare(
+    "SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND clerk_id LIKE 'pending_%'"
+  ).bind(email).first()
+  if (!pending) return c.json({ error: 'No pending invitation found for this email' }, 404)
+
+  await c.env.DB.prepare(
+    'UPDATE users SET clerk_id = ?, invitation_id = NULL WHERE id = ?'
+  ).bind(clerkId, pending.id).run()
+  return c.json({ ok: true })
+})
+
 // POST /admin/members/:id/resend-temp-password — admin regenerates temp password and resends welcome email
 app.post('/admin/members/:id/resend-temp-password', requireAdmin, async (c) => {
   const { id } = c.req.param()
@@ -430,6 +491,70 @@ app.post('/admin/members/:id/resend-temp-password', requireAdmin, async (c) => {
   }
 
   return c.json({ ok: true, temp_password: tempPassword })
+})
+
+// POST /admin/members/:id/resend-invite — re-issues the Clerk invitation for
+// a member who hasn't accepted yet. Only applicable while clerk_id is still a
+// `pending_<uid>` placeholder — once the invitee has set their password and
+// completed sign-up, the row has a real clerk_id and this endpoint returns
+// 400. For that case, admin should point them at the standard "Forgot
+// password?" flow on /login instead.
+app.post('/admin/members/:id/resend-invite', requireAdmin, async (c) => {
+  const { id } = c.req.param()
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first()
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  if (!user.clerk_id?.startsWith('pending_')) {
+    return c.json({ error: 'This member has already set up their account.' }, 400)
+  }
+
+  // Revoke the previous invitation (if any) so only one link is ever valid at
+  // a time — best-effort, it may already be expired/accepted.
+  if (user.invitation_id) {
+    await fetch(`https://api.clerk.com/v1/invitations/${user.invitation_id}/revoke`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` },
+    }).catch(() => {})
+  }
+
+  const invRes = await fetch('https://api.clerk.com/v1/invitations', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email_address: user.email,
+      redirect_url: inviteRedirectUrl(user.full_name),
+      notify: false,
+      ignore_existing: true,
+    }),
+  })
+  const invData = await invRes.json()
+  if (!invRes.ok) {
+    const msg = invData?.errors?.[0]?.long_message || invData?.errors?.[0]?.message || 'Failed to create invitation'
+    return c.json({ error: msg }, 500)
+  }
+  if (!invData.url) {
+    return c.json({ error: 'Invitation created but no accept URL was returned' }, 500)
+  }
+
+  await c.env.DB.prepare(
+    'UPDATE users SET invitation_id = ? WHERE id = ?'
+  ).bind(invData.id, id).run()
+
+  try {
+    const { subject, html } = inviteEmail({
+      recipientName: user.full_name,
+      role: user.role,
+      email: user.email,
+      inviteUrl: invData.url,
+    })
+    await sendEmail(c.env, { to: user.email, subject, html })
+  } catch (e) {
+    console.error('Resend invite email failed:', e.message)
+  }
+
+  return c.json({ ok: true, invitation_url: invData.url })
 })
 
 // ─── SESSION ROUTES (public / parent / student) ───────────────────────────────
@@ -1326,7 +1451,12 @@ app.get('/admin/members', requireAdminOrSwinger, async (c) => {
   return c.json({ members: result.results })
 })
 
-// POST /admin/members — create Clerk user with temp password + send credentials email
+// POST /admin/members — invite-based account creation. Admin never sets a
+// password; the invitee clicks the emailed link, lands on /accept-invitation,
+// and picks their own. Sync flipped to this flow in July 2026 (Phase 2 of the
+// swingtheoryv2 payments integration). The legacy temp-password path lived on
+// POST /v1/users + welcomeEmail() — retained in git history if you need to
+// look at the diff.
 app.post('/admin/members', requireAdmin, async (c) => {
   const body = await c.req.json()
   const {
@@ -1339,50 +1469,48 @@ app.post('/admin/members', requireAdmin, async (c) => {
     return c.json({ error: 'full_name, email, and role are required' }, 400)
   }
 
-  // Generate a memorable temp password: e.g., "swing-7429"
-  const tempPassword = 'swing-' + Math.floor(1000 + Math.random() * 9000)
-
-  // Step 1: Create Clerk user with the temp password
-  const nameParts = full_name.trim().split(/\s+/)
-  const firstName = nameParts[0]
-  const lastName = nameParts.slice(1).join(' ') || firstName
-
-  const createRes = await fetch('https://api.clerk.com/v1/users', {
+  // Step 1: Create a Clerk Invitation. `notify:false` suppresses Clerk's
+  // default email — we send our own branded one below. `ignore_existing:true`
+  // handles re-invites and the "customer already has a Clerk user from a
+  // different context" case (e.g. someone who booked a lesson before
+  // enrolling in Mini Mulligans).
+  const invRes = await fetch('https://api.clerk.com/v1/invitations', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      email_address: [email],
-      password: tempPassword,
-      first_name: firstName,
-      last_name: lastName,
-      skip_password_checks: true,
+      email_address: email,
+      redirect_url: inviteRedirectUrl(full_name),
+      notify: false,
+      ignore_existing: true,
     }),
   })
-
-  const createData = await createRes.json()
-  console.log('Clerk create user status:', createRes.status)
-
-  if (!createRes.ok) {
-    const msg = createData?.errors?.[0]?.long_message || createData?.errors?.[0]?.message || 'Failed to create Clerk user'
-    console.error('Clerk create user error:', JSON.stringify(createData))
+  const invData = await invRes.json()
+  if (!invRes.ok) {
+    const msg = invData?.errors?.[0]?.long_message || invData?.errors?.[0]?.message || 'Failed to create invitation'
+    console.error('Clerk invitation error:', JSON.stringify(invData))
     return c.json({ error: msg }, 500)
   }
+  if (!invData.url) {
+    return c.json({ error: 'Invitation created but no accept URL was returned' }, 500)
+  }
 
-  const finalClerkId = createData.id
-
-  // Step 2: Create user record in D1 with must_change_password = 1
+  // Step 2: Insert the D1 users row now with a `pending_<uid>` placeholder in
+  // clerk_id. POST /users/complete-invitation swaps the real clerk_id in
+  // after the invitee finishes signup. Storing invitation_id lets us revoke
+  // the outstanding invite on resend or delete.
   const userId = 'usr_' + uid()
+  const pendingClerkId = 'pending_' + uid()
   try {
     await c.env.DB.prepare(
-      'INSERT INTO users (id, clerk_id, email, full_name, phone, role, must_change_password) VALUES (?, ?, ?, ?, ?, ?, 1)'
-    ).bind(userId, finalClerkId, email, full_name, phone || null, role).run()
+      'INSERT INTO users (id, clerk_id, email, full_name, phone, role, invitation_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(userId, pendingClerkId, email, full_name, phone || null, role, invData.id).run()
   } catch (e) {
-    // Roll back the Clerk user since D1 insert failed
-    await fetch(`https://api.clerk.com/v1/users/${finalClerkId}`, {
-      method: 'DELETE',
+    // Roll back the Clerk invitation since D1 insert failed
+    await fetch(`https://api.clerk.com/v1/invitations/${invData.id}/revoke`, {
+      method: 'POST',
       headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` },
     }).catch(() => {})
     console.error('D1 insert error:', e.message)
@@ -1468,21 +1596,24 @@ app.post('/admin/members', requireAdmin, async (c) => {
     }
   }
 
-  // Step 3: Send welcome email with email + temp password
+  // Step 3: Send branded invite email carrying the Clerk ticket URL. The
+  // invitee sets their own password on /accept-invitation, so we no longer
+  // return a temp_password field — response includes invitation_url purely
+  // so admin can copy it (for a "help me, the email didn't arrive" case).
   try {
-    const { subject: ws, html: wh } = welcomeEmail({
+    const { subject: is, html: ih } = inviteEmail({
       recipientName: full_name,
       role,
       email,
-      tempPassword,
+      inviteUrl: invData.url,
     })
-    await sendEmail(c.env, { to: email, subject: ws, html: wh })
+    await sendEmail(c.env, { to: email, subject: is, html: ih })
   } catch (e) {
-    console.error('Welcome email failed:', e.message)
-    warnings.push({ step: 'welcome_email', error: e.message })
+    console.error('Invite email failed:', e.message)
+    warnings.push({ step: 'invite_email', error: e.message })
   }
 
-  const response = { ok: true, user_id: userId, temp_password: tempPassword }
+  const response = { ok: true, user_id: userId, invitation_url: invData.url }
   if (warnings.length > 0) response.warnings = warnings
   return c.json(response)
 })
@@ -1588,6 +1719,15 @@ app.delete('/admin/members/:id', requireAdmin, async (c) => {
       const err = await clerkRes.json()
       return c.json({ error: 'Clerk deletion failed', detail: err }, 500)
     }
+  } else if (user.invitation_id) {
+    // Still pending (no real Clerk user yet) — revoke the outstanding
+    // invitation so nobody can accept it later and end up as an orphan
+    // Clerk user with no matching D1 row. Best-effort; a revoke failure
+    // shouldn't block the D1 delete.
+    await fetch(`https://api.clerk.com/v1/invitations/${user.invitation_id}/revoke`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` },
+    }).catch(() => {})
   }
 
   // Resolve the instructor ID once (if any) so subsequent deletes can use simple
