@@ -889,25 +889,45 @@ app.post('/admin/members/:id/resend-invite', requireAdmin, async (c) => {
 app.get('/programs', requireAuth, async (c) => {
   const clerkId = c.get('clerkId')
 
-  // Default: list all active programs (existing behavior).
-  // When ENROLLMENT_ENFORCEMENT=on, parents/students only see programs they're
-  // enrolled in. Admin/instructor/swinger always see everything.
-  if (c.env.ENROLLMENT_ENFORCEMENT === 'on') {
-    const user = await c.env.DB.prepare(
-      'SELECT id, role FROM users WHERE clerk_id = ?'
-    ).bind(clerkId).first()
+  // Resolve the caller once — needed for enrollment-badge computation and
+  // for the ENROLLMENT_ENFORCEMENT hard-filter branch below.
+  const user = await c.env.DB.prepare(
+    'SELECT id, role FROM users WHERE clerk_id = ?'
+  ).bind(clerkId).first()
 
-    if (user && (user.role === 'parent' || user.role === 'student')) {
-      const programs = await c.env.DB.prepare(`
-        SELECT p.* FROM programs p
-        JOIN enrollments e ON e.program_id = p.id
-        WHERE p.is_active = 1
-          AND e.user_id = ?
-          AND e.is_active = 1
-        ORDER BY p.created_at ASC
-      `).bind(user.id).all()
-      return c.json({ programs: programs.results })
-    }
+  const isEnrollee = user && (user.role === 'parent' || user.role === 'student')
+
+  // Hard-filter branch: when ENROLLMENT_ENFORCEMENT=on, parents/students
+  // only see programs they're enrolled in. Everything visible is enrolled
+  // by definition, so is_enrolled = 1.
+  if (c.env.ENROLLMENT_ENFORCEMENT === 'on' && isEnrollee) {
+    const programs = await c.env.DB.prepare(`
+      SELECT p.*, 1 AS is_enrolled FROM programs p
+      JOIN enrollments e ON e.program_id = p.id
+      WHERE p.is_active = 1
+        AND e.user_id = ?
+        AND e.is_active = 1
+      ORDER BY p.created_at ASC
+    `).bind(user.id).all()
+    return c.json({ programs: programs.results })
+  }
+
+  // Default branch: show every active program, but annotate is_enrolled per
+  // program so the frontend can render an "Enrolled" pill. Admin/instructor/
+  // swinger roles don't need the annotation — their UI doesn't use it —
+  // but it's harmless if they read it.
+  if (isEnrollee) {
+    const programs = await c.env.DB.prepare(`
+      SELECT p.*,
+        CASE WHEN EXISTS(
+          SELECT 1 FROM enrollments e
+          WHERE e.user_id = ? AND e.program_id = p.id AND e.is_active = 1
+        ) THEN 1 ELSE 0 END AS is_enrolled
+      FROM programs p
+      WHERE p.is_active = 1
+      ORDER BY p.created_at ASC
+    `).bind(user.id).all()
+    return c.json({ programs: programs.results })
   }
 
   const programs = await c.env.DB.prepare(
@@ -930,17 +950,20 @@ app.get('/programs/:slug/sessions', requireAuth, async (c) => {
     'SELECT * FROM users WHERE clerk_id = ?'
   ).bind(clerkId).first()
 
-  // ─── Enrollment gate (v3.3) ─────────────────────────────────────────────────
-  // When flag is on, parent/student users must be enrolled to view the calendar.
-  // Other roles (admin, instructor, swinger) bypass this.
-  if (c.env.ENROLLMENT_ENFORCEMENT === 'on' && user && (user.role === 'parent' || user.role === 'student')) {
+  // ─── Enrollment gate ─────────────────────────────────────────────────────
+  // Parent/student roles must be actively enrolled to see the calendar for
+  // this program. Enforced unconditionally — the ENROLLMENT_ENFORCEMENT flag
+  // that used to gate this was removed in July 2026 when checkout-based
+  // provisioning went live and unpaid-user access became a real risk.
+  // Admin/instructor/swinger roles bypass so staff can inspect any calendar.
+  if (user && (user.role === 'parent' || user.role === 'student')) {
     const enrollment = await c.env.DB.prepare(`
       SELECT id FROM enrollments
       WHERE user_id = ? AND program_id = ? AND is_active = 1
     `).bind(user.id, program.id).first()
     if (!enrollment) {
       return c.json({
-        error: 'You are not enrolled in this program. Please contact your admin to be added.',
+        error: `You're not enrolled in ${program.name}. Sign up at swingtheory.golf to book sessions.`,
       }, 403)
     }
   }
@@ -997,12 +1020,18 @@ app.post('/bookings', requireAuth, async (c) => {
     return c.json({ error: 'This program can only be booked by a student' }, 403)
   }
 
-  // ─── Enrollment gate (v3.3) ─────────────────────────────────────────────────
-  // Gated behind ENROLLMENT_ENFORCEMENT env var so we can deploy the code dark
-  // and flip on after backfill is verified. Set to 'on' in Cloudflare → Workers
-  // → mm-api-prod → Settings → Variables and Secrets to enable.
-  // Admin/Swinger/Instructor manual booking endpoints bypass this entirely.
-  if (c.env.ENROLLMENT_ENFORCEMENT === 'on') {
+  // ─── Enrollment gate ─────────────────────────────────────────────────────
+  // Only allow booking sessions of programs this user is actively enrolled
+  // in. Load-bearing for the paid-checkout flow — an unenrolled parent hits
+  // this on POST /bookings and gets a hard 403 with a customer-friendly
+  // message pointing them at the checkout page. Enforced unconditionally
+  // for parent/student; admin/swinger/instructor bookings go through
+  // separate endpoints that intentionally bypass.
+  //
+  // Enrollment must also cover the session's date if start/end are set —
+  // handles the case where a customer paid for a summer session but tries
+  // to book something outside that window.
+  if (user.role === 'parent' || user.role === 'student') {
     const enrollment = await c.env.DB.prepare(`
       SELECT e.id FROM enrollments e
       JOIN programs p ON e.program_id = p.id
@@ -1015,7 +1044,7 @@ app.post('/bookings', requireAuth, async (c) => {
     `).bind(user.id, session.program_id, session.date, session.date).first()
     if (!enrollment) {
       return c.json({
-        error: 'You are not enrolled in this program. Please contact your admin to be added.',
+        error: "You're not enrolled in this program. Sign up at swingtheory.golf to book sessions.",
       }, 403)
     }
   }

@@ -162,11 +162,33 @@ export default function ProgramSelector() {
                 >
                   <div className={`h-0.5 bg-[#064029] transition-transform duration-300 origin-left ${isDisabled ? 'scale-x-0' : 'scale-x-0 group-hover:scale-x-100'}`} />
                   <div className="p-6 lg:p-7">
-                    {/* Top row: tag pill on left, arrow on right */}
+                    {/* Top row: tag pill(s) on left, arrow on right */}
                     <div className="flex items-center justify-between mb-5">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-3 py-1 rounded-full">
-                        {PROGRAM_TAG[program.slug] || 'Program'}
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75] bg-[#E1F5EE] px-3 py-1 rounded-full">
+                          {PROGRAM_TAG[program.slug] || 'Program'}
+                        </span>
+                        {/* Enrollment pill — only shown for parent/student.
+                            is_enrolled comes from GET /programs and reflects
+                            active enrollments for the current user. Rendered
+                            regardless of the ENROLLMENT_ENFORCEMENT flag so
+                            unpaid customers can still see the catalog but
+                            know at a glance which programs they can book. */}
+                        {(user?.role === 'parent' || user?.role === 'student') && (
+                          program.is_enrolled ? (
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-white bg-[#064029] px-3 py-1 rounded-full inline-flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                              Enrolled
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                              Not Enrolled
+                            </span>
+                          )
+                        )}
+                      </div>
                       <span className={`text-gray-100 text-xl font-light transition-colors ${!isDisabled ? 'group-hover:text-[#064029]' : ''}`}>→</span>
                     </div>
 
