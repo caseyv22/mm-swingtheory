@@ -6,6 +6,7 @@ import { api } from './lib/api.js'
 import { RoleProvider, useRole } from './lib/RoleProvider.jsx'
 import PWAShell from './components/PWAShell.jsx'
 import ProgramSelector from './pages/ProgramSelector.jsx'
+import AcceptInvitation from './pages/AcceptInvitation.jsx'
 import ParentHome from './pages/parent/ParentHome.jsx'
 import CalendarPage from './pages/parent/CalendarPage.jsx'
 import MyBookingsPage from './pages/parent/MyBookingsPage.jsx'
@@ -574,6 +575,13 @@ export default function App() {
         {/* Public routes — no role context, no shell */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/*" element={<LoginPage />} />
+        {/* Landing page for the emailed invite link. Clerk appends
+            __clerk_ticket to whatever redirect_url the invitation was created
+            with (see mm-api POST /admin/members). Not gated — the ticket
+            itself proves identity. Once accepted, this page calls
+            /users/complete-invitation to bind the new clerk_id to the D1
+            users row the admin (or /internal/enrollments) created. */}
+        <Route path="/accept-invitation" element={<AcceptInvitation />} />
         <Route path="/child-info" element={
           <Navigate to="/account?onboarding=true" replace />
         } />
