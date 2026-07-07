@@ -12,6 +12,7 @@ import {
   reminderEmail,
   welcomeEmail,
   inviteEmail,
+  paidEnrollmentEmail,
   passwordResetEmail,
 } from './lib/email.js'
 import {
@@ -301,6 +302,331 @@ app.post('/webhooks/registry', async (c) => {
 
   console.log(`[webhook/registry] created lesson=${lessonId} email=${emailNorm} id=${bookingId}`)
   return c.json({ ok: true, action: 'created', lesson_id: lessonId })
+})
+
+// POST /internal/enrollments — trusted-upstream provisioning entry point.
+//
+// Called by swingtheoryv2 (and eventually anywhere else that needs to
+// materialise "customer paid → they exist in Sync, enrolled, marked paid").
+// Not behind Clerk — the caller has no user session. Gated by:
+//   1. X-Internal-Secret header, verified against INTERNAL_PROVISIONING_SECRET
+//   2. Payload validation (all critical fields required)
+//   3. Idempotency by payment_ref (partial UNIQUE index on enrollments)
+//
+// Payload:
+//   {
+//     source: string,                 // audit label, e.g. "swingtheoryv2-program-checkout"
+//     payment_ref: string,            // REQUIRED — upstream payment id (Square, Stripe, etc)
+//     payment_amount_cents: number,   // optional, for the email/log
+//     payment_date: string,           // "YYYY-MM-DD" — REQUIRED (server-side, do not trust client tz)
+//     program_slug: string,           // must match programs.slug in this DB
+//     full_name: string,
+//     email: string,
+//     phone?: string,
+//     child_first_name?: string,      // REQUIRED when program.booker_type='parent' and user is net-new
+//     child_age?: number,
+//   }
+//
+// Behaviour:
+//   1. If an enrollment already exists with this payment_ref → return it
+//      (idempotent — Square retries, refresh-during-checkout, etc.)
+//   2. Resolve program by slug. is_active is NOT enforced here — the payment
+//      already succeeded, we don't get to say "sorry, no." Admin should
+//      keep swingtheoryv2's checkout_mode in sync with mm's is_active.
+//   3. Find or create the D1 user by lowercased email:
+//        - Existing user (any role) → keep their role/clerk_id, just add the
+//          enrollment. Sends paidEnrollmentEmail. No child creation.
+//        - Existing user with pending invitation → revoke old, issue new,
+//          reset invitation_id + full_name (in case name is different).
+//        - Net-new user → Clerk Invitation (redirect to /accept-invitation),
+//          insert users row with pending_ clerk_id, insert children row for
+//          parent-role programs. Sends inviteEmail.
+//   4. Insert enrollment with payment_status='paid', payment_date, payment_ref.
+//   5. Return { ok, user_id, enrollment_id, action, invitation_url? }.
+//
+// Never returns 500 to the caller unless something is genuinely broken —
+// callers should trust that a 200 means "the customer is provisioned or
+// safely idempotent." A 400 means "malformed request, don't retry as-is."
+app.post('/internal/enrollments', async (c) => {
+  // ── 1. Auth ──────────────────────────────────────────────────────────────
+  const expected = c.env.INTERNAL_PROVISIONING_SECRET
+  if (!expected) {
+    console.error('[internal/enrollments] INTERNAL_PROVISIONING_SECRET not set')
+    return c.json({ error: 'Endpoint not configured' }, 500)
+  }
+  const provided = c.req.header('x-internal-secret') || ''
+  if (provided !== expected) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  // ── 2. Parse + validate ──────────────────────────────────────────────────
+  let payload
+  try {
+    payload = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const source = String(payload?.source || 'unknown')
+  const paymentRef = String(payload?.payment_ref || '').trim()
+  const paymentDate = String(payload?.payment_date || '').trim()
+  const paymentAmountCents = Number.isFinite(payload?.payment_amount_cents) ? payload.payment_amount_cents : null
+  const programSlug = String(payload?.program_slug || '').trim()
+  const fullName = String(payload?.full_name || '').trim()
+  const emailRaw = String(payload?.email || '').trim()
+  const phone = payload?.phone ? String(payload.phone).trim() : null
+  const childFirstName = payload?.child_first_name ? String(payload.child_first_name).trim() : null
+  const childAge = Number.isFinite(payload?.child_age) ? Math.trunc(payload.child_age) : null
+
+  if (!paymentRef) return c.json({ error: 'payment_ref required' }, 400)
+  if (!programSlug) return c.json({ error: 'program_slug required' }, 400)
+  if (!fullName) return c.json({ error: 'full_name required' }, 400)
+  if (!emailRaw) return c.json({ error: 'email required' }, 400)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
+    return c.json({ error: 'payment_date must be YYYY-MM-DD' }, 400)
+  }
+
+  const email = emailRaw
+  const emailNorm = emailRaw.toLowerCase()
+
+  // ── 3. Idempotency by payment_ref ────────────────────────────────────────
+  // The partial UNIQUE index will also enforce this at insert time, but
+  // pre-checking lets us return the original enrollment_id in a 200 so
+  // the caller has something meaningful to work with (audit trails etc).
+  const existingByPayment = await c.env.DB.prepare(
+    'SELECT id, user_id FROM enrollments WHERE payment_ref = ?'
+  ).bind(paymentRef).first()
+  if (existingByPayment) {
+    console.log(`[internal/enrollments] idempotent payment_ref=${paymentRef} enrollment=${existingByPayment.id}`)
+    return c.json({
+      ok: true,
+      user_id: existingByPayment.user_id,
+      enrollment_id: existingByPayment.id,
+      action: 'idempotent',
+    })
+  }
+
+  // ── 4. Resolve program by slug ───────────────────────────────────────────
+  const program = await c.env.DB.prepare(
+    'SELECT id, name, booker_type FROM programs WHERE slug = ?'
+  ).bind(programSlug).first()
+  if (!program) {
+    console.error(`[internal/enrollments] unknown program_slug=${programSlug} source=${source} payment_ref=${paymentRef}`)
+    return c.json({ error: `Program not found for slug: ${programSlug}` }, 400)
+  }
+
+  const isParentProgram = program.booker_type === 'parent'
+
+  // ── 5. Find or create the user ───────────────────────────────────────────
+  const existingUser = await c.env.DB.prepare(
+    'SELECT id, clerk_id, role, invitation_id, full_name FROM users WHERE LOWER(email) = ?'
+  ).bind(emailNorm).first()
+
+  let userId
+  let invitationUrl = null
+  let userAction   // 'new' | 'existing' — drives which email we send
+
+  if (existingUser) {
+    // Existing D1 user — reuse the row regardless of role. Don't touch
+    // role, don't create children (they're probably already set up, or
+    // this is a mismatch admin needs to reconcile manually).
+    userId = existingUser.id
+    userAction = 'existing'
+
+    // If they were previously invited but never accepted, re-issue the
+    // invitation so the paying customer can actually log in. Same pattern
+    // as /admin/members/:id/resend-invite.
+    if (existingUser.clerk_id?.startsWith('pending_')) {
+      if (existingUser.invitation_id) {
+        await fetch(`https://api.clerk.com/v1/invitations/${existingUser.invitation_id}/revoke`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` },
+        }).catch(() => {})
+      }
+      const invRes = await fetch('https://api.clerk.com/v1/invitations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email_address: email,
+          redirect_url: inviteRedirectUrl(fullName),
+          notify: false,
+          ignore_existing: true,
+        }),
+      })
+      const invData = await invRes.json()
+      if (invRes.ok && invData.url) {
+        await c.env.DB.prepare(
+          'UPDATE users SET invitation_id = ? WHERE id = ?'
+        ).bind(invData.id, userId).run()
+        invitationUrl = invData.url
+        userAction = 'existing_pending_reinvited'
+      } else {
+        // Non-fatal — the customer is still enrolled, admin just has to
+        // help them get logged in. Log for triage.
+        console.error(`[internal/enrollments] reinvite failed for ${emailNorm}:`, JSON.stringify(invData))
+      }
+    }
+  } else {
+    // Net-new user — Clerk Invitation → D1 users row (pending_) → optional
+    // child row for parent-role programs.
+    userAction = 'new'
+
+    if (isParentProgram && !childFirstName) {
+      return c.json({ error: 'child_first_name required for parent-role programs when the payer is new' }, 400)
+    }
+
+    const invRes = await fetch('https://api.clerk.com/v1/invitations', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email_address: email,
+        redirect_url: inviteRedirectUrl(fullName),
+        notify: false,
+        ignore_existing: true,
+      }),
+    })
+    const invData = await invRes.json()
+    if (!invRes.ok || !invData.url) {
+      console.error('[internal/enrollments] Clerk invitation failed:', JSON.stringify(invData))
+      const msg = invData?.errors?.[0]?.long_message || invData?.errors?.[0]?.message || 'Failed to create invitation'
+      return c.json({ error: msg }, 500)
+    }
+    invitationUrl = invData.url
+
+    userId = 'usr_' + uid()
+    const pendingClerkId = 'pending_' + uid()
+    const role = isParentProgram ? 'parent' : 'student'
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO users (id, clerk_id, email, full_name, phone, role, invitation_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(userId, pendingClerkId, email, fullName, phone, role, invData.id).run()
+    } catch (e) {
+      // Roll back Clerk invitation since D1 insert failed
+      await fetch(`https://api.clerk.com/v1/invitations/${invData.id}/revoke`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${c.env.CLERK_SECRET_KEY}` },
+      }).catch(() => {})
+      console.error('[internal/enrollments] D1 users insert failed:', e.message)
+      return c.json({ error: 'Could not create user record: ' + e.message }, 500)
+    }
+
+    // Child row for parent-role programs. Non-fatal — the enrollment
+    // itself is what "unlocks" access; child info can be reconciled later.
+    if (isParentProgram && childFirstName) {
+      const childId = 'child_' + uid()
+      try {
+        await c.env.DB.prepare(
+          'INSERT INTO children (id, parent_id, first_name, age) VALUES (?, ?, ?, ?)'
+        ).bind(childId, userId, childFirstName, childAge).run()
+      } catch (e) {
+        console.error('[internal/enrollments] child insert failed:', e.message)
+      }
+    }
+  }
+
+  // ── 6. Enrollment row ────────────────────────────────────────────────────
+  // Two constraints could fail here:
+  //   (a) UNIQUE(user_id, program_id) — user was already enrolled in this
+  //       program from a prior admin action. Reactivate + mark paid.
+  //   (b) UNIQUE(payment_ref) — pre-check above races with a concurrent
+  //       call. Fall through to the existing row.
+  let enrollmentId
+  const existingEnrollment = await c.env.DB.prepare(
+    'SELECT id FROM enrollments WHERE user_id = ? AND program_id = ?'
+  ).bind(userId, program.id).first()
+
+  if (existingEnrollment) {
+    await c.env.DB.prepare(`
+      UPDATE enrollments
+      SET is_active = 1,
+          payment_status = 'paid',
+          payment_date = ?,
+          payment_ref = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(paymentDate, paymentRef, existingEnrollment.id).run()
+    enrollmentId = existingEnrollment.id
+  } else {
+    enrollmentId = 'enr_' + uid()
+    try {
+      await c.env.DB.prepare(`
+        INSERT INTO enrollments
+          (id, user_id, program_id, payment_status, payment_date, payment_ref, is_active)
+        VALUES (?, ?, ?, 'paid', ?, ?, 1)
+      `).bind(enrollmentId, userId, program.id, paymentDate, paymentRef).run()
+    } catch (e) {
+      // Concurrent request slipped in with the same payment_ref — the
+      // partial UNIQUE index rejected our insert. Fetch the winner and
+      // return that.
+      const msg = String(e?.message || e)
+      if (msg.toLowerCase().includes('unique')) {
+        const winner = await c.env.DB.prepare(
+          'SELECT id, user_id FROM enrollments WHERE payment_ref = ?'
+        ).bind(paymentRef).first()
+        if (winner) {
+          return c.json({
+            ok: true,
+            user_id: winner.user_id,
+            enrollment_id: winner.id,
+            action: 'idempotent',
+          })
+        }
+      }
+      console.error('[internal/enrollments] enrollment insert failed:', msg)
+      return c.json({ error: 'Enrollment insert failed' }, 500)
+    }
+  }
+
+  // ── 7. Notification email — best-effort, never fail the request ─────────
+  const amountLabel = paymentAmountCents != null
+    ? `$${(paymentAmountCents / 100).toFixed(2)}`
+    : null
+
+  try {
+    if (userAction === 'new' || userAction === 'existing_pending_reinvited') {
+      // Send the branded invite email — carries the Clerk ticket URL so
+      // they can set a password and log in.
+      const { subject, html } = inviteEmail({
+        recipientName: fullName,
+        role: isParentProgram ? 'parent' : 'student',
+        email,
+        inviteUrl: invitationUrl,
+      })
+      await sendEmail(c.env, { to: email, subject, html })
+    } else {
+      // Existing established user — send an enrollment confirmation.
+      const { subject, html } = paidEnrollmentEmail({
+        recipientName: existingUser.full_name || fullName,
+        programName: program.name,
+        amountLabel,
+        paymentRef,
+      })
+      await sendEmail(c.env, { to: email, subject, html })
+    }
+  } catch (e) {
+    console.error('[internal/enrollments] email failed:', e.message)
+  }
+
+  const action =
+    userAction === 'new' ? 'created' :
+    userAction === 'existing_pending_reinvited' ? 'existing_user_reinvited' :
+    'existing_user_enrolled'
+
+  console.log(`[internal/enrollments] ${action} source=${source} email=${emailNorm} program=${programSlug} enrollment=${enrollmentId} payment_ref=${paymentRef}`)
+
+  return c.json({
+    ok: true,
+    user_id: userId,
+    enrollment_id: enrollmentId,
+    action,
+    invitation_url: invitationUrl,
+  })
 })
 
 // ─── AUTH ROUTES ─────────────────────────────────────────────────────────────

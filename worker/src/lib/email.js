@@ -416,6 +416,53 @@ export function inviteEmail({ recipientName, role, email, inviteUrl }) {
   return { subject, html }
 }
 
+// ─── 7c. Paid enrollment (existing user paid via website checkout) ───────────
+// Used by POST /internal/enrollments when the paying email matches an
+// existing D1 user (e.g. a parent who already has a Sync login and is now
+// paying for a new program). Their account already works; they just need to
+// know they've been added to the program and can start booking.
+//
+// For net-new users the invitation flow above (inviteEmail) handles the
+// welcome — they get one branded email that both confirms enrollment and
+// gets them set up. This template is the existing-user variant.
+export function paidEnrollmentEmail({ recipientName, programName, amountLabel, paymentRef }) {
+  const subject = `You're enrolled in ${programName} — Swing Theory`
+
+  const html = baseLayout({
+    preheader: `Payment received. Log in to book your ${programName} sessions.`,
+    body: `
+  <tr>
+    <td style="padding:32px 32px 8px">
+      <div style="font-size:22px;font-weight:700;color:#064029;margin-bottom:8px">Thanks, ${recipientName}!</div>
+      <p style="font-size:14px;color:#555555;line-height:1.6;margin:0">
+        Your payment was received and you're enrolled in <strong>${programName}</strong>. Log in to book your first session — spots are filled first-come, first-served.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:16px 32px 8px">
+      <div style="background:#f7faf8;border:1px solid #d8e8dc;border-radius:12px;padding:20px 24px">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          ${infoRow('Program', programName)}
+          ${amountLabel ? infoRow('Amount', amountLabel) : ''}
+          ${paymentRef ? infoRow('Payment Ref', paymentRef) : ''}
+        </table>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:8px 32px 16px">
+      <p style="font-size:13px;color:#888888;line-height:1.6;margin:0">
+        Questions about your enrollment? Just reply to this email or call 626-879-5513.
+      </p>
+    </td>
+  </tr>
+  ${ctaButton('Book Your First Session', APP_URL + '/programs')}`,
+  })
+
+  return { subject, html }
+}
+
 // ─── 8. Password reset (user-triggered "forgot password") ────────────────────
 export function passwordResetEmail({ recipientName, resetUrl }) {
   const subject = 'Reset Your Swing Theory Password'
