@@ -917,6 +917,11 @@ app.get('/programs', requireAuth, async (c) => {
   // swinger roles don't need the annotation — their UI doesn't use it —
   // but it's harmless if they read it.
   if (isEnrollee) {
+    // is_enrolled DESC first so any program the current user is actively
+    // enrolled in bubbles to the top of the list — this drives ordering on
+    // both ProgramSelector and ParentHome, which render the API's array
+    // order without a client-side sort. created_at ASC is the tiebreaker
+    // so within each group the order remains stable/predictable.
     const programs = await c.env.DB.prepare(`
       SELECT p.*,
         CASE WHEN EXISTS(
@@ -925,7 +930,7 @@ app.get('/programs', requireAuth, async (c) => {
         ) THEN 1 ELSE 0 END AS is_enrolled
       FROM programs p
       WHERE p.is_active = 1
-      ORDER BY p.created_at ASC
+      ORDER BY is_enrolled DESC, p.created_at ASC
     `).bind(user.id).all()
     return c.json({ programs: programs.results })
   }
