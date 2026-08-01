@@ -3,7 +3,12 @@
 // Template matches existing Swing Theory email style
 
 const FROM = 'Swing Theory <info@swingtheory.golf>'
-const LOGO_URL = 'https://swingtheory.golf/wp-content/uploads/2025/03/Wide-Asset-3-copy.png'
+// NOTE: was https://swingtheory.golf/wp-content/uploads/2025/03/Wide-Asset-3-copy.png
+// That 404s — swingtheoryv2's _redirects still carries a WordPress-migration
+// rule (/wp-content/* -> /:splat 301) that rewrites it to a path with no file,
+// so EVERY Sync email was rendering with a broken logo. This R2 asset is the
+// one swingtheoryv2's own emails use and it load-tests clean.
+const LOGO_URL = 'https://media.swingtheory.golf/uploads/email-logo.png'
 const APP_URL = 'https://sync.swingtheory.golf'
 
 // ─── Send via Resend ──────────────────────────────────────────────────────────
@@ -379,17 +384,17 @@ export function welcomeEmail({ recipientName, role, email, tempPassword }) {
 // sync.swingtheory.golf; Clerk appends `__clerk_ticket=…` when the invitee
 // clicks the button.
 export function inviteEmail({ recipientName, role, email, inviteUrl }) {
-  const subject = "You're invited to Swing Theory"
+  const subject = 'Welcome to Sync by Swing Theory'
   const roleDisplay = role ? role.charAt(0).toUpperCase() + role.slice(1) : ''
 
   const html = baseLayout({
-    preheader: 'Set up your Swing Theory account — click the button below to pick a password.',
+    preheader: 'Set up your Swing Sync account — click the button below to setup your password.',
     body: `
   <tr>
     <td style="padding:32px 32px 8px">
       <div style="font-size:22px;font-weight:700;color:#064029;margin-bottom:8px">Welcome, ${recipientName}!</div>
       <p style="font-size:14px;color:#555555;line-height:1.6;margin:0">
-        You've been invited to Swing Theory. Click the button below to finish setting up your account — you'll pick your own password, then land right in the app.
+        You've been invited to create your Swing Sync Account. Click the button below to finish setting up your account — you'll be asked to setup your password and login.
       </p>
     </td>
   </tr>
@@ -422,9 +427,12 @@ export function inviteEmail({ recipientName, role, email, inviteUrl }) {
 // paying for a new program). Their account already works; they just need to
 // know they've been added to the program and can start booking.
 //
-// For net-new users the invitation flow above (inviteEmail) handles the
-// welcome — they get one branded email that both confirms enrollment and
-// gets them set up. This template is the existing-user variant.
+// Sent to EVERY paying customer, net-new or returning. Net-new users also
+// get inviteEmail above, which handles account setup only — it deliberately
+// says nothing about the purchase, so this template is what actually
+// confirms the enrollment for them. Previously this was the else-branch of
+// the invite, which meant first-time buyers were never told what they'd
+// bought.
 export function paidEnrollmentEmail({ recipientName, programName, amountLabel, paymentRef }) {
   const subject = `You're enrolled in ${programName} — Swing Theory`
 
@@ -435,7 +443,7 @@ export function paidEnrollmentEmail({ recipientName, programName, amountLabel, p
     <td style="padding:32px 32px 8px">
       <div style="font-size:22px;font-weight:700;color:#064029;margin-bottom:8px">Thanks, ${recipientName}!</div>
       <p style="font-size:14px;color:#555555;line-height:1.6;margin:0">
-        Your payment was received and you're enrolled in <strong>${programName}</strong>. Log in to book your first session — spots are filled first-come, first-served.
+        Your payment was received and you're enrolled in <strong>${programName}</strong>. Log in to book your first session.
       </p>
     </td>
   </tr>

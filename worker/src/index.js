@@ -588,6 +588,18 @@ app.post('/internal/enrollments', async (c) => {
     ? `$${(paymentAmountCents / 100).toFixed(2)}`
     : null
 
+  // Two emails with two distinct jobs, not an either/or:
+  //
+  //   inviteEmail        — account setup. Only net-new users need it.
+  //   paidEnrollmentEmail — "you're enrolled, here's what you paid."
+  //                         EVERY paying customer needs it.
+  //
+  // These used to be if/else, which meant a first-time buyer received only
+  // the invite — an email that never mentions the program, the amount, or
+  // the word "enrolled". They paid and were told nothing about what they
+  // bought. Returning customers got the confirmation and no invite, which
+  // was correct. Splitting them fixes the net-new case without changing
+  // what returning customers receive.
   try {
     if (userAction === 'new' || userAction === 'existing_pending_reinvited') {
       // Send the branded invite email — carries the Clerk ticket URL so
@@ -599,18 +611,24 @@ app.post('/internal/enrollments', async (c) => {
         inviteUrl: invitationUrl,
       })
       await sendEmail(c.env, { to: email, subject, html })
-    } else {
-      // Existing established user — send an enrollment confirmation.
-      const { subject, html } = paidEnrollmentEmail({
-        recipientName: existingUser.full_name || fullName,
-        programName: program.name,
-        amountLabel,
-        paymentRef,
-      })
-      await sendEmail(c.env, { to: email, subject, html })
     }
   } catch (e) {
-    console.error('[internal/enrollments] email failed:', e.message)
+    console.error('[internal/enrollments] invite email failed:', e.message)
+  }
+
+  // Enrollment confirmation — unconditional. Wrapped separately so a failed
+  // invite can't swallow the confirmation (and vice versa); before, one
+  // throw took out the only email the customer was going to get.
+  try {
+    const { subject, html } = paidEnrollmentEmail({
+      recipientName: (existingUser && existingUser.full_name) || fullName,
+      programName: program.name,
+      amountLabel,
+      paymentRef,
+    })
+    await sendEmail(c.env, { to: email, subject, html })
+  } catch (e) {
+    console.error('[internal/enrollments] enrollment email failed:', e.message)
   }
 
   const action =
