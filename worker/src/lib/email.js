@@ -2,7 +2,12 @@
 // All emails from info@swingtheory.golf
 // Template matches existing Swing Theory email style
 
-const FROM = 'Swing Theory <info@swingtheory.golf>'
+// Sender display name. Sync is its own product surface — account setup,
+// enrollments, booking confirmations, reminders, password resets — so it
+// signs as "Swing Sync". The marketing site (swingtheoryv2) sends as
+// "Swing Theory Indoor Golf". Same address, deliberately different names,
+// so a customer can tell at a glance which system is talking to them.
+const FROM = 'Swing Sync <info@swingtheory.golf>'
 // NOTE: was https://swingtheory.golf/wp-content/uploads/2025/03/Wide-Asset-3-copy.png
 // That 404s — swingtheoryv2's _redirects still carries a WordPress-migration
 // rule (/wp-content/* -> /:splat 301) that rewrites it to a path with no file,
